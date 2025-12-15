@@ -650,10 +650,7 @@ def render_chart_builder(current_user: Dict) -> None:
         st.info("Upload data first to build charts.")
         return
 
-    if "chart_preview" not in st.session_state:
-        st.session_state["chart_preview"] = None
-    if "chart_preview_comment" not in st.session_state:
-        st.session_state["chart_preview_comment"] = ""
+    st.session_state.setdefault("chart_preview", None)
 
     upload_options = {f"#{row['id']} • {row['filename']}": row["id"] for row in uploads}
     default_upload_label = list(upload_options.keys())[0]
@@ -708,7 +705,7 @@ def render_chart_builder(current_user: Dict) -> None:
                 "y_cols": y_cols,
                 "dataset_id": dataset_id,
             }
-            st.session_state["chart_preview_comment"] = ""
+            # comment captured via widget; no manual reset here to avoid widget key conflicts
 
     preview_data = st.session_state.get("chart_preview")
     if preview_data:
@@ -739,7 +736,11 @@ def render_chart_builder(current_user: Dict) -> None:
                 )
                 st.success(f"Saved chart to dashboard using dataset #{preview_data['dataset_id']}")
                 st.session_state["chart_preview"] = None
-                st.session_state["chart_preview_comment"] = ""
+                st.session_state.pop("chart_preview_comment", None)
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
 
 
 def render_config(config: Dict) -> Dict:
