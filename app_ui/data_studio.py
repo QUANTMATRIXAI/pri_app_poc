@@ -150,28 +150,24 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
 
     upload_options = {f"#{row['id']} - {row['filename']}": row["id"] for row in uploads}
 
+    # quick sample load outside the form to avoid extra submit buttons
+    if st.button("Use sample dataset for charts", key=f"use_sample_chart_{segment['id']}"):
+        sample_df = get_sample_dataset()
+        upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
+        st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
+
     with st.form(f"chart_builder_{segment['id']}"):
         st.markdown("**1) Dataset & filters**")
-        ds_col, action_col = st.columns([3, 1])
-        with ds_col:
-            selected_label = st.selectbox(
-                "Dataset",
-                options=list(upload_options.keys()),
-                index=0,
-                key=f"chart_dataset_{segment['id']}",
-            )
-        with action_col:
-            st.markdown("&nbsp;")
-            if st.form_submit_button("Use sample", key=f"use_sample_chart_{segment['id']}"):
-                sample_df = get_sample_dataset()
-                upload_id = save_upload_for_segment(
-                    "sample_dataset.csv", sample_df, current_user["username"], segment["id"]
-                )
-                st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
-                if hasattr(st, "rerun"):
-                    st.rerun()
-                else:
-                    st.experimental_rerun()
+        selected_label = st.selectbox(
+            "Dataset",
+            options=list(upload_options.keys()),
+            index=0,
+            key=f"chart_dataset_{segment['id']}",
+        )
         dataset_id = upload_options[selected_label]
         df = load_dataset(dataset_id)
         if df is None or df.empty:
@@ -341,25 +337,20 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
 
     upload_options = {f"#{row['id']} - {row['filename']}": row["id"] for row in uploads}
 
+    if st.button("Use sample dataset for tables", key=f"use_sample_table_{segment['id']}"):
+        sample_df = get_sample_dataset()
+        upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
+        st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
+
     with st.form(f"table_builder_{segment['id']}"):
         st.markdown("**1) Dataset & filters**")
-        ds_col, action_col = st.columns([3, 1])
-        with ds_col:
-            selected_label = st.selectbox(
-                "Dataset", options=list(upload_options.keys()), index=0, key=f"table_dataset_{segment['id']}"
-            )
-        with action_col:
-            st.markdown("&nbsp;")
-            if st.form_submit_button("Use sample", key=f"use_sample_table_{segment['id']}"):
-                sample_df = get_sample_dataset()
-                upload_id = save_upload_for_segment(
-                    "sample_dataset.csv", sample_df, current_user["username"], segment["id"]
-                )
-                st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
-                if hasattr(st, "rerun"):
-                    st.rerun()
-                else:
-                    st.experimental_rerun()
+        selected_label = st.selectbox(
+            "Dataset", options=list(upload_options.keys()), index=0, key=f"table_dataset_{segment['id']}"
+        )
         dataset_id = upload_options[selected_label]
         df = load_dataset(dataset_id)
         if df is None or df.empty:
