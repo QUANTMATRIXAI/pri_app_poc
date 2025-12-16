@@ -3,6 +3,8 @@ from typing import List, Optional
 
 from .database import get_connection
 
+SEGMENT_ORDER = ["Value", "Deluxe", "Premium", "SPIB", "SP BIO"]
+
 
 def create_default_segments() -> int:
     """Ensure the default five segments exist; return the first segment id."""
@@ -39,12 +41,26 @@ def create_default_segments() -> int:
         return row["id"]
 
 
+def _sort_segments(rows) -> List[dict]:
+    ordered = []
+    remaining = []
+    order_lookup = {name: idx for idx, name in enumerate(SEGMENT_ORDER)}
+    for r in rows:
+        name = r["name"]
+        if name in order_lookup:
+            ordered.append((order_lookup[name], dict(r)))
+        else:
+            remaining.append(dict(r))
+    ordered_sorted = [pair[1] for pair in sorted(ordered, key=lambda x: x[0])]
+    return ordered_sorted + remaining
+
+
 def get_segments() -> List[dict]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, name, description, color FROM segments ORDER BY id ASC"
+            "SELECT id, name, description, color FROM segments"
         ).fetchall()
-        return [dict(r) for r in rows]
+    return _sort_segments(rows)
 
 
 def get_segment(segment_id: int) -> Optional[dict]:
