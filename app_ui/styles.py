@@ -66,6 +66,8 @@ def inject_styles() -> None:
             }
             .stTabs [role="tab"] {
                 padding: 0.35rem 0.8rem;
+                font-size: 1rem;
+                font-weight: 600;
             }
             .stButton>button {
                 background: var(--accent) !important;
@@ -110,4 +112,3 @@ def inject_styles() -> None:
         """,
         unsafe_allow_html=True,
     )
-
