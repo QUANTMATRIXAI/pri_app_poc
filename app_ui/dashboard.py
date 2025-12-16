@@ -185,7 +185,7 @@ def render_media_block(media, is_editor: bool) -> None:
     if media.get("comment"):
         st.markdown(f"<div class='comment-box'>{media['comment']}</div>", unsafe_allow_html=True)
     if media.get("file_path"):
-        st.image(media["file_path"], use_column_width=True)
+        st.image(media["file_path"], use_container_width=True)
     else:
         st.warning("Image missing.")
     if is_editor:
