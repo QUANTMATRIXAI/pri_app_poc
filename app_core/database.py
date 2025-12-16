@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+from typing import Optional
 
 DB_PATH = Path("data/app.db")
 
@@ -29,12 +30,24 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS segments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT DEFAULT '',
+                color TEXT DEFAULT '#f5b400',
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS uploads (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 filename TEXT NOT NULL,
                 data_json TEXT NOT NULL,
                 uploaded_by TEXT NOT NULL,
-                uploaded_at TEXT NOT NULL
+                uploaded_at TEXT NOT NULL,
+                segment_id INTEGER
             )
             """
         )
@@ -56,6 +69,12 @@ def ensure_chart_comment_column() -> None:
         if "comment" not in cols:
             conn.execute("ALTER TABLE charts ADD COLUMN comment TEXT DEFAULT ''")
             conn.commit()
+        if "segment_id" not in cols:
+            conn.execute("ALTER TABLE charts ADD COLUMN segment_id INTEGER DEFAULT NULL")
+            conn.commit()
+        if "section" not in cols:
+            conn.execute("ALTER TABLE charts ADD COLUMN section TEXT DEFAULT 'NS Landscape'")
+            conn.commit()
 
 
 def migrate_charts_table() -> None:
@@ -76,6 +95,8 @@ def migrate_charts_table() -> None:
                     dataset_id INTEGER NOT NULL,
                     created_by TEXT NOT NULL,
                     comment TEXT DEFAULT '',
+                    segment_id INTEGER,
+                    section TEXT DEFAULT 'NS Landscape',
                     created_at TEXT NOT NULL
                 )
                 """
@@ -91,24 +112,29 @@ def migrate_charts_table() -> None:
 
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS charts_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                chart_type TEXT NOT NULL,
-                x_col TEXT NOT NULL,
-                y_cols TEXT NOT NULL,
-                dataset_id INTEGER NOT NULL,
-                created_by TEXT NOT NULL,
-                comment TEXT DEFAULT '',
-                created_at TEXT NOT NULL
-            )
-            """
+                CREATE TABLE IF NOT EXISTS charts_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    chart_type TEXT NOT NULL,
+                    x_col TEXT NOT NULL,
+                    y_cols TEXT NOT NULL,
+                    dataset_id INTEGER NOT NULL,
+                    created_by TEXT NOT NULL,
+                    comment TEXT DEFAULT '',
+                    segment_id INTEGER,
+                    section TEXT DEFAULT 'NS Landscape',
+                    created_at TEXT NOT NULL
+                )
+                """
         )
         conn.execute(
             """
-            INSERT INTO charts_new (id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, created_at)
+            INSERT INTO charts_new (id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at)
             SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by,
-                   COALESCE(comment, '') AS comment, created_at
+                   COALESCE(comment, '') AS comment,
+                   NULL AS segment_id,
+                   'NS Landscape' AS section,
+                   created_at
             FROM charts
             """
         )
@@ -116,3 +142,34 @@ def migrate_charts_table() -> None:
         conn.execute("ALTER TABLE charts_new RENAME TO charts")
         conn.commit()
 
+
+def ensure_tables_table() -> None:
+    """Ensure a table exists for saved data tables on dashboards."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tables (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                dataset_id INTEGER NOT NULL,
+                columns_json TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                comment TEXT DEFAULT '',
+                segment_id INTEGER,
+                section TEXT DEFAULT 'NS Landscape',
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+
+def ensure_uploads_segment_column(default_segment_id: Optional[int]) -> None:
+    """Ensure uploads carry a segment reference."""
+    with get_connection() as conn:
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(uploads)").fetchall()]
+        if "segment_id" not in cols:
+            conn.execute("ALTER TABLE uploads ADD COLUMN segment_id INTEGER")
+            if default_segment_id:
+                conn.execute("UPDATE uploads SET segment_id = ?", (default_segment_id,))
+            conn.commit()

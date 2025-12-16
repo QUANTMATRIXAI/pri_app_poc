@@ -2,7 +2,6 @@ import datetime
 import json
 
 from .database import get_connection
-from .uploads import load_dataset
 
 
 def save_chart(
@@ -12,13 +11,15 @@ def save_chart(
     y_cols: list[str],
     dataset_id: int,
     created_by: str,
+    segment_id: int,
+    section: str,
     comment: str = "",
 ) -> None:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO charts (name, chart_type, x_col, y_cols, dataset_id, created_by, comment, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO charts (name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -28,6 +29,8 @@ def save_chart(
                 dataset_id,
                 created_by,
                 comment,
+                segment_id,
+                section,
                 datetime.datetime.utcnow().isoformat(),
             ),
         )
@@ -38,10 +41,23 @@ def get_saved_charts():
     with get_connection() as conn:
         return conn.execute(
             """
-            SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, created_at
+            SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at
             FROM charts
             ORDER BY created_at DESC
             """
+        ).fetchall()
+
+
+def get_charts_for_segment(segment_id: int):
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at
+            FROM charts
+            WHERE segment_id = ?
+            ORDER BY created_at DESC
+            """,
+            (segment_id,),
         ).fetchall()
 
 
@@ -57,6 +73,15 @@ def count_charts() -> int:
         return row["c"]
 
 
+def count_charts_for_segment(segment_id: int) -> int:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM charts WHERE segment_id = ?",
+            (segment_id,),
+        ).fetchone()
+        return row["c"] if row else 0
+
+
 def get_dataset_label(dataset_id: int) -> str:
     with get_connection() as conn:
         row = conn.execute(
@@ -70,4 +95,3 @@ def delete_chart(chart_id: int) -> None:
     with get_connection() as conn:
         conn.execute("DELETE FROM charts WHERE id = ?", (chart_id,))
         conn.commit()
-
