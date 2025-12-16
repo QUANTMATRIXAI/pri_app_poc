@@ -9,11 +9,11 @@ SEGMENT_ORDER = ["Value", "Deluxe", "Premium", "SPIB", "SP BIO"]
 def create_default_segments() -> int:
     """Ensure the default five segments exist; return the first segment id."""
     defaults = [
-        ("Value", "Value-focused customers", "#f5b400"),
-        ("Deluxe", "High-touch, curated experiences", "#6c8cff"),
-        ("Premium", "Top-tier premium segment", "#34c38f"),
-        ("SPIB", "Strategic projects in business", "#ff7f50"),
-        ("SP BIO", "Bio-focused strategic plays", "#9c6bdb"),
+        ("Value", "Entry-value seekers focused on affordability.", "#f5b400"),
+        ("Deluxe", "Upgraded experience with curated add-ons.", "#6c8cff"),
+        ("Premium", "High-touch premium tier for loyal customers.", "#34c38f"),
+        ("SPIB", "Strategic projects in business (SPIB).", "#ff7f50"),
+        ("SP BIO", "Specialized bio strategic tier (SP BIO).", "#9c6bdb"),
     ]
     with get_connection() as conn:
         existing = conn.execute("SELECT id FROM segments ORDER BY id ASC").fetchall()
