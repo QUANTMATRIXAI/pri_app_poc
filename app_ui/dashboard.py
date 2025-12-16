@@ -132,7 +132,7 @@ def render_chart_block(chart, is_editor: bool) -> None:
     comment = chart["comment"] if "comment" in chart.keys() else ""
     if comment:
         st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
-    plot_chart(df, chart["chart_type"], chart["x_col"], y_cols)
+    plot_chart(df, chart["chart_type"], chart["x_col"], y_cols, chart_key=f"dash_chart_{chart['id']}")
     if is_editor:
         if st.button("Delete chart", key=f"del_chart_{chart['id']}"):
             delete_chart(chart["id"])

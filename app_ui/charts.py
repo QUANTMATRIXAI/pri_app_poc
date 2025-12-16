@@ -3,7 +3,7 @@ import plotly.express as px
 import streamlit as st
 
 
-def plot_chart(df: pd.DataFrame, chart_type: str, x_col: str, y_cols: list[str]) -> None:
+def plot_chart(df: pd.DataFrame, chart_type: str, x_col: str, y_cols: list[str], chart_key: str | None = None) -> None:
     """Render a chart preview or dashboard chart using Plotly."""
     if x_col not in df.columns:
         st.warning(f"Column {x_col} not in dataset.")
@@ -51,4 +51,4 @@ def plot_chart(df: pd.DataFrame, chart_type: str, x_col: str, y_cols: list[str])
             height=320,
         )
     fig.update_layout(margin=dict(l=10, r=10, t=20, b=10), legend_title_text="")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=chart_key)

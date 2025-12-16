@@ -277,7 +277,13 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
         prev_col, note_col = st.columns([1.5, 1])
         with prev_col:
             st.markdown("#### Preview")
-            plot_chart(df_preview, preview_data["chart_type"], preview_data["x_col"], preview_data["y_cols"])
+            plot_chart(
+                df_preview,
+                preview_data["chart_type"],
+                preview_data["x_col"],
+                preview_data["y_cols"],
+                chart_key=f"chart_preview_{segment['id']}",
+            )
         with note_col:
             st.markdown("#### Add note and publish")
             comment = st.text_area(
