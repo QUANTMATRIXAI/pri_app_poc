@@ -65,6 +65,9 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
             )
             if section_media_items:
                 blocks.append({"type": "media", "section": section, "items": section_media_items})
+            # Brand Truths and Segment Trends are image-only
+            if section in {"Brand Truths", "Segment Trends"}:
+                blocks = [b for b in blocks if b["type"] == "media"]
             blocks = filter_blocks(blocks, search_lower)
             blocks = sorted(blocks, key=lambda b: b.get("created_at", ""), reverse=True)
             if not blocks:
