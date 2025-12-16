@@ -209,6 +209,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
 
     st.markdown("**Preview & publish**")
     for block in blocks:
+        key_suffix = f"{segment['id']}_{block['section'].replace(' ', '_')}_{block['name'].replace(' ', '_')}"
         # per-section filters
         filter_col1, filter_col2 = st.columns([2, 2])
         with filter_col1:
@@ -218,7 +219,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                     "Brands",
                     options=sorted(df["brand"].dropna().unique().tolist()),
                     default=sorted(df["brand"].dropna().unique().tolist()),
-                    key=f"{block['section']}_{segment['id']}_brands",
+                    key=f"{key_suffix}_brands",
                 )
         with filter_col2:
             years = []
@@ -228,7 +229,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                     "Years",
                     options=years,
                     default=years,
-                    key=f"{block['section']}_{segment['id']}_years",
+                    key=f"{key_suffix}_years",
                 )
 
         filter_spec = {
@@ -247,7 +248,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                     block["chart_type"],
                     block["x_col"],
                     block["y_cols"],
-                    chart_key=f"block_preview_{segment['id']}_{block['section']}",
+                    chart_key=f"block_preview_{key_suffix}",
                 )
             elif block["type"] == "table":
                 cols_in_df = [c for c in block["columns"] if c in df_filtered.columns]
@@ -258,13 +259,13 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
             else:
                 st.info("Upload an image in the action column to publish to this section.")
         with col_actions:
-            comment_key = f"block_comment_{segment['id']}_{block['section']}"
+            comment_key = f"block_comment_{key_suffix}"
             comment_val = st.text_area("Comment", key=comment_key, height=80)
             if block["type"] == "media":
                 uploaded = st.file_uploader(
-                    "Image", type=["png", "jpg", "jpeg"], key=f"media_upload_{block['section']}_{segment['id']}"
+                    "Image", type=["png", "jpg", "jpeg"], key=f"media_upload_{key_suffix}"
                 )
-                if st.button("Save to dashboard", key=f"save_block_{segment['id']}_{block['section']}"):
+                if st.button("Save to dashboard", key=f"save_block_{key_suffix}"):
                     if uploaded:
                         delete_media_for_section(segment["id"], block["section"])
                         save_media_upload(uploaded, segment["id"], block["section"], current_user["username"])
@@ -276,7 +277,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                     else:
                         st.error("Upload an image to save.")
             else:
-                if st.button("Save to dashboard", key=f"save_block_{segment['id']}_{block['section']}"):
+                if st.button("Save to dashboard", key=f"save_block_{key_suffix}"):
                     if block["type"] == "chart":
                         delete_charts_for_section(segment["id"], block["section"], block["name"])
                         save_chart(
