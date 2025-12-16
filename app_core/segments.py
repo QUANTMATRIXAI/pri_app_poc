@@ -5,23 +5,35 @@ from .database import get_connection
 
 
 def create_default_segments() -> int:
-    """Seed default segments if none exist; return the first segment id."""
+    """Ensure the default five segments exist; return the first segment id."""
     defaults = [
-        ("North Star", "Primary strategic segment", "#f5b400"),
-        ("Growth", "Emerging opportunities", "#6c8cff"),
-        ("Retention", "Keep and win back customers", "#34c38f"),
+        ("Value", "Value-focused customers", "#f5b400"),
+        ("Deluxe", "High-touch, curated experiences", "#6c8cff"),
+        ("Premium", "Top-tier premium segment", "#34c38f"),
+        ("SPIB", "Strategic projects in business", "#ff7f50"),
+        ("SP BIO", "Bio-focused strategic plays", "#9c6bdb"),
     ]
     with get_connection() as conn:
         existing = conn.execute("SELECT id FROM segments ORDER BY id ASC").fetchall()
-        if existing:
-            return existing[0]["id"]
-
         now = datetime.datetime.utcnow().isoformat()
-        for name, desc, color in defaults:
+
+        # Rename existing rows to align with defaults when possible
+        for idx, row in enumerate(existing):
+            if idx < len(defaults):
+                name, desc, color = defaults[idx]
+                conn.execute(
+                    "UPDATE segments SET name = ?, description = ?, color = ? WHERE id = ?",
+                    (name, desc, color, row["id"]),
+                )
+
+        # Insert missing defaults
+        for idx in range(len(existing), len(defaults)):
+            name, desc, color = defaults[idx]
             conn.execute(
                 "INSERT INTO segments (name, description, color, created_at) VALUES (?, ?, ?, ?)",
                 (name, desc, color, now),
             )
+
         conn.commit()
         row = conn.execute("SELECT id FROM segments ORDER BY id ASC LIMIT 1").fetchone()
         return row["id"]

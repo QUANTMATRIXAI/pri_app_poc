@@ -107,9 +107,10 @@ def render_chart_grid(charts, is_editor: bool) -> None:
                     f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
                     unsafe_allow_html=True,
                 )
-                if chart.get("comment"):
+                comment = chart["comment"] if "comment" in chart.keys() else ""
+                if comment:
                     st.markdown(
-                        f"<div class='comment-box'>{chart['comment']}</div>",
+                        f"<div class='comment-box'>{comment}</div>",
                         unsafe_allow_html=True,
                     )
                 plot_chart(df, chart["chart_type"], chart["x_col"], y_cols)
@@ -134,8 +135,9 @@ def render_tables(tables, is_editor: bool) -> None:
             f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
             unsafe_allow_html=True,
         )
-        if table.get("comment"):
-            st.markdown(f"<div class='comment-box'>{table['comment']}</div>", unsafe_allow_html=True)
+        comment = table["comment"] if "comment" in table.keys() else ""
+        if comment:
+            st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
         preview_df = build_table_preview(table)
         if preview_df is None or preview_df.empty:
             st.warning("Dataset missing or empty for this table.")
