@@ -18,7 +18,11 @@ def plot_chart(df: pd.DataFrame, chart_type: str, x_col: str, y_cols: list[str],
         id_vars.append("brand")
     plot_df = df[id_vars + y_cols].copy()
 
-    if pd.api.types.is_datetime64_any_dtype(plot_df[x_col]) is False:
+    # Only coerce to datetime when the column is not numeric and not already datetime-like
+    if (
+        not pd.api.types.is_datetime64_any_dtype(plot_df[x_col])
+        and not pd.api.types.is_numeric_dtype(plot_df[x_col])
+    ):
         try:
             plot_df[x_col] = pd.to_datetime(plot_df[x_col])
         except Exception:  # noqa: BLE001
