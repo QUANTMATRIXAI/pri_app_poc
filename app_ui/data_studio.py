@@ -4,10 +4,10 @@ from typing import Dict, List
 import pandas as pd
 import streamlit as st
 
-from app_core.charts import get_charts_for_segment, save_chart
+from app_core.charts import delete_charts_for_section, get_charts_for_segment, save_chart
 from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
-from app_core.tables import get_tables_for_segment, save_table
+from app_core.tables import delete_tables_for_section, get_tables_for_segment, save_table
 from app_core.uploads import (
     delete_upload,
     get_dataset_usage,
@@ -27,18 +27,12 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
         "Publish charts or tables to the dashboard for this segment. All uploads, previews, and saves stay within this segment."
     )
 
-    chart_tab, table_tab, upload_tab = st.tabs(["Publish chart", "Publish table", "Upload data"])
+    blocks_tab, upload_tab = st.tabs(["Dashboard blocks", "Upload data"])
 
-    with chart_tab:
+    with blocks_tab:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
-        st.markdown("#### Build a chart and add a note")
-        render_chart_builder(current_user, segment)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with table_tab:
-        st.markdown('<div class="panel">', unsafe_allow_html=True)
-        st.markdown("#### Publish a data table")
-        render_table_builder(current_user, segment)
+        st.markdown("#### Configure dashboard blocks")
+        render_block_publisher(current_user, segment)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with upload_tab:
@@ -122,11 +116,11 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
                 st.markdown(f"- {t['name']} · {t['section']}")
 
 
-def render_chart_builder(current_user: Dict, segment: Dict) -> None:
+def render_block_publisher(current_user: Dict, segment: Dict) -> None:
     uploads = get_uploads(segment_id=segment["id"])
     if not uploads:
-        st.info("Upload data first to build charts for this segment.")
-        if st.button("Load sample dataset", key=f"chart_load_sample_{segment['id']}"):
+        st.info("Upload data first to configure dashboard blocks.")
+        if st.button("Load sample dataset", key=f"blocks_load_sample_{segment['id']}"):
             sample_df = get_sample_dataset()
             upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
             st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
@@ -136,341 +130,151 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
                 st.experimental_rerun()
         return
 
-    preview_key = f"chart_preview_{segment['id']}"
-    comment_key = f"chart_preview_comment_{segment['id']}"
-    reset_key = f"chart_preview_comment_reset_{segment['id']}"
-
-    if preview_key not in st.session_state:
-        st.session_state[preview_key] = None
-    if comment_key not in st.session_state:
-        st.session_state[comment_key] = ""
-    if st.session_state.get(reset_key):
-        st.session_state[comment_key] = ""
-        st.session_state[reset_key] = False
-
     upload_options = {f"#{row['id']} - {row['filename']}": row["id"] for row in uploads}
+    selected_label = st.selectbox(
+        "Dataset for previews",
+        options=list(upload_options.keys()),
+        index=0,
+        key=f"blocks_dataset_{segment['id']}",
+    )
+    dataset_id = upload_options[selected_label]
+    df = load_dataset(dataset_id)
+    if df is None or df.empty:
+        st.warning("Selected dataset is empty.")
+        return
 
-    # quick sample load outside the form to avoid extra submit buttons
-    if st.button("Use sample dataset for charts", key=f"use_sample_chart_{segment['id']}"):
-        sample_df = get_sample_dataset()
-        upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
-        st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
-        if hasattr(st, "rerun"):
-            st.rerun()
-        else:
-            st.experimental_rerun()
-
-    with st.form(f"chart_builder_{segment['id']}"):
-        st.markdown("**Dataset & Filters**")
-        row1 = st.columns([2, 2, 1, 1])
-        with row1[0]:
-            selected_label = st.selectbox(
-                "Dataset",
-                options=list(upload_options.keys()),
-                index=0,
-                key=f"chart_dataset_{segment['id']}",
+    filter_col1, filter_col2 = st.columns([2, 2])
+    with filter_col1:
+        brands = []
+        if "brand" in df.columns:
+            brands = st.multiselect(
+                "Brands",
+                options=sorted(df["brand"].dropna().unique().tolist()),
+                default=sorted(df["brand"].dropna().unique().tolist()),
+                key=f"blocks_brand_filter_{segment['id']}",
             )
-        with row1[1]:
-            chart_name = st.text_input("Chart name", value="Performance trend", key=f"chart_name_{segment['id']}")
-        with row1[2]:
-            view_mode = st.selectbox(
-                "View",
-                options=["Monthly", "Yearly"],
-                index=0,
-                key=f"chart_view_{segment['id']}",
-                help="Monthly uses year/month; Yearly aggregates metrics by year (and brand).",
-            )
-        with row1[3]:
-            chart_type = st.selectbox(
-                "Chart type", options=["line", "bar"], index=0, key=f"chart_type_{segment['id']}"
-            )
-
-        dataset_id = upload_options[selected_label]
-        df = load_dataset(dataset_id)
-        if df is None or df.empty:
-            st.warning("Selected dataset is empty.")
-            st.form_submit_button("Preview chart", disabled=True)
-            return
-
-        row2 = st.columns([2, 2, 2])
-        with row2[0]:
-            brands = []
-            if "brand" in df.columns:
-                brands = st.multiselect(
-                    "Brands",
-                    options=sorted(df["brand"].dropna().unique().tolist()),
-                    default=sorted(df["brand"].dropna().unique().tolist()),
-                    key=f"chart_brand_filter_{segment['id']}",
-                )
-        with row2[1]:
-            years = []
-            if "year" in df.columns:
-                years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
-                years = st.multiselect(
-                    "Years",
-                    options=years,
-                    default=years,
-                    key=f"chart_year_filter_{segment['id']}",
-                )
-
-        st.markdown("**Axes & Destination**")
-        numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        default_y = [col for col in ["sales", "volume"] if col in numeric_cols]
-        if not default_y and numeric_cols:
-            default_y = [numeric_cols[0]]
-
-        x_col_default = "period" if view_mode == "Monthly" else "year"
-        available_x = []
-        if view_mode == "Monthly" and "period" in df.columns:
-            available_x.append("period")
+    with filter_col2:
+        years = []
         if "year" in df.columns:
-            available_x.append("year")
-        if "month" in df.columns and view_mode == "Monthly":
-            available_x.append("month")
-        if not available_x:
-            available_x = df.columns.tolist()
-
-        row3 = st.columns([1, 2, 1])
-        with row3[0]:
-            x_col = st.selectbox(
-                "X axis",
-                options=available_x,
-                index=available_x.index(x_col_default) if x_col_default in available_x else 0,
-                key=f"x_col_{segment['id']}",
-            )
-        with row3[1]:
-            y_cols = st.multiselect(
-                "Metrics (Y)",
-                options=numeric_cols,
-                default=default_y,
-                key=f"y_cols_{segment['id']}",
-            )
-        with row3[2]:
-            section = st.selectbox(
-                "Dashboard section",
-                options=SECTIONS,
-                index=0,
-                key=f"chart_section_{segment['id']}",
+            years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
+            years = st.multiselect(
+                "Years",
+                options=years,
+                default=years,
+                key=f"blocks_year_filter_{segment['id']}",
             )
 
-        preview = st.form_submit_button("Preview chart", use_container_width=True)
+    blocks = [
+        {
+            "name": "NS Landscape - Yearly Sales",
+            "section": "NS Landscape",
+            "type": "chart",
+            "chart_type": "line",
+            "view_mode": "yearly",
+            "x_col": "year",
+            "y_cols": ["sales"],
+        },
+        {
+            "name": "Segment Truths - Yearly Volume",
+            "section": "Segment Truths",
+            "type": "chart",
+            "chart_type": "bar",
+            "view_mode": "yearly",
+            "x_col": "year",
+            "y_cols": ["volume"],
+        },
+        {
+            "name": "Brand Truths - Monthly Sales",
+            "section": "Brand Truths",
+            "type": "chart",
+            "chart_type": "line",
+            "view_mode": "monthly",
+            "x_col": "period",
+            "y_cols": ["sales"],
+        },
+        {
+            "name": "Segment Trends - Monthly Volume",
+            "section": "Segment Trends",
+            "type": "chart",
+            "chart_type": "bar",
+            "view_mode": "monthly",
+            "x_col": "period",
+            "y_cols": ["volume"],
+        },
+        {
+            "name": "Brand Trends - Monthly Table",
+            "section": "Brand Trends",
+            "type": "table",
+            "view_mode": "monthly",
+            "columns": ["year", "month", "brand", "sales", "volume", "price"],
+        },
+        {
+            "name": "Battlegrounds - Yearly Price Table",
+            "section": "Battlegrounds",
+            "type": "table",
+            "view_mode": "yearly",
+            "columns": ["year", "brand", "price"],
+        },
+    ]
 
-    if preview:
-        if not y_cols:
-            st.error("Select at least one metric.")
-            st.session_state[preview_key] = None
-        else:
-            filter_spec = {"brands": brands, "years": years, "view_mode": "monthly" if view_mode == "Monthly" else "yearly"}
-            st.session_state[preview_key] = {
-                "chart_name": chart_name.strip() or "Chart",
-                "chart_type": chart_type,
-                "x_col": x_col,
-                "y_cols": y_cols,
-                "dataset_id": dataset_id,
-                "section": section,
-                "filters": filter_spec,
-            }
-            st.session_state[comment_key] = ""
+    st.markdown("**Preview & publish**")
+    for block in blocks:
+        filter_spec = {
+            "brands": brands,
+            "years": years,
+            "view_mode": "monthly" if block["view_mode"] == "monthly" else "yearly",
+        }
+        df_filtered = apply_filters(df.copy(), filter_spec)
 
-    preview_data = st.session_state.get(preview_key)
-    if preview_data:
-        df_preview = load_dataset(preview_data["dataset_id"])
-        if df_preview is None or df_preview.empty:
-            st.warning("Dataset unavailable for preview.")
-            return
-        df_preview = apply_filters(df_preview, preview_data.get("filters"))
-        prev_col, note_col = st.columns([1.5, 1])
-        with prev_col:
-            st.markdown("#### Preview")
-            plot_chart(
-                df_preview,
-                preview_data["chart_type"],
-                preview_data["x_col"],
-                preview_data["y_cols"],
-                chart_key=f"chart_preview_{segment['id']}",
-            )
-        with note_col:
-            st.markdown("#### Add note and publish")
-            comment = st.text_area(
-                "Dashboard note (optional)",
-                key=comment_key,
-                placeholder="Add context for viewers...",
-            )
-            if st.button("Save chart to dashboard", use_container_width=True, key=f"save_chart_{segment['id']}"):
-                save_chart(
-                    preview_data["chart_name"],
-                    preview_data["chart_type"],
-                    preview_data["x_col"],
-                    preview_data["y_cols"],
-                    preview_data["dataset_id"],
-                    current_user["username"],
-                    segment["id"],
-                    preview_data["section"],
-                    json.dumps(preview_data.get("filters") or {}),
-                    comment.strip(),
+        col_preview, col_actions = st.columns([3, 1])
+        with col_preview:
+            st.markdown(f"##### {block['name']} ({block['section']})")
+            if block["type"] == "chart":
+                plot_chart(
+                    df_filtered,
+                    block["chart_type"],
+                    block["x_col"],
+                    block["y_cols"],
+                    chart_key=f"block_preview_{segment['id']}_{block['section']}",
                 )
-                st.success(
-                    f"Saved chart to dashboard ({preview_data['section']}) using dataset #{preview_data['dataset_id']}"
-                )
-                st.session_state[preview_key] = None
-                st.session_state[reset_key] = True
+            else:
+                cols_in_df = [c for c in block["columns"] if c in df_filtered.columns]
+                if cols_in_df:
+                    st.dataframe(df_filtered[cols_in_df].head(50), use_container_width=True)
+                else:
+                    st.warning("Columns not found in dataset.")
+        with col_actions:
+            comment_key = f"block_comment_{segment['id']}_{block['section']}"
+            comment_val = st.text_area("Comment", key=comment_key, height=80)
+            if st.button("Save to dashboard", key=f"save_block_{segment['id']}_{block['section']}"):
+                if block["type"] == "chart":
+                    delete_charts_for_section(segment["id"], block["section"], block["name"])
+                    save_chart(
+                        block["name"],
+                        block["chart_type"],
+                        block["x_col"],
+                        block["y_cols"],
+                        dataset_id,
+                        current_user["username"],
+                        segment["id"],
+                        block["section"],
+                        json.dumps(filter_spec),
+                        comment_val.strip(),
+                    )
+                else:
+                    delete_tables_for_section(segment["id"], block["section"], block["name"])
+                    save_table(
+                        block["name"],
+                        dataset_id,
+                        block["columns"],
+                        current_user["username"],
+                        segment["id"],
+                        block["section"],
+                        json.dumps(filter_spec),
+                        comment_val.strip(),
+                    )
+                st.success(f"Saved to {block['section']}")
                 if hasattr(st, "rerun"):
                     st.rerun()
                 else:
                     st.experimental_rerun()
-
-
-def render_table_builder(current_user: Dict, segment: Dict) -> None:
-    uploads = get_uploads(segment_id=segment["id"])
-    if not uploads:
-        st.info("Upload data first to publish tables for this segment.")
-        if st.button("Load sample dataset", key=f"table_load_sample_{segment['id']}"):
-            sample_df = get_sample_dataset()
-            upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
-            st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
-        return
-
-    table_key = f"table_preview_{segment['id']}"
-    table_comment_key = f"table_comment_{segment['id']}"
-    table_reset_key = f"table_comment_reset_{segment['id']}"
-
-    if table_key not in st.session_state:
-        st.session_state[table_key] = None
-    if table_comment_key not in st.session_state:
-        st.session_state[table_comment_key] = ""
-    if st.session_state.get(table_reset_key):
-        st.session_state[table_comment_key] = ""
-        st.session_state[table_reset_key] = False
-
-    upload_options = {f"#{row['id']} - {row['filename']}": row["id"] for row in uploads}
-
-    if st.button("Use sample dataset for tables", key=f"use_sample_table_{segment['id']}"):
-        sample_df = get_sample_dataset()
-        upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
-        st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
-        if hasattr(st, "rerun"):
-            st.rerun()
-        else:
-            st.experimental_rerun()
-
-    with st.form(f"table_builder_{segment['id']}"):
-        st.markdown("**Dataset & Filters**")
-        row1 = st.columns([2, 2, 1])
-        with row1[0]:
-            selected_label = st.selectbox(
-                "Dataset", options=list(upload_options.keys()), index=0, key=f"table_dataset_{segment['id']}"
-            )
-        with row1[1]:
-            table_name = st.text_input(
-                "Table name",
-                value="Dataset snapshot",
-                key=f"table_name_{segment['id']}",
-            )
-        with row1[2]:
-            view_mode = st.selectbox(
-                "View",
-                options=["Monthly", "Yearly"],
-                index=0,
-                key=f"table_view_{segment['id']}",
-                help="Monthly uses year/month; Yearly aggregates metrics by year (and brand).",
-            )
-        dataset_id = upload_options[selected_label]
-        df = load_dataset(dataset_id)
-        if df is None or df.empty:
-            st.warning("Selected dataset is empty.")
-            st.form_submit_button("Preview table", disabled=True)
-            return
-
-        row2 = st.columns([2, 2, 2])
-        with row2[0]:
-            brand_filter = []
-            if "brand" in df.columns:
-                brand_filter = st.multiselect(
-                    "Brands",
-                    options=sorted(df["brand"].dropna().unique().tolist()),
-                    default=sorted(df["brand"].dropna().unique().tolist()),
-                    key=f"table_brand_filter_{segment['id']}",
-                )
-        with row2[1]:
-            year_filter = []
-            if "year" in df.columns:
-                years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
-                year_filter = st.multiselect(
-                    "Years",
-                    options=years,
-                    default=years,
-                    key=f"table_year_filter_{segment['id']}",
-                )
-
-        st.markdown("**Columns & Destination**")
-        row3 = st.columns([2, 2, 1])
-        with row3[0]:
-            selected_columns: List[str] = st.multiselect(
-                "Columns to include",
-                options=df.columns.tolist(),
-                default=df.columns.tolist()[:5],
-                key=f"table_columns_{segment['id']}",
-            )
-        with row3[1]:
-            section = st.selectbox(
-                "Dashboard section",
-                options=SECTIONS,
-                index=0,
-                key=f"table_section_{segment['id']}",
-            )
-        preview = st.form_submit_button("Preview table", use_container_width=True)
-
-    if preview:
-        if not selected_columns:
-            st.error("Pick at least one column.")
-            st.session_state[table_key] = None
-        else:
-            filter_spec = {"brands": brand_filter, "years": year_filter, "view_mode": "monthly" if view_mode == "Monthly" else "yearly"}
-            st.session_state[table_key] = {
-                "dataset_id": dataset_id,
-                "name": table_name.strip() or "Dataset snapshot",
-                "columns": selected_columns,
-                "section": section,
-                "filters": filter_spec,
-            }
-            st.session_state[table_comment_key] = ""
-
-    table_preview = st.session_state.get(table_key)
-    if table_preview:
-        df_preview = load_dataset(table_preview["dataset_id"])
-        if df_preview is None or df_preview.empty:
-            st.warning("Dataset unavailable for preview.")
-            return
-        df_preview = apply_filters(df_preview, table_preview.get("filters"))
-        st.markdown("#### Preview")
-        cols_in_df = [c for c in table_preview["columns"] if c in df_preview.columns]
-        st.dataframe(df_preview[cols_in_df].head(100), use_container_width=True)
-        comment = st.text_area(
-            "Dashboard note (optional)",
-            key=table_comment_key,
-            placeholder="Add context for viewers...",
-        )
-        if st.button("Save table to dashboard", use_container_width=True, key=f"save_table_{segment['id']}"):
-            save_table(
-                table_preview["name"],
-                table_preview["dataset_id"],
-                table_preview["columns"],
-                current_user["username"],
-                segment["id"],
-                table_preview["section"],
-                json.dumps(table_preview.get("filters") or {}),
-                comment.strip(),
-            )
-            st.success(
-                f"Saved table to dashboard ({table_preview['section']}) using dataset #{table_preview['dataset_id']}"
-            )
-            st.session_state[table_key] = None
-            st.session_state[table_reset_key] = True
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()

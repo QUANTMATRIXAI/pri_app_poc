@@ -67,6 +67,22 @@ def delete_table(table_id: int) -> None:
         conn.commit()
 
 
+def delete_tables_for_section(segment_id: int, section: str, name: str | None = None) -> None:
+    """Remove tables for a given section (and optional name) in a segment to avoid duplicates."""
+    with get_connection() as conn:
+        if name:
+            conn.execute(
+                "DELETE FROM tables WHERE segment_id = ? AND section = ? AND name = ?",
+                (segment_id, section, name),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM tables WHERE segment_id = ? AND section = ?",
+                (segment_id, section),
+            )
+        conn.commit()
+
+
 def build_table_preview(table_row) -> pd.DataFrame | None:
     df = load_dataset(table_row["dataset_id"])
     if df is None or df.empty:

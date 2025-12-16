@@ -97,3 +97,19 @@ def delete_chart(chart_id: int) -> None:
     with get_connection() as conn:
         conn.execute("DELETE FROM charts WHERE id = ?", (chart_id,))
         conn.commit()
+
+
+def delete_charts_for_section(segment_id: int, section: str, name: str | None = None) -> None:
+    """Remove charts for a given section (and optional name) in a segment to avoid duplicates."""
+    with get_connection() as conn:
+        if name:
+            conn.execute(
+                "DELETE FROM charts WHERE segment_id = ? AND section = ? AND name = ?",
+                (segment_id, section, name),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM charts WHERE segment_id = ? AND section = ?",
+                (segment_id, section),
+            )
+        conn.commit()
