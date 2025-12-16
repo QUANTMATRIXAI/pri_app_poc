@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict, List
 
 import streamlit as st
@@ -6,7 +7,7 @@ import streamlit as st
 from app_core.charts import count_charts_for_segment, delete_chart, get_dataset_label
 from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
-from app_core.media import delete_media, get_media_for_segment
+from app_core.media import delete_media, delete_media_for_section, get_media_for_segment
 from app_core.tables import build_table_preview, delete_table
 from app_core.uploads import count_uploads_for_segment, load_dataset
 
@@ -189,23 +190,29 @@ def render_media_block(block, is_editor: bool) -> None:
     st.markdown(f"<h4 class='chart-title'>{block.get('section','Image')}</h4>", unsafe_allow_html=True)
 
     if len(items) > 1:
-        idx = st.slider(
+        idx = st.number_input(
             "Slide",
-            min_value=0,
-            max_value=len(items) - 1,
-            value=0,
+            min_value=1,
+            max_value=len(items),
+            value=1,
+            step=1,
             key=f"media_slider_{block.get('section','')}",
-        )
+        ) - 1
     else:
         idx = 0
     media = items[idx]
     comment = media.get("comment") or ""
     if comment:
         st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
-    if media.get("file_path"):
-        st.image(media["file_path"], use_container_width=True)
+    file_path = media.get("file_path")
+    if file_path and os.path.exists(file_path):
+        if str(file_path).lower().endswith((".ppt", ".pptx")):
+            with open(file_path, "rb") as f:
+                st.download_button("Download PPT", data=f, file_name=os.path.basename(file_path))
+        else:
+            st.image(file_path, use_container_width=True)
     else:
-        st.warning("Image missing.")
+        st.warning("File missing.")
     if len(items) > 1:
         st.caption(f"Image {idx + 1} of {len(items)}")
     if is_editor:

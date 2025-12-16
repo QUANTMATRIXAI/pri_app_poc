@@ -230,7 +230,10 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
             comment_val = st.text_area("Comment", key=comment_key, height=80)
             if block["type"] == "media":
                 uploaded = st.file_uploader(
-                    "Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=f"media_upload_{key_suffix}"
+                    "Images / PPT",
+                    type=["png", "jpg", "jpeg", "ppt", "pptx"],
+                    accept_multiple_files=True,
+                    key=f"media_upload_{key_suffix}",
                 )
                 if st.button("Save to dashboard", key=f"save_block_{key_suffix}"):
                     if uploaded:
