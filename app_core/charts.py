@@ -13,13 +13,14 @@ def save_chart(
     created_by: str,
     segment_id: int,
     section: str,
+    filter_json: str,
     comment: str = "",
 ) -> None:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO charts (name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO charts (name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, filter_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -31,6 +32,7 @@ def save_chart(
                 comment,
                 segment_id,
                 section,
+                filter_json,
                 datetime.datetime.utcnow().isoformat(),
             ),
         )
@@ -41,7 +43,7 @@ def get_saved_charts():
     with get_connection() as conn:
         return conn.execute(
             """
-            SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at
+            SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, filter_json, created_at
             FROM charts
             ORDER BY created_at DESC
             """
@@ -52,7 +54,7 @@ def get_charts_for_segment(segment_id: int):
     with get_connection() as conn:
         return conn.execute(
             """
-            SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at
+            SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, filter_json, created_at
             FROM charts
             WHERE segment_id = ?
             ORDER BY created_at DESC

@@ -75,6 +75,9 @@ def ensure_chart_comment_column() -> None:
         if "section" not in cols:
             conn.execute("ALTER TABLE charts ADD COLUMN section TEXT DEFAULT 'NS Landscape'")
             conn.commit()
+        if "filter_json" not in cols:
+            conn.execute("ALTER TABLE charts ADD COLUMN filter_json TEXT DEFAULT '{}' ")
+            conn.commit()
 
 
 def migrate_charts_table() -> None:
@@ -97,6 +100,7 @@ def migrate_charts_table() -> None:
                     comment TEXT DEFAULT '',
                     segment_id INTEGER,
                     section TEXT DEFAULT 'NS Landscape',
+                    filter_json TEXT DEFAULT '{}',
                     created_at TEXT NOT NULL
                 )
                 """
@@ -123,17 +127,19 @@ def migrate_charts_table() -> None:
                     comment TEXT DEFAULT '',
                     segment_id INTEGER,
                     section TEXT DEFAULT 'NS Landscape',
+                    filter_json TEXT DEFAULT '{}',
                     created_at TEXT NOT NULL
                 )
                 """
         )
         conn.execute(
             """
-            INSERT INTO charts_new (id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, created_at)
+            INSERT INTO charts_new (id, name, chart_type, x_col, y_cols, dataset_id, created_by, comment, segment_id, section, filter_json, created_at)
             SELECT id, name, chart_type, x_col, y_cols, dataset_id, created_by,
                    COALESCE(comment, '') AS comment,
                    NULL AS segment_id,
                    'NS Landscape' AS section,
+                   '{}' AS filter_json,
                    created_at
             FROM charts
             """
@@ -157,10 +163,14 @@ def ensure_tables_table() -> None:
                 comment TEXT DEFAULT '',
                 segment_id INTEGER,
                 section TEXT DEFAULT 'NS Landscape',
+                filter_json TEXT DEFAULT '{}',
                 created_at TEXT NOT NULL
             )
             """
         )
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(tables)").fetchall()]
+        if "filter_json" not in cols:
+            conn.execute("ALTER TABLE tables ADD COLUMN filter_json TEXT DEFAULT '{}' ")
         conn.commit()
 
 

@@ -5,6 +5,7 @@ import streamlit as st
 
 from app_core.charts import count_charts_for_segment, delete_chart, get_dataset_label
 from app_core.constants import SECTIONS
+from app_core.filters import apply_filters
 from app_core.tables import build_table_preview, delete_table
 from app_core.uploads import count_uploads_for_segment, load_dataset
 
@@ -117,6 +118,8 @@ def render_chart_block(chart, is_editor: bool) -> None:
     if df is None or df.empty:
         st.warning(f"Dataset missing for chart '{chart['name']}'.")
         return
+    filters = json.loads(chart["filter_json"]) if "filter_json" in chart.keys() else {}
+    df = apply_filters(df, filters)
     y_cols = json.loads(chart["y_cols"])
     dataset_label = get_dataset_label(chart["dataset_id"])
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)

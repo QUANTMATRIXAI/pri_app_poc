@@ -1,12 +1,15 @@
+import json
 from typing import Dict, List
 
 import pandas as pd
 import streamlit as st
 
-from app_core.charts import save_chart
+from app_core.charts import get_charts_for_segment, save_chart
 from app_core.constants import SECTIONS
-from app_core.tables import save_table
+from app_core.filters import apply_filters
+from app_core.tables import get_tables_for_segment, save_table
 from app_core.uploads import (
+    get_sample_dataset,
     get_upload_history,
     get_uploads,
     load_dataset,
@@ -39,7 +42,17 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     with upload_tab:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
         st.markdown("#### Upload CSV / Excel to this segment")
-        uploaded = st.file_uploader("Upload file", type=["csv", "xlsx", "xls"], key=f"upload_{segment['id']}")
+        col_a, col_b = st.columns([2, 1])
+        with col_a:
+            uploaded = st.file_uploader("Upload file", type=["csv", "xlsx", "xls"], key=f"upload_{segment['id']}")
+        with col_b:
+            if st.button("Load sample dataset", key=f"sample_{segment['id']}"):
+                sample_df = get_sample_dataset()
+                upload_id = save_upload_for_segment(
+                    "sample_dataset.csv", sample_df, current_user["username"], segment["id"]
+                )
+                st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
+                st.dataframe(sample_df.head(), use_container_width=True)
         if uploaded:
             try:
                 if uploaded.name.endswith(".csv"):
@@ -58,6 +71,23 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
         else:
             st.table(history)
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # Status expander
+    charts = get_charts_for_segment(segment["id"])
+    tables = get_tables_for_segment(segment["id"])
+    with st.expander("Current dashboard status"):
+        st.markdown(
+            f"- Charts: **{len(charts)}**  \n- Tables: **{len(tables)}**",
+            unsafe_allow_html=False,
+        )
+        if charts:
+            st.markdown("**Charts**")
+            for c in charts:
+                st.markdown(f"- {c['name']} · {c['section']}")
+        if tables:
+            st.markdown("**Tables**")
+            for t in tables:
+                st.markdown(f"- {t['name']} · {t['section']}")
 
 
 def render_chart_builder(current_user: Dict, segment: Dict) -> None:
@@ -105,6 +135,29 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         default_y = [numeric_cols[0]] if numeric_cols else []
 
+        st.markdown("**Step 1b: Filters (optional)**")
+        filt_col1, filt_col2 = st.columns(2)
+        with filt_col1:
+            brand_filter = []
+            if "brand" in df.columns:
+                brand_filter = st.multiselect(
+                    "Filter by brand",
+                    options=sorted(df["brand"].dropna().unique().tolist()),
+                    key=f"chart_brand_filter_{segment['id']}",
+                )
+        with filt_col2:
+            year_filter = None
+            if "year" in df.columns:
+                years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
+                if years:
+                    year_filter = st.slider(
+                        "Year range",
+                        min_value=min(years),
+                        max_value=max(years),
+                        value=(min(years), max(years)),
+                        key=f"chart_year_filter_{segment['id']}",
+                    )
+
         st.markdown("**Step 2: Columns**")
         col_x, col_y = st.columns([1, 1.3])
         with col_x:
@@ -150,6 +203,7 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
             st.error("Select at least one Y column.")
             st.session_state[preview_key] = None
         else:
+            filter_spec = {"brands": brand_filter, "year_range": year_filter}
             st.session_state[preview_key] = {
                 "chart_name": chart_name.strip() or "Chart",
                 "chart_type": chart_type,
@@ -157,6 +211,7 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
                 "y_cols": y_cols,
                 "dataset_id": dataset_id,
                 "section": section,
+                "filters": filter_spec,
             }
             st.session_state[comment_key] = ""
 
@@ -166,6 +221,7 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
         if df_preview is None or df_preview.empty:
             st.warning("Dataset unavailable for preview.")
             return
+        df_preview = apply_filters(df_preview, preview_data.get("filters"))
         prev_col, note_col = st.columns([1.6, 1])
         with prev_col:
             st.markdown("#### Preview")
@@ -187,6 +243,7 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
                     current_user["username"],
                     segment["id"],
                     preview_data["section"],
+                    json.dumps(preview_data.get("filters") or {}),
                     comment.strip(),
                 )
                 st.success(
@@ -232,6 +289,29 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
             st.form_submit_button("Preview table", disabled=True)
             return
 
+        st.markdown("**Step 1b: Filters (optional)**")
+        filt_col1, filt_col2 = st.columns(2)
+        with filt_col1:
+            brand_filter = []
+            if "brand" in df.columns:
+                brand_filter = st.multiselect(
+                    "Filter by brand",
+                    options=sorted(df["brand"].dropna().unique().tolist()),
+                    key=f"table_brand_filter_{segment['id']}",
+                )
+        with filt_col2:
+            year_filter = None
+            if "year" in df.columns:
+                years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
+                if years:
+                    year_filter = st.slider(
+                        "Year range",
+                        min_value=min(years),
+                        max_value=max(years),
+                        value=(min(years), max(years)),
+                        key=f"table_year_filter_{segment['id']}",
+                    )
+
         st.markdown("**Step 2: Columns & destination**")
         cols_left, cols_right = st.columns([1, 1])
         with cols_left:
@@ -260,11 +340,13 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
             st.error("Pick at least one column.")
             st.session_state[table_key] = None
         else:
+            filter_spec = {"brands": brand_filter, "year_range": year_filter}
             st.session_state[table_key] = {
                 "dataset_id": dataset_id,
                 "name": table_name.strip() or "Dataset snapshot",
                 "columns": selected_columns,
                 "section": section,
+                "filters": filter_spec,
             }
             st.session_state[table_comment_key] = ""
 
@@ -274,6 +356,7 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
         if df_preview is None or df_preview.empty:
             st.warning("Dataset unavailable for preview.")
             return
+        df_preview = apply_filters(df_preview, table_preview.get("filters"))
         st.markdown("#### Preview")
         st.dataframe(df_preview[table_preview["columns"]].head(100), use_container_width=True)
         comment = st.text_area(
@@ -289,6 +372,7 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
                 current_user["username"],
                 segment["id"],
                 table_preview["section"],
+                json.dumps(table_preview.get("filters") or {}),
                 comment.strip(),
             )
             st.success(

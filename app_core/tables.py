@@ -15,13 +15,14 @@ def save_table(
     created_by: str,
     segment_id: int,
     section: str,
+    filter_json: str,
     comment: str = "",
 ) -> None:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO tables (name, dataset_id, columns_json, created_by, comment, segment_id, section, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tables (name, dataset_id, columns_json, created_by, comment, segment_id, section, filter_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -31,6 +32,7 @@ def save_table(
                 comment,
                 segment_id,
                 section,
+                filter_json,
                 datetime.datetime.utcnow().isoformat(),
             ),
         )
@@ -41,7 +43,7 @@ def get_tables_for_segment(segment_id: int):
     with get_connection() as conn:
         return conn.execute(
             """
-            SELECT id, name, dataset_id, columns_json, created_by, comment, section, created_at
+            SELECT id, name, dataset_id, columns_json, created_by, comment, section, filter_json, created_at
             FROM tables
             WHERE segment_id = ?
             ORDER BY created_at DESC
@@ -70,6 +72,10 @@ def build_table_preview(table_row) -> pd.DataFrame | None:
     if df is None or df.empty:
         return None
     cols = json.loads(table_row["columns_json"])
+    filters = json.loads(table_row["filter_json"]) if "filter_json" in table_row.keys() else {}
+    from app_core.filters import apply_filters  # local import to avoid cycle
+
+    df = apply_filters(df, filters)
     missing = [c for c in cols if c not in df.columns]
     if missing:
         return df.head(100)
