@@ -230,13 +230,14 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
             comment_val = st.text_area("Comment", key=comment_key, height=80)
             if block["type"] == "media":
                 uploaded = st.file_uploader(
-                    "Image", type=["png", "jpg", "jpeg"], key=f"media_upload_{key_suffix}"
+                    "Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=f"media_upload_{key_suffix}"
                 )
                 if st.button("Save to dashboard", key=f"save_block_{key_suffix}"):
                     if uploaded:
                         delete_media_for_section(segment["id"], block["section"])
-                        save_media_upload(uploaded, segment["id"], block["section"], current_user["username"])
-                        st.success(f"Saved image to {block['section']}")
+                        for file in uploaded:
+                            save_media_upload(file, segment["id"], block["section"], current_user["username"], comment_val.strip())
+                        st.success(f"Saved {len(uploaded)} image(s) to {block['section']}")
                         if hasattr(st, "rerun"):
                             st.rerun()
                         else:

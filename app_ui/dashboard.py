@@ -51,18 +51,19 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
     section_tabs = st.tabs(SECTIONS)
     charts_by_section = group_by_section(charts)
     tables_by_section = group_by_section(tables)
-    media_items = group_by_section(get_media_for_segment(segment["id"]))
+    media_by_section = group_by_section(get_media_for_segment(segment["id"]))
 
     for section, tab in zip(SECTIONS, section_tabs):
         with tab:
             section_charts = [dict(row) for row in charts_by_section.get(section, [])]
             section_tables = [dict(row) for row in tables_by_section.get(section, [])]
-            section_media = [dict(row) for row in media_items.get(section, [])]
+            section_media_items = [dict(row) for row in media_by_section.get(section, [])]
             blocks = (
                 [{"type": "chart", **row} for row in section_charts]
                 + [{"type": "table", **row} for row in section_tables]
-                + [{"type": "media", **row} for row in section_media]
             )
+            if section_media_items:
+                blocks.append({"type": "media", "section": section, "items": section_media_items})
             blocks = filter_blocks(blocks, search_lower)
             blocks = sorted(blocks, key=lambda b: b.get("created_at", ""), reverse=True)
             if not blocks:
@@ -178,20 +179,39 @@ def render_table_block(table, is_editor: bool) -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def render_media_block(media, is_editor: bool) -> None:
+def render_media_block(block, is_editor: bool) -> None:
+    items = block.get("items") or []
+    if not items:
+        st.info("No images uploaded for this section.")
+        return
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(f"<div class='pill'>Image</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{media['name']}</h4>", unsafe_allow_html=True)
-    if media.get("comment"):
-        st.markdown(f"<div class='comment-box'>{media['comment']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{block.get('section','Image')}</h4>", unsafe_allow_html=True)
+
+    if len(items) > 1:
+        idx = st.slider(
+            "Slide",
+            min_value=0,
+            max_value=len(items) - 1,
+            value=0,
+            key=f"media_slider_{block.get('section','')}",
+        )
+    else:
+        idx = 0
+    media = items[idx]
+    comment = media.get("comment") or ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
     if media.get("file_path"):
         st.image(media["file_path"], use_container_width=True)
     else:
         st.warning("Image missing.")
+    if len(items) > 1:
+        st.caption(f"Image {idx + 1} of {len(items)}")
     if is_editor:
-        if st.button("Delete image", key=f"del_media_{media['id']}"):
-            delete_media(media["id"])
-            st.success("Image removed")
+        if st.button("Delete images", key=f"del_media_section_{block.get('section','')}"):
+            delete_media_for_section(media.get("segment_id"), media.get("section"))
+            st.success("Images removed")
             if hasattr(st, "rerun"):
                 st.rerun()
             else:

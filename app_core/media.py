@@ -10,7 +10,7 @@ MEDIA_DIR = Path("data/media")
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def save_media_upload(uploaded_file, segment_id: int, section: str, created_by: str) -> str:
+def save_media_upload(uploaded_file, segment_id: int, section: str, created_by: str, comment: str = "") -> str:
     """Persist an uploaded image to disk and record in DB."""
     filename = f"{datetime.datetime.utcnow().timestamp()}_{uploaded_file.name}"
     file_path = MEDIA_DIR / filename
@@ -29,7 +29,7 @@ def save_media_upload(uploaded_file, segment_id: int, section: str, created_by: 
                 created_by,
                 segment_id,
                 section,
-                "",
+                comment,
                 datetime.datetime.utcnow().isoformat(),
             ),
         )
