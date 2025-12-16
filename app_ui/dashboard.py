@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Dict, List
 
 import streamlit as st
@@ -7,9 +8,9 @@ import streamlit as st
 from app_core.charts import count_charts_for_segment, delete_chart, get_dataset_label
 from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
-from app_core.media import delete_media, delete_media_for_section, get_media_for_segment
+from app_core.media import delete_media_for_section, get_media_for_segment
 from app_core.tables import build_table_preview, delete_table
-from app_core.uploads import count_uploads_for_segment, load_dataset
+from app_core.uploads import count_uploads_for_segment, load_dataset, overwrite_dataset
 
 from .charts import plot_chart
 
@@ -124,6 +125,15 @@ def render_blocks(blocks, is_editor: bool) -> None:
         st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
 
 
+def format_comment(text: str) -> str:
+    """Lightweight formatting: **bold**, ## heading, line breaks."""
+    safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    safe = re.sub(r"##\s*(.+)", r"<div style='font-size:1.08rem;font-weight:700'>\1</div>", safe)
+    safe = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", safe)
+    safe = safe.replace("\n", "<br>")
+    return safe
+
+
 def render_chart_block(chart, is_editor: bool) -> None:
     df = load_dataset(chart["dataset_id"])
     if df is None or df.empty:
@@ -142,7 +152,7 @@ def render_chart_block(chart, is_editor: bool) -> None:
     )
     comment = chart["comment"] if "comment" in chart.keys() else ""
     if comment:
-        st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
     plot_chart(df, chart["chart_type"], chart["x_col"], y_cols, chart_key=f"dash_chart_{chart['id']}")
     with st.expander("View data"):
         st.dataframe(df[[chart["x_col"]] + y_cols].head(200), use_container_width=True)
@@ -168,24 +178,34 @@ def render_table_block(table, is_editor: bool) -> None:
     )
     comment = table["comment"] if "comment" in table.keys() else ""
     if comment:
-        st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
     preview_df = build_table_preview(table)
     if preview_df is None or preview_df.empty:
         st.warning("Dataset missing or empty for this table.")
     else:
         st.dataframe(preview_df, use_container_width=True)
-        editable_df = preview_df.copy()
-        if "Notes" not in editable_df.columns:
-            editable_df["Notes"] = ""
-        st.caption("Editable view (local only; use download if needed).")
-        edited = st.data_editor(
-            editable_df.head(200),
-            use_container_width=True,
-            num_rows="dynamic",
-            key=f"edit_table_{table['id']}",
-        )
-        csv = edited.to_csv(index=False).encode("utf-8")
-        st.download_button("Download edited CSV", data=csv, file_name=f"table_{table['id']}_edited.csv", key=f"dl_table_{table['id']}")
+        if is_editor:
+            editable_df = preview_df.copy()
+            if "Notes" not in editable_df.columns:
+                editable_df["Notes"] = ""
+            st.caption("Editable view (changes can overwrite the dataset for this table).")
+            edited = st.data_editor(
+                editable_df.head(500),
+                use_container_width=True,
+                num_rows="dynamic",
+                key=f"edit_table_{table['id']}",
+            )
+            csv = edited.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Download edited CSV", data=csv, file_name=f"table_{table['id']}_edited.csv", key=f"dl_table_{table['id']}"
+            )
+            if st.button("Save edits to dataset", key=f"save_table_edits_{table['id']}"):
+                overwrite_dataset(table["dataset_id"], edited)
+                st.success("Dataset updated with your edits.")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     if is_editor:
         if st.button("Delete table", key=f"del_table_{table['id']}"):
             delete_table(table["id"])
@@ -220,7 +240,7 @@ def render_media_block(block, is_editor: bool) -> None:
     media = items[idx]
     comment = media.get("comment") or ""
     if comment:
-        st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
     file_path = media.get("file_path")
     if file_path and os.path.exists(file_path):
         if str(file_path).lower().endswith((".ppt", ".pptx")):

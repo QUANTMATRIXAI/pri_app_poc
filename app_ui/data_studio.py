@@ -227,7 +227,12 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                 st.info("Upload an image in the action column to publish to this section.")
         with col_actions:
             comment_key = f"block_comment_{key_suffix}"
-            comment_val = st.text_area("Comment", key=comment_key, height=80)
+            comment_val = st.text_area(
+                "Comment (use **bold**, prefix with ## for a larger line)",
+                key=comment_key,
+                height=80,
+                help="Wrap text with **double asterisks** to bold; start a line with ## for a larger heading.",
+            )
             if block["type"] == "media":
                 uploaded = st.file_uploader(
                     "Images / PPT",

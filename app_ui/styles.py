@@ -86,8 +86,8 @@ def inject_styles() -> None:
                 border-radius: 8px;
                 color: var(--text);
                 margin-bottom: 0.6rem;
-                font-size: 1rem;
-                font-weight: 600;
+                font-size: 0.98rem;
+                font-weight: 500;
             }
             .meta-line {
                 font-size: 0.9rem;

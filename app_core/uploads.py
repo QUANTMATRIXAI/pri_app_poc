@@ -151,6 +151,17 @@ def get_dataset_usage(upload_id: int) -> tuple[int, int]:
         return charts_count, tables_count
 
 
+def overwrite_dataset(upload_id: int, df: pd.DataFrame) -> None:
+    """Persist edited dataframe back to the uploads table."""
+    data_json = df.to_json(orient="records")
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE uploads SET data_json = ?, uploaded_at = ? WHERE id = ?",
+            (data_json, datetime.datetime.utcnow().isoformat(), upload_id),
+        )
+        conn.commit()
+
+
 def delete_upload(upload_id: int) -> tuple[bool, str]:
     charts_c, tables_c = get_dataset_usage(upload_id)
     if charts_c or tables_c:
