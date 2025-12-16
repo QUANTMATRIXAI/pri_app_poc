@@ -161,23 +161,18 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
             st.experimental_rerun()
 
     with st.form(f"chart_builder_{segment['id']}"):
-        st.markdown("**1) Dataset & filters**")
-        selected_label = st.selectbox(
-            "Dataset",
-            options=list(upload_options.keys()),
-            index=0,
-            key=f"chart_dataset_{segment['id']}",
-        )
-        dataset_id = upload_options[selected_label]
-        df = load_dataset(dataset_id)
-        if df is None or df.empty:
-            st.warning("Selected dataset is empty.")
-            st.form_submit_button("Preview chart", disabled=True)
-            return
-
-        left_filters, right_filters = st.columns(2)
-        with left_filters:
+        st.markdown("**Dataset & Filters**")
+        row1 = st.columns([2, 2, 1, 1])
+        with row1[0]:
+            selected_label = st.selectbox(
+                "Dataset",
+                options=list(upload_options.keys()),
+                index=0,
+                key=f"chart_dataset_{segment['id']}",
+            )
+        with row1[1]:
             chart_name = st.text_input("Chart name", value="Performance trend", key=f"chart_name_{segment['id']}")
+        with row1[2]:
             view_mode = st.selectbox(
                 "View",
                 options=["Monthly", "Yearly"],
@@ -185,10 +180,20 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
                 key=f"chart_view_{segment['id']}",
                 help="Monthly uses year/month; Yearly aggregates metrics by year (and brand).",
             )
+        with row1[3]:
             chart_type = st.selectbox(
                 "Chart type", options=["line", "bar"], index=0, key=f"chart_type_{segment['id']}"
             )
-        with right_filters:
+
+        dataset_id = upload_options[selected_label]
+        df = load_dataset(dataset_id)
+        if df is None or df.empty:
+            st.warning("Selected dataset is empty.")
+            st.form_submit_button("Preview chart", disabled=True)
+            return
+
+        row2 = st.columns([2, 2, 2])
+        with row2[0]:
             brands = []
             if "brand" in df.columns:
                 brands = st.multiselect(
@@ -197,6 +202,7 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
                     default=sorted(df["brand"].dropna().unique().tolist()),
                     key=f"chart_brand_filter_{segment['id']}",
                 )
+        with row2[1]:
             years = []
             if "year" in df.columns:
                 years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
@@ -207,7 +213,7 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
                     key=f"chart_year_filter_{segment['id']}",
                 )
 
-        st.markdown("**2) Axes**")
+        st.markdown("**Axes & Destination**")
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         default_y = [col for col in ["sales", "volume"] if col in numeric_cols]
         if not default_y and numeric_cols:
@@ -224,29 +230,28 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
         if not available_x:
             available_x = df.columns.tolist()
 
-        col_x, col_y = st.columns([1, 2])
-        with col_x:
+        row3 = st.columns([1, 2, 1])
+        with row3[0]:
             x_col = st.selectbox(
                 "X axis",
                 options=available_x,
                 index=available_x.index(x_col_default) if x_col_default in available_x else 0,
                 key=f"x_col_{segment['id']}",
             )
-        with col_y:
+        with row3[1]:
             y_cols = st.multiselect(
                 "Metrics (Y)",
                 options=numeric_cols,
                 default=default_y,
                 key=f"y_cols_{segment['id']}",
             )
-
-        st.markdown("**3) Dashboard destination**")
-        section = st.selectbox(
-            "Dashboard section",
-            options=SECTIONS,
-            index=0,
-            key=f"chart_section_{segment['id']}",
-        )
+        with row3[2]:
+            section = st.selectbox(
+                "Dashboard section",
+                options=SECTIONS,
+                index=0,
+                key=f"chart_section_{segment['id']}",
+            )
 
         preview = st.form_submit_button("Preview chart", use_container_width=True)
 
@@ -353,10 +358,26 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
             st.experimental_rerun()
 
     with st.form(f"table_builder_{segment['id']}"):
-        st.markdown("**1) Dataset & filters**")
-        selected_label = st.selectbox(
-            "Dataset", options=list(upload_options.keys()), index=0, key=f"table_dataset_{segment['id']}"
-        )
+        st.markdown("**Dataset & Filters**")
+        row1 = st.columns([2, 2, 1])
+        with row1[0]:
+            selected_label = st.selectbox(
+                "Dataset", options=list(upload_options.keys()), index=0, key=f"table_dataset_{segment['id']}"
+            )
+        with row1[1]:
+            table_name = st.text_input(
+                "Table name",
+                value="Dataset snapshot",
+                key=f"table_name_{segment['id']}",
+            )
+        with row1[2]:
+            view_mode = st.selectbox(
+                "View",
+                options=["Monthly", "Yearly"],
+                index=0,
+                key=f"table_view_{segment['id']}",
+                help="Monthly uses year/month; Yearly aggregates metrics by year (and brand).",
+            )
         dataset_id = upload_options[selected_label]
         df = load_dataset(dataset_id)
         if df is None or df.empty:
@@ -364,9 +385,8 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
             st.form_submit_button("Preview table", disabled=True)
             return
 
-        st.markdown("**Step 1b: Filters (optional)**")
-        filt_col1, filt_col2 = st.columns(2)
-        with filt_col1:
+        row2 = st.columns([2, 2, 2])
+        with row2[0]:
             brand_filter = []
             if "brand" in df.columns:
                 brand_filter = st.multiselect(
@@ -375,7 +395,7 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
                     default=sorted(df["brand"].dropna().unique().tolist()),
                     key=f"table_brand_filter_{segment['id']}",
                 )
-        with filt_col2:
+        with row2[1]:
             year_filter = []
             if "year" in df.columns:
                 years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
@@ -386,29 +406,16 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
                     key=f"table_year_filter_{segment['id']}",
                 )
 
-        view_mode = st.selectbox(
-            "View",
-            options=["Monthly", "Yearly"],
-            index=0,
-            key=f"table_view_{segment['id']}",
-            help="Monthly uses year/month; Yearly aggregates metrics by year (and brand).",
-        )
-
-        st.markdown("**2) Columns & destination**")
-        cols_left, cols_right = st.columns([1, 1])
-        with cols_left:
-            table_name = st.text_input(
-                "Table name",
-                value="Dataset snapshot",
-                key=f"table_name_{segment['id']}",
-            )
+        st.markdown("**Columns & Destination**")
+        row3 = st.columns([2, 2, 1])
+        with row3[0]:
             selected_columns: List[str] = st.multiselect(
                 "Columns to include",
                 options=df.columns.tolist(),
                 default=df.columns.tolist()[:5],
                 key=f"table_columns_{segment['id']}",
             )
-        with cols_right:
+        with row3[1]:
             section = st.selectbox(
                 "Dashboard section",
                 options=SECTIONS,
