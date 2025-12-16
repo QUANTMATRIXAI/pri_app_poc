@@ -235,7 +235,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
         filter_spec = {
             "brands": brands,
             "years": years,
-            "view_mode": "monthly" if block["view_mode"] == "monthly" else "yearly",
+            "view_mode": "monthly" if block.get("view_mode") == "monthly" else "yearly",
         }
         df_filtered = apply_filters(df.copy(), filter_spec)
 
