@@ -143,27 +143,6 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
         st.warning("Selected dataset is empty.")
         return
 
-    filter_col1, filter_col2 = st.columns([2, 2])
-    with filter_col1:
-        brands = []
-        if "brand" in df.columns:
-            brands = st.multiselect(
-                "Brands",
-                options=sorted(df["brand"].dropna().unique().tolist()),
-                default=sorted(df["brand"].dropna().unique().tolist()),
-                key=f"blocks_brand_filter_{segment['id']}",
-            )
-    with filter_col2:
-        years = []
-        if "year" in df.columns:
-            years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
-            years = st.multiselect(
-                "Years",
-                options=years,
-                default=years,
-                key=f"blocks_year_filter_{segment['id']}",
-            )
-
     blocks = [
         {
             "name": "NS Landscape - Yearly Sales",
@@ -219,6 +198,28 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
 
     st.markdown("**Preview & publish**")
     for block in blocks:
+        # per-section filters
+        filter_col1, filter_col2 = st.columns([2, 2])
+        with filter_col1:
+            brands = []
+            if "brand" in df.columns:
+                brands = st.multiselect(
+                    "Brands",
+                    options=sorted(df["brand"].dropna().unique().tolist()),
+                    default=sorted(df["brand"].dropna().unique().tolist()),
+                    key=f"{block['section']}_{segment['id']}_brands",
+                )
+        with filter_col2:
+            years = []
+            if "year" in df.columns:
+                years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
+                years = st.multiselect(
+                    "Years",
+                    options=years,
+                    default=years,
+                    key=f"{block['section']}_{segment['id']}_years",
+                )
+
         filter_spec = {
             "brands": brands,
             "years": years,
