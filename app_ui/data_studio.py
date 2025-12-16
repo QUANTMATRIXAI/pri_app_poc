@@ -163,93 +163,60 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
             "x_col": "year",
             "y_cols": ["volume"],
         },
-        {
-            "name": "Brand Truths - Monthly Sales",
-            "section": "Brand Truths",
-            "type": "chart",
-            "chart_type": "line",
-            "view_mode": "monthly",
-            "x_col": "period",
-            "y_cols": ["sales"],
-        },
-        {
-            "name": "Segment Trends - Monthly Volume",
-            "section": "Segment Trends",
-            "type": "chart",
-            "chart_type": "bar",
-            "view_mode": "monthly",
-            "x_col": "period",
-            "y_cols": ["volume"],
-        },
-        {
-            "name": "Brand Trends - Monthly Table",
-            "section": "Brand Trends",
-            "type": "table",
-            "view_mode": "monthly",
-            "columns": ["year", "month", "brand", "sales", "volume", "price"],
-        },
-        {
-            "name": "Battlegrounds - Yearly Price Table",
-            "section": "Battlegrounds",
-            "type": "table",
-            "view_mode": "yearly",
-            "columns": ["year", "brand", "price"],
-        },
-        {
-            "name": "Brand Truths - Image",
-            "section": "Brand Truths",
-            "type": "media",
-        },
-        {
-            "name": "Segment Trends - Image",
-            "section": "Segment Trends",
-            "type": "media",
-        },
+        # Brand Truths and Segment Trends now use images instead of charts
+        {"name": "Brand Trends - Monthly Table", "section": "Brand Trends", "type": "table", "view_mode": "monthly", "columns": ["year", "month", "brand", "sales", "volume", "price"]},
+        {"name": "Battlegrounds - Yearly Price Table", "section": "Battlegrounds", "type": "table", "view_mode": "yearly", "columns": ["year", "brand", "price"]},
+        {"name": "Brand Truths - Image", "section": "Brand Truths", "type": "media"},
+        {"name": "Segment Trends - Image", "section": "Segment Trends", "type": "media"},
     ]
 
     st.markdown("**Preview & publish**")
     for block in blocks:
         key_suffix = f"{segment['id']}_{block['section'].replace(' ', '_')}_{block['name'].replace(' ', '_')}"
         # per-section filters
-        filter_col1, filter_col2 = st.columns([2, 2])
-        with filter_col1:
-            brands = []
-            if "brand" in df.columns:
-                brands = st.multiselect(
-                    "Brands",
-                    options=sorted(df["brand"].dropna().unique().tolist()),
-                    default=sorted(df["brand"].dropna().unique().tolist()),
-                    key=f"{key_suffix}_brands",
-                )
-        with filter_col2:
-            years = []
-            if "year" in df.columns:
-                years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
-                years = st.multiselect(
-                    "Years",
-                    options=years,
-                    default=years,
-                    key=f"{key_suffix}_years",
-                )
+        brands = []
+        years = []
+        if block["type"] != "media":
+            filter_col1, filter_col2 = st.columns([2, 2])
+            with filter_col1:
+                if "brand" in df.columns:
+                    brands = st.multiselect(
+                        "Brands",
+                        options=sorted(df["brand"].dropna().unique().tolist()),
+                        default=sorted(df["brand"].dropna().unique().tolist()),
+                        key=f"{key_suffix}_brands",
+                    )
+            with filter_col2:
+                if "year" in df.columns:
+                    years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
+                    years = st.multiselect(
+                        "Years",
+                        options=years,
+                        default=years,
+                        key=f"{key_suffix}_years",
+                    )
 
         filter_spec = {
             "brands": brands,
             "years": years,
             "view_mode": "monthly" if block.get("view_mode") == "monthly" else "yearly",
         }
-        df_filtered = apply_filters(df.copy(), filter_spec)
+        df_filtered = apply_filters(df.copy(), filter_spec) if block["type"] != "media" else df
 
         col_preview, col_actions = st.columns([3, 1])
         with col_preview:
             st.markdown(f"##### {block['name']} ({block['section']})")
             if block["type"] == "chart":
-                plot_chart(
-                    df_filtered,
-                    block["chart_type"],
-                    block["x_col"],
-                    block["y_cols"],
-                    chart_key=f"block_preview_{key_suffix}",
-                )
+                if block["x_col"] not in df_filtered.columns:
+                    st.warning(f"Column {block['x_col']} not in dataset.")
+                else:
+                    plot_chart(
+                        df_filtered,
+                        block["chart_type"],
+                        block["x_col"],
+                        block["y_cols"],
+                        chart_key=f"block_preview_{key_suffix}",
+                    )
             elif block["type"] == "table":
                 cols_in_df = [c for c in block["columns"] if c in df_filtered.columns]
                 if cols_in_df:
