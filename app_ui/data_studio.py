@@ -65,6 +65,9 @@ def render_chart_builder(current_user: Dict) -> None:
         st.session_state["chart_preview"] = None
     if "chart_preview_comment" not in st.session_state:
         st.session_state["chart_preview_comment"] = ""
+    if st.session_state.get("chart_preview_comment_reset"):
+        st.session_state["chart_preview_comment"] = ""
+        st.session_state["chart_preview_comment_reset"] = False
 
     upload_options = {f"#{row['id']} - {row['filename']}": row["id"] for row in uploads}
 
@@ -149,5 +152,8 @@ def render_chart_builder(current_user: Dict) -> None:
                 )
                 st.success(f"Saved chart to dashboard using dataset #{preview_data['dataset_id']}")
                 st.session_state["chart_preview"] = None
-                st.session_state["chart_preview_comment"] = ""
-
+                st.session_state["chart_preview_comment_reset"] = True
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
