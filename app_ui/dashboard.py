@@ -210,8 +210,9 @@ def render_media_block(block, is_editor: bool) -> None:
     file_path = media.get("file_path")
     if file_path and os.path.exists(file_path):
         if str(file_path).lower().endswith((".ppt", ".pptx")):
+            st.caption("PPT preview not available; download to view.")
             with open(file_path, "rb") as f:
-                st.download_button("Download PPT", data=f, file_name=os.path.basename(file_path))
+                st.download_button("Download PPT", data=f.read(), file_name=os.path.basename(file_path))
         else:
             st.image(file_path, use_container_width=True)
     else:
