@@ -52,21 +52,18 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
 
     for section, tab in zip(SECTIONS, section_tabs):
         with tab:
-            section_charts = charts_by_section.get(section, [])
-            section_tables = tables_by_section.get(section, [])
-            section_charts = filter_by_search(section_charts, search_lower)
-            section_tables = filter_by_search(section_tables, search_lower, is_table=True)
-            if not section_charts and not section_tables:
+            section_charts = [dict(row) for row in charts_by_section.get(section, [])]
+            section_tables = [dict(row) for row in tables_by_section.get(section, [])]
+            blocks = (
+                [{"type": "chart", **row} for row in section_charts]
+                + [{"type": "table", **row} for row in section_tables]
+            )
+            blocks = filter_blocks(blocks, search_lower)
+            blocks = sorted(blocks, key=lambda b: b.get("created_at", ""), reverse=True)
+            if not blocks:
                 st.info("No content yet. Publish from Data Studio.")
                 continue
-
-            if section_charts:
-                st.markdown("### Charts")
-                render_chart_grid(section_charts, is_editor)
-
-            if section_tables:
-                st.markdown("### Tables")
-                render_tables(section_tables, is_editor)
+            render_blocks(blocks, is_editor)
 
 
 def group_by_section(rows) -> Dict[str, List]:
@@ -90,65 +87,83 @@ def filter_by_search(items, search_lower: str, is_table: bool = False):
     return filtered
 
 
-def render_chart_grid(charts, is_editor: bool) -> None:
-    for i in range(0, len(charts), 2):
+def filter_blocks(blocks, search_lower: str):
+    if not search_lower:
+        return blocks
+    filtered = []
+    for block in blocks:
+        dataset_label = get_dataset_label(block["dataset_id"])
+        comment = block["comment"] if "comment" in block.keys() else ""
+        haystack = " ".join([block["name"], dataset_label, comment or "", block.get("type", "")]).lower()
+        if search_lower in haystack:
+            filtered.append(block)
+    return filtered
+
+
+def render_blocks(blocks, is_editor: bool) -> None:
+    for i in range(0, len(blocks), 2):
         cols = st.columns(2)
-        for offset, chart in enumerate(charts[i : i + 2]):
+        for offset, block in enumerate(blocks[i : i + 2]):
             with cols[offset]:
-                df = load_dataset(chart["dataset_id"])
-                if df is None or df.empty:
-                    st.warning(f"Dataset missing for chart '{chart['name']}'.")
-                    continue
-                y_cols = json.loads(chart["y_cols"])
-                dataset_label = get_dataset_label(chart["dataset_id"])
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                st.markdown(f"<h4 class='chart-title'>{chart['name']}</h4>", unsafe_allow_html=True)
-                st.markdown(
-                    f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
-                    unsafe_allow_html=True,
-                )
-                comment = chart["comment"] if "comment" in chart.keys() else ""
-                if comment:
-                    st.markdown(
-                        f"<div class='comment-box'>{comment}</div>",
-                        unsafe_allow_html=True,
-                    )
-                plot_chart(df, chart["chart_type"], chart["x_col"], y_cols)
-                if is_editor:
-                    if st.button("Delete chart", key=f"del_chart_{chart['id']}"):
-                        delete_chart(chart["id"])
-                        st.success("Chart removed")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
-                        else:
-                            st.experimental_rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
+                if block["type"] == "chart":
+                    render_chart_block(block, is_editor)
+                else:
+                    render_table_block(block, is_editor)
         st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
 
 
-def render_tables(tables, is_editor: bool) -> None:
-    for table in tables:
-        dataset_label = get_dataset_label(table["dataset_id"])
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.markdown(f"<h4 class='chart-title'>{table['name']}</h4>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
-            unsafe_allow_html=True,
-        )
-        comment = table["comment"] if "comment" in table.keys() else ""
-        if comment:
-            st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
-        preview_df = build_table_preview(table)
-        if preview_df is None or preview_df.empty:
-            st.warning("Dataset missing or empty for this table.")
-        else:
-            st.dataframe(preview_df, use_container_width=True)
-        if is_editor:
-            if st.button("Delete table", key=f"del_table_{table['id']}"):
-                delete_table(table["id"])
-                st.success("Table removed")
-                if hasattr(st, "rerun"):
-                    st.rerun()
-                else:
-                    st.experimental_rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+def render_chart_block(chart, is_editor: bool) -> None:
+    df = load_dataset(chart["dataset_id"])
+    if df is None or df.empty:
+        st.warning(f"Dataset missing for chart '{chart['name']}'.")
+        return
+    y_cols = json.loads(chart["y_cols"])
+    dataset_label = get_dataset_label(chart["dataset_id"])
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    st.markdown(f"<div class='pill'>Chart</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{chart['name']}</h4>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
+        unsafe_allow_html=True,
+    )
+    comment = chart["comment"] if "comment" in chart.keys() else ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
+    plot_chart(df, chart["chart_type"], chart["x_col"], y_cols)
+    if is_editor:
+        if st.button("Delete chart", key=f"del_chart_{chart['id']}"):
+            delete_chart(chart["id"])
+            st.success("Chart removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_table_block(table, is_editor: bool) -> None:
+    dataset_label = get_dataset_label(table["dataset_id"])
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{table['name']}</h4>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
+        unsafe_allow_html=True,
+    )
+    comment = table["comment"] if "comment" in table.keys() else ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
+    preview_df = build_table_preview(table)
+    if preview_df is None or preview_df.empty:
+        st.warning("Dataset missing or empty for this table.")
+    else:
+        st.dataframe(preview_df, use_container_width=True)
+    if is_editor:
+        if st.button("Delete table", key=f"del_table_{table['id']}"):
+            delete_table(table["id"])
+            st.success("Table removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
