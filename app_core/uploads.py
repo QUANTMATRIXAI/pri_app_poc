@@ -115,14 +115,26 @@ def count_uploads_for_segment(segment_id: int) -> int:
 
 
 def get_sample_dataset() -> pd.DataFrame:
-    data = {
-        "year": [2019, 2020, 2021, 2022, 2023, 2019, 2020, 2021, 2022, 2023],
-        "brand": ["Alpha", "Alpha", "Alpha", "Alpha", "Alpha", "Beta", "Beta", "Beta", "Beta", "Beta"],
-        "sales": [12.3, 13.1, 14.0, 15.2, 16.8, 9.5, 10.1, 11.4, 12.0, 12.9],
-        "volume": [110, 120, 130, 142, 155, 90, 95, 105, 112, 118],
-        "price": [112, 109, 108, 107, 108, 105, 106, 108, 107, 109],
-    }
-    return pd.DataFrame(data)
+    rows = []
+    brands = ["Alpha", "Beta"]
+    for year in [2023, 2024]:
+        for month in range(1, 13):
+            for brand in brands:
+                base = 100 if brand == "Alpha" else 85
+                sales = base + (month * 2) + (year - 2023) * 5
+                volume = base + month * 3
+                price = round(sales / max(volume, 1) * 10, 2)
+                rows.append(
+                    {
+                        "year": year,
+                        "month": month,
+                        "brand": brand,
+                        "sales": round(sales, 2),
+                        "volume": round(volume, 2),
+                        "price": price,
+                    }
+                )
+    return pd.DataFrame(rows)
 
 
 def get_dataset_usage(upload_id: int) -> tuple[int, int]:
