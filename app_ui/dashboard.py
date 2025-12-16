@@ -142,7 +142,7 @@ def render_chart_block(chart, is_editor: bool) -> None:
     )
     comment = chart["comment"] if "comment" in chart.keys() else ""
     if comment:
-                st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='comment-box'>{comment}</div>", unsafe_allow_html=True)
     plot_chart(df, chart["chart_type"], chart["x_col"], y_cols, chart_key=f"dash_chart_{chart['id']}")
     with st.expander("View data"):
         st.dataframe(df[[chart["x_col"]] + y_cols].head(200), use_container_width=True)
@@ -174,12 +174,18 @@ def render_table_block(table, is_editor: bool) -> None:
         st.warning("Dataset missing or empty for this table.")
     else:
         st.dataframe(preview_df, use_container_width=True)
-        if is_editor:
-            editable_df = preview_df.copy()
-            if "Notes" not in editable_df.columns:
-                editable_df["Notes"] = ""
-            st.caption("Editable view (not saved; for quick what-if checks).")
-            st.data_editor(editable_df.head(200), use_container_width=True, num_rows="dynamic", key=f"edit_table_{table['id']}")
+        editable_df = preview_df.copy()
+        if "Notes" not in editable_df.columns:
+            editable_df["Notes"] = ""
+        st.caption("Editable view (local only; use download if needed).")
+        edited = st.data_editor(
+            editable_df.head(200),
+            use_container_width=True,
+            num_rows="dynamic",
+            key=f"edit_table_{table['id']}",
+        )
+        csv = edited.to_csv(index=False).encode("utf-8")
+        st.download_button("Download edited CSV", data=csv, file_name=f"table_{table['id']}_edited.csv", key=f"dl_table_{table['id']}")
     if is_editor:
         if st.button("Delete table", key=f"del_table_{table['id']}"):
             delete_table(table["id"])
