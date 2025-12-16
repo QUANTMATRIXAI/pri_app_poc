@@ -123,3 +123,27 @@ def get_sample_dataset() -> pd.DataFrame:
         "price": [112, 109, 108, 107, 108, 105, 106, 108, 107, 109],
     }
     return pd.DataFrame(data)
+
+
+def get_dataset_usage(upload_id: int) -> tuple[int, int]:
+    """Return (charts_count, tables_count) referencing the dataset."""
+    with get_connection() as conn:
+        charts_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM charts WHERE dataset_id = ?",
+            (upload_id,),
+        ).fetchone()["c"]
+        tables_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM tables WHERE dataset_id = ?",
+            (upload_id,),
+        ).fetchone()["c"]
+        return charts_count, tables_count
+
+
+def delete_upload(upload_id: int) -> tuple[bool, str]:
+    charts_c, tables_c = get_dataset_usage(upload_id)
+    if charts_c or tables_c:
+        return False, "Dataset in use by dashboard content; delete charts/tables first."
+    with get_connection() as conn:
+        conn.execute("DELETE FROM uploads WHERE id = ?", (upload_id,))
+        conn.commit()
+    return True, "Dataset deleted"

@@ -9,6 +9,8 @@ from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
 from app_core.tables import get_tables_for_segment, save_table
 from app_core.uploads import (
+    delete_upload,
+    get_dataset_usage,
     get_sample_dataset,
     get_upload_history,
     get_uploads,
@@ -70,6 +72,36 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
             st.write("No uploads yet.")
         else:
             st.table(history)
+
+        st.markdown("#### Manage datasets")
+        uploads_list = get_uploads(segment_id=segment["id"])
+        if not uploads_list:
+            st.write("No datasets in this segment.")
+        else:
+            for row in uploads_list:
+                charts_c, tables_c = get_dataset_usage(row["id"])
+                cols = st.columns([2, 1, 1, 1])
+                with cols[0]:
+                    st.markdown(f"**{row['filename']}**")
+                    st.caption(f"Uploaded: {row['uploaded_at']}")
+                with cols[1]:
+                    st.caption(f"Charts: {charts_c}")
+                with cols[2]:
+                    st.caption(f"Tables: {tables_c}")
+                with cols[3]:
+                    disabled = charts_c > 0 or tables_c > 0
+                    label = "In use" if disabled else "Delete"
+                    if st.button(label, key=f"del_upload_{row['id']}", disabled=disabled):
+                        ok, msg = delete_upload(row["id"])
+                        if ok:
+                            st.success(msg)
+                        else:
+                            st.error(msg)
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     # Status expander
@@ -94,6 +126,14 @@ def render_chart_builder(current_user: Dict, segment: Dict) -> None:
     uploads = get_uploads(segment_id=segment["id"])
     if not uploads:
         st.info("Upload data first to build charts for this segment.")
+        if st.button("Load sample dataset", key=f"chart_load_sample_{segment['id']}"):
+            sample_df = get_sample_dataset()
+            upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
+            st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
         return
 
     preview_key = f"chart_preview_{segment['id']}"
@@ -261,6 +301,14 @@ def render_table_builder(current_user: Dict, segment: Dict) -> None:
     uploads = get_uploads(segment_id=segment["id"])
     if not uploads:
         st.info("Upload data first to publish tables for this segment.")
+        if st.button("Load sample dataset", key=f"table_load_sample_{segment['id']}"):
+            sample_df = get_sample_dataset()
+            upload_id = save_upload_for_segment("sample_dataset.csv", sample_df, current_user["username"], segment["id"])
+            st.success(f"Loaded sample dataset #{upload_id} for {segment['name']}")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
         return
 
     table_key = f"table_preview_{segment['id']}"
