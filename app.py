@@ -5,6 +5,7 @@ from app_core.charts import get_charts_for_segment
 from app_core.database import (
     ensure_chart_comment_column,
     ensure_tables_table,
+    ensure_media_table,
     ensure_uploads_segment_column,
     init_db,
     migrate_charts_table,
@@ -35,6 +36,7 @@ def bootstrap() -> None:
     ensure_uploads_segment_column(default_segment_id)
     ensure_chart_comment_column()
     ensure_tables_table()
+    ensure_media_table()
     with get_connection() as conn:
         if default_segment_id:
             conn.execute("UPDATE uploads SET segment_id = ? WHERE segment_id IS NULL", (default_segment_id,))

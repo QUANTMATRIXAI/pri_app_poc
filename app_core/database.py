@@ -174,6 +174,26 @@ def ensure_tables_table() -> None:
         conn.commit()
 
 
+def ensure_media_table() -> None:
+    """Ensure table for uploaded media shown on dashboard sections."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS media (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                segment_id INTEGER,
+                section TEXT NOT NULL,
+                comment TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+
 def ensure_uploads_segment_column(default_segment_id: Optional[int]) -> None:
     """Ensure uploads carry a segment reference."""
     with get_connection() as conn:

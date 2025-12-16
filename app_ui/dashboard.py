@@ -6,6 +6,7 @@ import streamlit as st
 from app_core.charts import count_charts_for_segment, delete_chart, get_dataset_label
 from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
+from app_core.media import delete_media, get_media_for_segment
 from app_core.tables import build_table_preview, delete_table
 from app_core.uploads import count_uploads_for_segment, load_dataset
 
@@ -50,14 +51,17 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
     section_tabs = st.tabs(SECTIONS)
     charts_by_section = group_by_section(charts)
     tables_by_section = group_by_section(tables)
+    media_items = group_by_section(get_media_for_segment(segment["id"]))
 
     for section, tab in zip(SECTIONS, section_tabs):
         with tab:
             section_charts = [dict(row) for row in charts_by_section.get(section, [])]
             section_tables = [dict(row) for row in tables_by_section.get(section, [])]
+            section_media = [dict(row) for row in media_items.get(section, [])]
             blocks = (
                 [{"type": "chart", **row} for row in section_charts]
                 + [{"type": "table", **row} for row in section_tables]
+                + [{"type": "media", **row} for row in section_media]
             )
             blocks = filter_blocks(blocks, search_lower)
             blocks = sorted(blocks, key=lambda b: b.get("created_at", ""), reverse=True)
@@ -108,8 +112,10 @@ def render_blocks(blocks, is_editor: bool) -> None:
             with cols[offset]:
                 if block["type"] == "chart":
                     render_chart_block(block, is_editor)
-                else:
+                elif block["type"] == "table":
                     render_table_block(block, is_editor)
+                else:
+                    render_media_block(block, is_editor)
         st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
 
 
@@ -165,6 +171,27 @@ def render_table_block(table, is_editor: bool) -> None:
         if st.button("Delete table", key=f"del_table_{table['id']}"):
             delete_table(table["id"])
             st.success("Table removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_media_block(media, is_editor: bool) -> None:
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    st.markdown(f"<div class='pill'>Image</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{media['name']}</h4>", unsafe_allow_html=True)
+    if media.get("comment"):
+        st.markdown(f"<div class='comment-box'>{media['comment']}</div>", unsafe_allow_html=True)
+    if media.get("file_path"):
+        st.image(media["file_path"], use_column_width=True)
+    else:
+        st.warning("Image missing.")
+    if is_editor:
+        if st.button("Delete image", key=f"del_media_{media['id']}"):
+            delete_media(media["id"])
+            st.success("Image removed")
             if hasattr(st, "rerun"):
                 st.rerun()
             else:
