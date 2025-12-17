@@ -233,6 +233,28 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                 height=80,
                 help="Wrap text with **double asterisks** to bold; start a line with ## for a larger heading.",
             )
+            # extra comments list
+            extra_key = f"block_extra_comments_{key_suffix}"
+            if extra_key not in st.session_state:
+                st.session_state[extra_key] = []
+            note_key = f"add_note_{key_suffix}"
+            new_comment = st.text_input("Add another note", key=note_key)
+            if st.button("Add note", key=f"add_btn_{key_suffix}"):
+                if new_comment.strip():
+                    st.session_state[extra_key].append(new_comment.strip())
+                    st.session_state[note_key] = ""
+            if st.session_state[extra_key]:
+                st.markdown("Extra notes:")
+                to_remove = None
+                for idx, note in enumerate(st.session_state[extra_key]):
+                    cols_rm = st.columns([3, 1])
+                    with cols_rm[0]:
+                        st.write(f"- {note}")
+                    with cols_rm[1]:
+                        if st.button("Remove", key=f"rm_note_{key_suffix}_{idx}"):
+                            to_remove = idx
+                if to_remove is not None:
+                    st.session_state[extra_key].pop(to_remove)
             if block["type"] == "media":
                 uploaded = st.file_uploader(
                     "Images / PPT",
@@ -244,7 +266,13 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                     if uploaded:
                         delete_media_for_section(segment["id"], block["section"])
                         for file in uploaded:
-                            save_media_upload(file, segment["id"], block["section"], current_user["username"], comment_val.strip())
+                            save_media_upload(
+                                file,
+                                segment["id"],
+                                block["section"],
+                                current_user["username"],
+                                comment_val.strip() + format_extra_comments(st.session_state.get(extra_key, [])),
+                            )
                         st.success(f"Saved {len(uploaded)} image(s) to {block['section']}")
                         if hasattr(st, "rerun"):
                             st.rerun()
@@ -266,7 +294,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                             segment["id"],
                             block["section"],
                             json.dumps(filter_spec),
-                            comment_val.strip(),
+                            comment_val.strip() + format_extra_comments(st.session_state.get(extra_key, [])),
                         )
                     else:
                         delete_tables_for_section(segment["id"], block["section"], block["name"])
@@ -278,10 +306,15 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                             segment["id"],
                             block["section"],
                             json.dumps(filter_spec),
-                            comment_val.strip(),
+                            comment_val.strip() + format_extra_comments(st.session_state.get(extra_key, [])),
                         )
                     st.success(f"Saved to {block['section']}")
                     if hasattr(st, "rerun"):
                         st.rerun()
                     else:
                         st.experimental_rerun()
+def format_extra_comments(extras: list[str] | None) -> str:
+    if not extras:
+        return ""
+    bullet = "<br>" + "<br>".join([f"• {c}" for c in extras])
+    return bullet
