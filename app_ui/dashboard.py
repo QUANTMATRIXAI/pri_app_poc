@@ -81,7 +81,10 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
             blocks = filter_blocks(blocks, search_lower)
             blocks = sorted(blocks, key=lambda b: b.get("created_at", ""), reverse=True)
             if not blocks:
-                st.info("No content yet. Publish from Data Studio.")
+                if section == "Battlegrounds":
+                    render_battleground_tabs_view(segment["id"], is_editor)
+                else:
+                    st.info("No content yet. Publish from Data Studio.")
                 continue
             render_blocks(blocks, is_editor, media_by_section, current_section=section, segment_id=segment["id"])
 
