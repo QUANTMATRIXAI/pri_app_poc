@@ -50,7 +50,7 @@ def render_header() -> None:
         """
         <div class="info-card" style="margin-bottom: 1rem;">
             <div class="pill">Secure Workspace</div>
-            <h1 style="margin-bottom:0.2rem;">Trial Dashboard</h1>
+            <h1 style="margin-bottom:0.2rem;">Trinity - Data Science Democratised</h1>
             <p style="color: var(--muted); margin-bottom:0;">Editors manage data and publish charts; viewers see the live dashboard only.</p>
         </div>
         """,
@@ -60,7 +60,7 @@ def render_header() -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Trial Dashboard",
+        page_title="Trinity - Data Science Democratised",
         page_icon=":bar_chart:",
         layout="wide",
     )

@@ -1,0 +1,13 @@
+# Bytecode and caches
+__pycache__/
+app_core/__pycache__/
+app_ui/__pycache__/
+*.pyc
+
+# Local data and media
+data/
+Trinity - Data Science Democratised_files/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

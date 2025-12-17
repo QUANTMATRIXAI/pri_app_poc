@@ -97,6 +97,41 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
                         else:
                             st.experimental_rerun()
 
+        with st.expander("Remove uploaded files for this segment"):
+            if not uploads_list:
+                st.caption("No files to remove.")
+            else:
+                for row in uploads_list:
+                    charts_c, tables_c = get_dataset_usage(row["id"])
+                    in_use = charts_c > 0 or tables_c > 0
+                    cols = st.columns([3, 2, 2, 1])
+                    with cols[0]:
+                        st.write(row["filename"])
+                        st.caption(f"Uploaded: {row['uploaded_at']}")
+                    with cols[1]:
+                        st.caption(f"Charts using: {charts_c}")
+                    with cols[2]:
+                        st.caption(f"Tables using: {tables_c}")
+                    with cols[3]:
+                        if in_use:
+                            st.button(
+                                "In use",
+                                key=f"del_upload_disabled_{row['id']}",
+                                disabled=True,
+                                help="Detach charts/tables before deleting this file.",
+                            )
+                        else:
+                            if st.button("Delete", key=f"del_upload_inline_{row['id']}"):
+                                ok, msg = delete_upload(row["id"])
+                                if ok:
+                                    st.success(msg)
+                                else:
+                                    st.error(msg)
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     # Status expander
@@ -154,6 +189,9 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
             "x_col": "year",
             "y_cols": ["sales"],
         },
+        {"name": "NS Image 1", "section": "NS Landscape", "type": "media"},
+        {"name": "NS Image 2", "section": "NS Landscape", "type": "media"},
+        {"name": "NS Image 3", "section": "NS Landscape", "type": "media"},
         {
             "name": "Segment Truths - Yearly Volume",
             "section": "Segment Truths",
@@ -171,6 +209,8 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
     ]
 
     st.markdown("**Preview & publish**")
+    printed_sections = set()
+
     for block in blocks:
         key_suffix = f"{segment['id']}_{block['section'].replace(' ', '_')}_{block['name'].replace(' ', '_')}"
         # per-section filters
@@ -202,6 +242,10 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
             "view_mode": "monthly" if block.get("view_mode") == "monthly" else "yearly",
         }
         df_filtered = apply_filters(df.copy(), filter_spec) if block["type"] != "media" else df
+
+        if block["section"] not in printed_sections:
+            st.markdown(f"### {block['section']}")
+            printed_sections.add(block["section"])
 
         col_preview, col_actions = st.columns([3, 1])
         with col_preview:
@@ -264,7 +308,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                 )
                 if st.button("Save to dashboard", key=f"save_block_{key_suffix}"):
                     if uploaded:
-                        delete_media_for_section(segment["id"], block["section"])
+                        delete_media_for_section(segment["id"], block["section"], block["name"])
                         for file in uploaded:
                             save_media_upload(
                                 file,
@@ -272,6 +316,7 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                                 block["section"],
                                 current_user["username"],
                                 comment_val.strip() + format_extra_comments(st.session_state.get(extra_key, [])),
+                                label=block["name"],
                             )
                         st.success(f"Saved {len(uploaded)} image(s) to {block['section']}")
                         if hasattr(st, "rerun"):
@@ -313,8 +358,9 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                         st.rerun()
                     else:
                         st.experimental_rerun()
+
 def format_extra_comments(extras: list[str] | None) -> str:
     if not extras:
         return ""
-    bullet = "<br>" + "<br>".join([f"• {c}" for c in extras])
-    return bullet
+    bullet_lines = [f"• {c}" for c in extras]
+    return "\n" + "\n".join(bullet_lines)

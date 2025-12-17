@@ -10,8 +10,16 @@ MEDIA_DIR = Path("data/media")
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def save_media_upload(uploaded_file, segment_id: int, section: str, created_by: str, comment: str = "") -> str:
-    """Persist an uploaded image to disk and record in DB."""
+def save_media_upload(
+    uploaded_file,
+    segment_id: int,
+    section: str,
+    created_by: str,
+    comment: str = "",
+    label: str | None = None,
+) -> str:
+    """Persist an uploaded media file to disk and record in DB."""
+    display_name = label or uploaded_file.name
     filename = f"{datetime.datetime.utcnow().timestamp()}_{uploaded_file.name}"
     file_path = MEDIA_DIR / filename
     with open(file_path, "wb") as f:
@@ -24,7 +32,7 @@ def save_media_upload(uploaded_file, segment_id: int, section: str, created_by: 
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                uploaded_file.name,
+                display_name,
                 str(file_path),
                 created_by,
                 segment_id,
@@ -72,13 +80,18 @@ def delete_media(media_id: int) -> None:
             pass
 
 
-def delete_media_for_section(segment_id: int, section: str) -> None:
+def delete_media_for_section(segment_id: int, section: str, name: str | None = None) -> None:
+    query = "SELECT id, file_path FROM media WHERE segment_id = ? AND section = ?"
+    params: list = [segment_id, section]
+    if name:
+        query += " AND name = ?"
+        params.append(name)
     with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT id, file_path FROM media WHERE segment_id = ? AND section = ?",
-            (segment_id, section),
-        ).fetchall()
-        conn.execute("DELETE FROM media WHERE segment_id = ? AND section = ?", (segment_id, section))
+        rows = conn.execute(query, tuple(params)).fetchall()
+        if name:
+            conn.execute("DELETE FROM media WHERE segment_id = ? AND section = ? AND name = ?", (segment_id, section, name))
+        else:
+            conn.execute("DELETE FROM media WHERE segment_id = ? AND section = ?", (segment_id, section))
         conn.commit()
     for row in rows:
         if row["file_path"] and os.path.exists(row["file_path"]):

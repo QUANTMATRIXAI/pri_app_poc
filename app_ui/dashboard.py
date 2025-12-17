@@ -1,8 +1,10 @@
 import json
 import os
 import re
+import uuid
 from typing import Dict, List
 
+import pandas as pd
 import streamlit as st
 
 from app_core.charts import count_charts_for_segment, delete_chart, get_dataset_label
@@ -65,7 +67,13 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
                 + [{"type": "table", **row} for row in section_tables]
             )
             if section_media_items:
-                blocks.append({"type": "media", "section": section, "items": section_media_items})
+                if section == "NS Landscape":
+                    names = sorted({m["name"] for m in section_media_items})
+                    for name in names:
+                        filtered = [m for m in section_media_items if m["name"] == name]
+                        blocks.append({"type": "media", "section": section, "items": filtered, "name": name})
+                else:
+                    blocks.append({"type": "media", "section": section, "items": section_media_items, "name": section})
             # Brand Truths and Segment Trends are image-only
             if section in {"Brand Truths", "Segment Trends"}:
                 blocks = [b for b in blocks if b["type"] == "media"]
@@ -74,7 +82,7 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
             if not blocks:
                 st.info("No content yet. Publish from Data Studio.")
                 continue
-            render_blocks(blocks, is_editor)
+            render_blocks(blocks, is_editor, media_by_section, current_section=section)
 
 
 def group_by_section(rows) -> Dict[str, List]:
@@ -111,27 +119,54 @@ def filter_blocks(blocks, search_lower: str):
     return filtered
 
 
-def render_blocks(blocks, is_editor: bool) -> None:
-    for i in range(0, len(blocks), 2):
+def render_blocks(blocks, is_editor: bool, media_by_section: Dict[str, List], current_section: str) -> None:
+    ns_media = media_by_section.get("NS Landscape") or []
+    other_blocks = [b for b in blocks if not (b.get("type") == "media" and b.get("section") == "NS Landscape")]
+    ns_media_rendered = False
+
+    for i in range(0, len(other_blocks), 2):
         cols = st.columns(2)
-        for offset, block in enumerate(blocks[i : i + 2]):
+        for offset, block in enumerate(other_blocks[i : i + 2]):
             with cols[offset]:
                 if block["type"] == "chart":
                     render_chart_block(block, is_editor)
+                    if block.get("section") == "NS Landscape":
+                        extra_media = media_by_section.get("NS Landscape") or []
+                        all_media = ns_media or extra_media
+                        if all_media:
+                            seg_id = all_media[0].get("segment_id", "")
+                            render_media_tabs(
+                                all_media,
+                                is_editor,
+                                title="NS Landscape Images",
+                                key_prefix=f"ns_media_{seg_id}",
+                            )
+                            ns_media_rendered = True
                 elif block["type"] == "table":
                     render_table_block(block, is_editor)
                 else:
                     render_media_block(block, is_editor)
         st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
 
+    # Show NS Landscape media once even if chart is missing
+    if current_section == "NS Landscape" and ns_media and not ns_media_rendered:
+        seg_id = ns_media[0].get("segment_id", "")
+        render_media_tabs(ns_media, is_editor, title="NS Landscape Images", key_prefix=f"ns_media_fallback_{seg_id}")
+
 
 def format_comment(text: str) -> str:
     """Lightweight formatting: **bold**, ## heading, line breaks."""
     safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    safe = re.sub(r"##\s*(.+)", r"<div style='font-size:1.08rem;font-weight:700'>\1</div>", safe)
-    safe = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", safe)
-    safe = safe.replace("\n", "<br>")
-    return safe
+    lines = safe.splitlines()
+    rendered = []
+    for line in lines:
+        if line.startswith("##"):
+            rendered.append(f"<div style='font-size:1.08rem;font-weight:700'>{line.lstrip('#').strip()}</div>")
+        elif line.startswith("•"):
+            rendered.append(f"<div style='margin-left:0.6rem;'>• {line.lstrip('•').strip()}</div>")
+        else:
+            rendered.append(re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line))
+    return "<br>".join(rendered)
 
 
 def render_chart_block(chart, is_editor: bool) -> None:
@@ -183,7 +218,8 @@ def render_table_block(table, is_editor: bool) -> None:
     if preview_df is None or preview_df.empty:
         st.warning("Dataset missing or empty for this table.")
     else:
-        st.dataframe(preview_df, use_container_width=True)
+        styled = preview_df.style.apply(highlight_extremes, axis=0)
+        st.dataframe(styled, use_container_width=True)
         if is_editor:
             editable_df = preview_df.copy()
             if "Notes" not in editable_df.columns:
@@ -217,27 +253,48 @@ def render_table_block(table, is_editor: bool) -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
+def highlight_extremes(series: pd.Series):
+    if not pd.api.types.is_numeric_dtype(series):
+        return [""] * len(series)
+    max_val = series.max()
+    min_val = series.min()
+    styles = []
+    for val in series:
+        if pd.isna(val):
+            styles.append("")
+        elif val == max_val:
+            styles.append("background-color: #e8f7ff; font-weight: 700;")
+        elif val == min_val:
+            styles.append("background-color: #fff3e0; font-weight: 700;")
+        else:
+            styles.append("")
+    return styles
+
+
 def render_media_block(block, is_editor: bool) -> None:
     items = block.get("items") or []
     if not items:
         st.info("No images uploaded for this section.")
         return
+    prefix_base = f"media_{block.get('section','').replace(' ', '_')}_{block.get('name','').replace(' ', '_')}".strip("_")
+    if items and items[0].get("segment_id"):
+        prefix_base = f"{prefix_base}_{items[0]['segment_id']}"
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(f"<div class='pill'>Image</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{block.get('section','Image')}</h4>", unsafe_allow_html=True)
+    title_label = block.get("name") or block.get("section", "Image")
+    st.markdown(f"<h4 class='chart-title'>{title_label}</h4>", unsafe_allow_html=True)
 
     if len(items) > 1:
-        idx = st.number_input(
-            "Slide",
-            min_value=1,
-            max_value=len(items),
-            value=1,
-            step=1,
-            key=f"media_slider_{block.get('section','')}",
-        ) - 1
+        tab_labels = [item.get("name") or f"Image {i+1}" for i, item in enumerate(items)]
+        tabs = st.tabs(tab_labels)
+        for idx, tab in enumerate(tabs):
+            with tab:
+                render_media_item(items[idx], is_editor, key_prefix=f"{prefix_base}_{idx}")
     else:
-        idx = 0
-    media = items[idx]
+        render_media_item(items[0], is_editor, key_prefix=prefix_base)
+
+
+def render_media_item(media, is_editor: bool, key_prefix: str = "media") -> None:
     comment = media.get("comment") or ""
     if comment:
         st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
@@ -246,19 +303,38 @@ def render_media_block(block, is_editor: bool) -> None:
         if str(file_path).lower().endswith((".ppt", ".pptx")):
             st.caption("PPT preview not available; download to view.")
             with open(file_path, "rb") as f:
-                st.download_button("Download PPT", data=f.read(), file_name=os.path.basename(file_path))
+                st.download_button(
+                    "Download PPT",
+                    data=f.read(),
+                    file_name=os.path.basename(file_path),
+                    key=f"dl_ppt_{key_prefix}",
+                )
         else:
             st.image(file_path, use_container_width=True)
     else:
         st.warning("File missing.")
-    if len(items) > 1:
-        st.caption(f"Image {idx + 1} of {len(items)}")
     if is_editor:
-        if st.button("Delete images", key=f"del_media_section_{block.get('section','')}"):
-            delete_media_for_section(media.get("segment_id"), media.get("section"))
+        unique_suffix = uuid.uuid4().hex
+        btn_key = f"del_media_{media.get('id') or 'noid'}_{key_prefix}_{unique_suffix}"
+        if st.button(
+            "Delete images",
+            key=btn_key,
+            help="Remove all images for this section entry.",
+        ):
+            delete_media_for_section(media.get("segment_id"), media.get("section"), media.get("name"))
             st.success("Images removed")
             if hasattr(st, "rerun"):
                 st.rerun()
             else:
                 st.experimental_rerun()
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_media_tabs(items, is_editor: bool, title: str = "Images", key_prefix: str = "media_tabs") -> None:
+    if title:
+        st.markdown(f"##### {title}")
+    tab_labels = [item.get("name") or f"Image {i+1}" for i, item in enumerate(items)]
+    tabs = st.tabs(tab_labels)
+    for idx, tab in enumerate(tabs):
+        with tab:
+            render_media_item(items[idx], is_editor, key_prefix=f"{key_prefix}_{idx}")
