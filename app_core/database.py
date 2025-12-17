@@ -203,3 +203,24 @@ def ensure_uploads_segment_column(default_segment_id: Optional[int]) -> None:
             if default_segment_id:
                 conn.execute("UPDATE uploads SET segment_id = ?", (default_segment_id,))
             conn.commit()
+
+
+def ensure_battleground_notes_table() -> None:
+    """Ensure table for battleground JTBD text blocks exists."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS battleground_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                segment_id INTEGER NOT NULL,
+                tab_index INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                working_text TEXT DEFAULT '',
+                jtbd_text TEXT DEFAULT '',
+                created_by TEXT DEFAULT '',
+                updated_at TEXT NOT NULL,
+                UNIQUE(segment_id, tab_index)
+            )
+            """
+        )
+        conn.commit()

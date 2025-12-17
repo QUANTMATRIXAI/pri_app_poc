@@ -9,6 +9,7 @@ from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
 from app_core.media import delete_media_for_section, save_media_upload
 from app_core.tables import delete_tables_for_section, get_tables_for_segment, save_table
+from app_ui.battlegrounds import render_battleground_notes_editor
 from app_core.uploads import (
     delete_upload,
     get_dataset_usage,
@@ -358,6 +359,10 @@ def render_block_publisher(current_user: Dict, segment: Dict) -> None:
                         st.rerun()
                     else:
                         st.experimental_rerun()
+
+    st.markdown("### Battlegrounds JTBD tabs")
+    render_battleground_notes_editor(segment, current_user)
+
 
 def format_extra_comments(extras: list[str] | None) -> str:
     if not extras:

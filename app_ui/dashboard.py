@@ -11,6 +11,7 @@ from app_core.charts import count_charts_for_segment, delete_chart, get_dataset_
 from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
 from app_core.media import delete_media_for_section, get_media_for_segment
+from app_core.battlegrounds import get_battleground_notes
 from app_core.tables import build_table_preview, delete_table
 from app_core.uploads import count_uploads_for_segment, load_dataset, overwrite_dataset
 
@@ -82,7 +83,7 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
             if not blocks:
                 st.info("No content yet. Publish from Data Studio.")
                 continue
-            render_blocks(blocks, is_editor, media_by_section, current_section=section)
+            render_blocks(blocks, is_editor, media_by_section, current_section=section, segment_id=segment["id"])
 
 
 def group_by_section(rows) -> Dict[str, List]:
@@ -119,10 +120,16 @@ def filter_blocks(blocks, search_lower: str):
     return filtered
 
 
-def render_blocks(blocks, is_editor: bool, media_by_section: Dict[str, List], current_section: str) -> None:
+def render_blocks(
+    blocks, is_editor: bool, media_by_section: Dict[str, List], current_section: str, segment_id: int
+) -> None:
     ns_media = media_by_section.get("NS Landscape") or []
     other_blocks = [b for b in blocks if not (b.get("type") == "media" and b.get("section") == "NS Landscape")]
     ns_media_rendered = False
+
+    if current_section == "Battlegrounds":
+        render_battleground_tabs_view(segment_id, is_editor)
+        st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
 
     for i in range(0, len(other_blocks), 2):
         cols = st.columns(2)
@@ -338,3 +345,24 @@ def render_media_tabs(items, is_editor: bool, title: str = "Images", key_prefix:
     for idx, tab in enumerate(tabs):
         with tab:
             render_media_item(items[idx], is_editor, key_prefix=f"{key_prefix}_{idx}")
+
+
+def render_battleground_tabs_view(segment_id: int, is_editor: bool) -> None:
+    """Display JTBD tabs in the Battlegrounds section."""
+    notes = get_battleground_notes(segment_id)
+    if not notes:
+        st.info("No Battlegrounds JTBD tabs published yet. Editors can add them in Data Studio.")
+        return
+    labels = [n.get("title") or f"Cluster {n['tab_index']}" for n in notes]
+    tabs = st.tabs(labels)
+    for note, tab in zip(notes, tabs):
+        with tab:
+            title = note.get("title") or f"Cluster {note['tab_index']}"
+            st.markdown(f"### {title}")
+            cols = st.columns(2)
+            with cols[0]:
+                st.markdown("**What's Working & Holding Us Back?**")
+                st.markdown(f"<div class='comment-box'>{format_comment(note.get('working_text',''))}</div>", unsafe_allow_html=True)
+            with cols[1]:
+                st.markdown("**JTBDs**")
+                st.markdown(f"<div class='comment-box'>{format_comment(note.get('jtbd_text',''))}</div>", unsafe_allow_html=True)
