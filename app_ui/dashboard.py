@@ -41,7 +41,7 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
     
     # Brand Truths tab
     with tabs[2]:
-        st.info("No content published for Brand Truths yet.")
+        render_brand_truths_dashboard(segment, tables, is_editor)
     
     # Segment Trends tab
     with tabs[3]:
@@ -49,7 +49,7 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
     
     # Brand Trends tab
     with tabs[4]:
-        st.info("No content published for Brand Trends yet.")
+        render_brand_trends_dashboard(segment, tables, is_editor)
     
     # Battlegrounds tab
     with tabs[5]:
@@ -1354,10 +1354,11 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                         margin: 1rem 0;
                         border-radius: 8px;
                         text-align: center;
+                        font-size: 1rem;
+                        line-height: 1.6;
+                        color: #2C2C2C;
                     '>
-                        <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
-                            {escaped_desc}
-                        </div>
+                        {escaped_desc}
                     </div>
                 """, unsafe_allow_html=True)
             
@@ -1398,10 +1399,12 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                                     margin: 0.5rem 0;
                                     border-radius: 8px;
                                     min-height: 100px;
+                                    font-size: 0.95rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                    font-weight: 500;
                                 '>
-                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
-                                        {escaped_left}
-                                    </div>
+                                    {escaped_left}
                                 </div>
                             """, unsafe_allow_html=True)
                     
@@ -1417,10 +1420,12 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                                     margin: 0.5rem 0;
                                     border-radius: 8px;
                                     min-height: 100px;
+                                    font-size: 0.95rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                    font-weight: 500;
                                 '>
-                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
-                                        {escaped_right}
-                                    </div>
+                                    {escaped_right}
                                 </div>
                             """, unsafe_allow_html=True)
             
@@ -1435,3 +1440,278 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                         st.experimental_rerun()
         except Exception as e:
             st.error(f"Error rendering custom view: {str(e)}")
+
+
+
+def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
+    """Render Brand Truths section"""
+    # Get brand truths views
+    brand_view = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+    brand_view_2 = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View 2"), None)
+    
+    if not brand_view and not brand_view_2:
+        st.info("No content published for Brand Truths yet. Editors can configure it in Data Studio.")
+        return
+    
+    # Render first section
+    if brand_view:
+        render_brand_truths_section(brand_view, is_editor, segment, "1")
+    
+    # Render second section
+    if brand_view_2:
+        if brand_view:
+            st.markdown("---")
+        render_brand_truths_section(brand_view_2, is_editor, segment, "2")
+
+
+def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict, section_num: str) -> None:
+    """Render a single brand truths section"""
+    
+    try:
+        config = json.loads(brand_view["filter_json"]) if brand_view["filter_json"] else {}
+        title = config.get("title", "")
+        description = config.get("description", "")
+        brands = config.get("brands", [])
+        
+        if title:
+            st.markdown(f"### {title}")
+        
+        if description:
+            import html
+            escaped_desc = html.escape(description).replace('\n', '<br>')
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #FFF9E6 0%, #FFF3D6 100%);
+                    border: 1px solid #E8D7A0;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    text-align: center;
+                '>
+                    <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                        {escaped_desc}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display brand sections with intelligent layout
+        total_brands = len(brands)
+        
+        # Determine layout based on number of brands
+        if total_brands <= 4:
+            # 1-4: Show all in one row
+            layout = [total_brands]
+        elif total_brands == 5:
+            # 5: 3 + 2
+            layout = [3, 2]
+        elif total_brands == 6:
+            # 6: 3 + 3
+            layout = [3, 3]
+        elif total_brands == 7:
+            # 7: 4 + 3
+            layout = [4, 3]
+        else:  # 8
+            # 8: 4 + 4
+            layout = [4, 4]
+        
+        # Display brands according to layout
+        brand_idx = 0
+        for row_size in layout:
+            row_brands = brands[brand_idx:brand_idx + row_size]
+            cols = st.columns(row_size)
+            brand_idx += row_size
+            
+            for idx, (col, brand) in enumerate(zip(cols, row_brands)):
+                with col:
+                    # Display brand name as header
+                    if brand.get("name"):
+                        st.markdown(f"### {brand['name']}")
+                    
+                    # Display brand content
+                    if brand.get("content"):
+                        import html
+                        escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
+                        st.markdown(f"""
+                            <div style='
+                                background: #F5F5F5;
+                                border: 1px solid #CCCCCC;
+                                padding: 1rem;
+                                margin: 0.5rem 0;
+                                border-radius: 8px;
+                                min-height: 200px;
+                            '>
+                                <div style='font-size: 0.9rem; line-height: 1.6; color: #1A1A1A;'>
+                                    {escaped_content}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+            
+            # Add spacing between rows
+            st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for editors
+        if is_editor:
+            if st.button("Delete Brand Truths", key=f"del_brand_truths_{segment['id']}"):
+                delete_table(brand_view["id"])
+                st.success("Brand Truths removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    except Exception as e:
+        st.error(f"Error rendering Brand Truths: {str(e)}")
+
+
+def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
+    """Render Brand Trends JTBD section"""
+    # Get JTBD view
+    jtbd_view = next((t for t in tables if t["section"] == "Brand Trends" and t["name"] == "JTBD View"), None)
+    
+    if not jtbd_view:
+        st.info("No content published for Brand Trends yet. Editors can configure it in Data Studio.")
+        return
+    
+    try:
+        config = json.loads(jtbd_view["filter_json"]) if jtbd_view["filter_json"] else {}
+        title = config.get("title", "")
+        description = config.get("description", "")
+        left_header = config.get("left_header", "")
+        right_header = config.get("right_header", "")
+        sections = config.get("sections", [])
+        
+        if title:
+            st.markdown(f"### {title}")
+        
+        if description:
+            import html
+            escaped_desc = html.escape(description).replace('\n', '<br>')
+            st.markdown(f"""
+                <div style='
+                    background: #F5F5F5;
+                    border: 1px solid #CCCCCC;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    font-size: 1rem;
+                    line-height: 1.6;
+                    color: #2C2C2C;
+                '>
+                    {escaped_desc}
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display JTBD sections
+        for section in sections:
+            if section.get("left") or section.get("right"):
+                # Rectangular label on the left (vertical text)
+                cols = st.columns([0.15, 4, 4])
+                
+                with cols[0]:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                            border: 2px solid #999999;
+                            padding: 1rem 0.3rem;
+                            margin: 0.5rem 0;
+                            border-radius: 6px;
+                            min-height: 300px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            writing-mode: vertical-rl;
+                            text-orientation: mixed;
+                            font-size: 1.1rem;
+                            font-weight: bold;
+                            color: #333333;
+                            text-align: center;
+                        '>
+                            {section.get("label", "")}
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                with cols[1]:
+                    # Left section with header
+                    if left_header:
+                        st.markdown(f"""
+                            <div style='
+                                background: #D0D0D0;
+                                padding: 0.5rem 1rem;
+                                margin-bottom: 0.5rem;
+                                border-radius: 6px 6px 0 0;
+                                font-weight: bold;
+                                font-size: 1rem;
+                                color: #1A1A1A;
+                            '>
+                                {left_header}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    if section.get("left"):
+                        import html
+                        escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                        st.markdown(f"""
+                            <div style='
+                                background: #F5F5F5;
+                                border: 1px solid #CCCCCC;
+                                padding: 1rem;
+                                margin: 0;
+                                border-radius: 0 0 6px 6px;
+                                min-height: 250px;
+                                font-size: 0.9rem;
+                                line-height: 1.6;
+                                color: #1A1A1A;
+                            '>
+                                {escaped_left}
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                with cols[2]:
+                    # Right section with header
+                    if right_header:
+                        st.markdown(f"""
+                            <div style='
+                                background: #D0D0D0;
+                                padding: 0.5rem 1rem;
+                                margin-bottom: 0.5rem;
+                                border-radius: 6px 6px 0 0;
+                                font-weight: bold;
+                                font-size: 1rem;
+                                color: #1A1A1A;
+                            '>
+                                {right_header}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    if section.get("right"):
+                        import html
+                        escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                        st.markdown(f"""
+                            <div style='
+                                background: #F5F5F5;
+                                border: 1px solid #CCCCCC;
+                                padding: 1rem;
+                                margin: 0;
+                                border-radius: 0 0 6px 6px;
+                                min-height: 250px;
+                                font-size: 0.9rem;
+                                line-height: 1.6;
+                                color: #1A1A1A;
+                            '>
+                                {escaped_right}
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                # Add spacing between sections
+                st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for editors
+        if is_editor:
+            if st.button("Delete Brand Trends JTBD", key=f"del_jtbd_{segment['id']}"):
+                delete_table(jtbd_view["id"])
+                st.success("Brand Trends JTBD removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    except Exception as e:
+        st.error(f"Error rendering JTBD view: {str(e)}")

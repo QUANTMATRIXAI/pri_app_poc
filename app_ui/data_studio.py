@@ -102,13 +102,13 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
         render_segment_truths_config(segment, df_filtered, latest["id"], current_user)
     
     with tabs[2]:
-        st.info("Configuration for Brand Truths will be available soon.")
+        render_brand_truths_config(segment, df_filtered, latest["id"], current_user)
     
     with tabs[3]:
         render_segment_trends_config(segment, df_filtered, latest["id"], current_user)
     
     with tabs[4]:
-        st.info("Configuration for Brand Trends will be available soon.")
+        render_brand_trends_config(segment, df_filtered, latest["id"], current_user)
     
     with tabs[5]:
         st.info("Configuration for Battlegrounds will be available soon.")
@@ -2013,3 +2013,592 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 comment=""
             )
             st.success("Custom Trends View saved to dashboard!")
+
+
+
+def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
+    """Configure Brand Trends: JTBD view with rectangular labels and left/right sections"""
+    st.markdown("#### Brand Trends - JTBD Configuration")
+    st.caption("Create a Jobs To Be Done view with title, description, and rectangular section labels")
+    
+    # Title and main description
+    jtbd_title = st.text_input(
+        "View Title",
+        value="",
+        placeholder="e.g., Battlegrounds JTBDs: BP to Secure & Grow",
+        key=f"jtbd_title_{segment['id']}"
+    )
+    
+    jtbd_description = st.text_area(
+        "Main Description (optional)",
+        placeholder="Enter overview or context...",
+        height=80,
+        key=f"jtbd_desc_{segment['id']}"
+    )
+    
+    # Column headers (same for all sections)
+    st.markdown("**Column Headers (applies to all sections):**")
+    col_left_h, col_right_h = st.columns(2)
+    
+    with col_left_h:
+        left_header = st.text_input(
+            "Left Column Header",
+            value="What's Working & Holding Us Back?",
+            key=f"jtbd_left_header_{segment['id']}"
+        )
+    
+    with col_right_h:
+        right_header = st.text_input(
+            "Right Column Header",
+            value="JTBDs:",
+            key=f"jtbd_right_header_{segment['id']}"
+        )
+    
+    st.markdown("---")
+    
+    # Number of JTBD sections
+    num_jtbd_sections = st.number_input(
+        "Number of JTBD Sections (1-8)",
+        min_value=1,
+        max_value=8,
+        value=3,
+        key=f"jtbd_num_sections_{segment['id']}"
+    )
+    
+    # JTBD section inputs
+    jtbd_sections_data = []
+    for i in range(num_jtbd_sections):
+        st.markdown(f"**JTBD Section {i+1}:**")
+        
+        col_label, col_left, col_right = st.columns([1, 2, 2])
+        
+        with col_label:
+            section_label = st.text_input(
+                f"Section Label",
+                value=f"LDA-40YO",
+                key=f"jtbd_sec{i}_label_{segment['id']}",
+                placeholder="e.g., LDA-40YO, UP-HR-MP"
+            )
+        
+        with col_left:
+            left_content = st.text_area(
+                f"Left Content",
+                placeholder="What's Working?\n• Point 1\n• Point 2\n\nWhat's Holding Us Back?\n• Issue 1\n• Issue 2",
+                height=200,
+                key=f"jtbd_sec{i}_left_{segment['id']}"
+            )
+        
+        with col_right:
+            right_content = st.text_area(
+                f"Right Content (JTBDs)",
+                placeholder="1. First JTBD\n• Detail 1\n• Detail 2\n\n2. Second JTBD\n• Detail 1\n• Detail 2",
+                height=200,
+                key=f"jtbd_sec{i}_right_{segment['id']}"
+            )
+        
+        jtbd_sections_data.append({
+            "label": section_label,
+            "left": left_content,
+            "right": right_content
+        })
+    
+    # Preview
+    if jtbd_title or jtbd_description or any(s["left"] or s["right"] for s in jtbd_sections_data):
+        st.markdown("---")
+        st.markdown("**Preview:**")
+        
+        if jtbd_title:
+            st.markdown(f"### {jtbd_title}")
+        
+        if jtbd_description:
+            import html
+            escaped_desc = html.escape(jtbd_description).replace('\n', '<br>')
+            st.markdown(f"""
+                <div style='
+                    background: #F5F5F5;
+                    border: 1px solid #CCCCCC;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    font-size: 1rem;
+                    line-height: 1.6;
+                    color: #2C2C2C;
+                '>
+                    {escaped_desc}
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display JTBD sections
+        for section in jtbd_sections_data:
+            if section["left"] or section["right"]:
+                # Rectangular label on the left (vertical text)
+                cols = st.columns([0.15, 4, 4])
+                
+                with cols[0]:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                            border: 2px solid #999999;
+                            padding: 1rem 0.3rem;
+                            margin: 0.5rem 0;
+                            border-radius: 6px;
+                            min-height: 300px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            writing-mode: vertical-rl;
+                            text-orientation: mixed;
+                            font-size: 1.1rem;
+                            font-weight: bold;
+                            color: #333333;
+                            text-align: center;
+                        '>
+                            {section["label"]}
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                with cols[1]:
+                    # Left section with header
+                    if left_header:
+                        st.markdown(f"""
+                            <div style='
+                                background: #D0D0D0;
+                                padding: 0.5rem 1rem;
+                                margin-bottom: 0.5rem;
+                                border-radius: 6px 6px 0 0;
+                                font-weight: bold;
+                                font-size: 1rem;
+                                color: #1A1A1A;
+                            '>
+                                {left_header}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    if section["left"]:
+                        import html
+                        escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                        st.markdown(f"""
+                            <div style='
+                                background: #F5F5F5;
+                                border: 1px solid #CCCCCC;
+                                padding: 1rem;
+                                margin: 0;
+                                border-radius: 0 0 6px 6px;
+                                min-height: 250px;
+                                font-size: 0.9rem;
+                                line-height: 1.6;
+                                color: #1A1A1A;
+                            '>
+                                {escaped_left}
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                with cols[2]:
+                    # Right section with header
+                    if right_header:
+                        st.markdown(f"""
+                            <div style='
+                                background: #D0D0D0;
+                                padding: 0.5rem 1rem;
+                                margin-bottom: 0.5rem;
+                                border-radius: 6px 6px 0 0;
+                                font-weight: bold;
+                                font-size: 1rem;
+                                color: #1A1A1A;
+                            '>
+                                {right_header}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    if section["right"]:
+                        import html
+                        escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                        st.markdown(f"""
+                            <div style='
+                                background: #F5F5F5;
+                                border: 1px solid #CCCCCC;
+                                padding: 1rem;
+                                margin: 0;
+                                border-radius: 0 0 6px 6px;
+                                min-height: 250px;
+                                font-size: 0.9rem;
+                                line-height: 1.6;
+                                color: #1A1A1A;
+                            '>
+                                {escaped_right}
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                # Add spacing between sections
+                st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+    
+    # Save button
+    if st.button("Save Brand Trends JTBD to Dashboard", key=f"save_jtbd_{segment['id']}"):
+        if not jtbd_title:
+            st.error("Please provide a title for the JTBD view.")
+        else:
+            # Delete existing
+            delete_tables_for_section(segment["id"], "Brand Trends", "JTBD View")
+            
+            # Save configuration
+            config_data = json.dumps({
+                "title": jtbd_title,
+                "description": jtbd_description,
+                "left_header": left_header,
+                "right_header": right_header,
+                "sections": jtbd_sections_data
+            })
+            
+            save_table(
+                name="JTBD View",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Brand Trends",
+                filter_json=config_data,
+                comment=""
+            )
+            st.success("Brand Trends JTBD saved to dashboard!")
+
+
+def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
+    """Configure Brand Truths: Title, description, and brand sections with images"""
+    st.markdown("#### Brand Truths Configuration")
+    st.caption("Create a brand comparison view with title, description, and brand sections")
+    
+    # Title and main description
+    brand_title = st.text_input(
+        "View Title",
+        value="",
+        placeholder="e.g., Double Whammy for BP – Threat on NE & Laterals",
+        key=f"brand_title_{segment['id']}"
+    )
+    
+    brand_description = st.text_area(
+        "Main Description",
+        placeholder="e.g., BP watch-outs across age groups; threat from RF & Sig on Laterals...",
+        height=100,
+        key=f"brand_desc_{segment['id']}"
+    )
+    
+    # Number of brand sections
+    num_brands = st.number_input(
+        "Number of Brand Sections (1-8)",
+        min_value=1,
+        max_value=8,
+        value=3,
+        key=f"brand_num_sections_{segment['id']}"
+    )
+    
+    # Brand section inputs
+    brands_data = []
+    for i in range(num_brands):
+        st.markdown(f"**Brand Section {i+1}:**")
+        
+        col_name, col_content = st.columns([1, 3])
+        
+        with col_name:
+            brand_name = st.text_input(
+                f"Brand Name",
+                value="",
+                placeholder="e.g., Signature",
+                key=f"brand_sec{i}_name_{segment['id']}"
+            )
+        
+        with col_content:
+            brand_content = st.text_area(
+                f"Brand insights/bullet points",
+                placeholder="Enter brand insights, trends, threats, opportunities...",
+                height=150,
+                key=f"brand_sec{i}_content_{segment['id']}"
+            )
+        
+        brands_data.append({
+            "number": i + 1,
+            "name": brand_name,
+            "content": brand_content
+        })
+    
+    # Preview
+    if brand_title or brand_description or any(b["content"] for b in brands_data):
+        st.markdown("---")
+        st.markdown("**Preview:**")
+        
+        if brand_title:
+            st.markdown(f"### {brand_title}")
+        
+        if brand_description:
+            import html
+            escaped_desc = html.escape(brand_description).replace('\n', '<br>')
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #FFF9E6 0%, #FFF3D6 100%);
+                    border: 1px solid #E8D7A0;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    text-align: center;
+                    font-size: 1rem;
+                    line-height: 1.6;
+                    color: #2C2C2C;
+                '>
+                    {escaped_desc}
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display brand sections with intelligent layout
+        total_brands = len(brands_data)
+        
+        # Determine layout based on number of brands
+        if total_brands <= 4:
+            # 1-4: Show all in one row
+            layout = [total_brands]
+        elif total_brands == 5:
+            # 5: 3 + 2
+            layout = [3, 2]
+        elif total_brands == 6:
+            # 6: 3 + 3
+            layout = [3, 3]
+        elif total_brands == 7:
+            # 7: 4 + 3
+            layout = [4, 3]
+        else:  # 8
+            # 8: 4 + 4
+            layout = [4, 4]
+        
+        # Display brands according to layout
+        brand_idx = 0
+        for row_size in layout:
+            row_brands = brands_data[brand_idx:brand_idx + row_size]
+            cols = st.columns(row_size)
+            brand_idx += row_size
+            
+            for idx, (col, brand) in enumerate(zip(cols, row_brands)):
+                with col:
+                    if brand["name"] or brand["content"]:
+                        # Brand name as header
+                        if brand["name"]:
+                            st.markdown(f"### {brand['name']}")
+                        
+                        # Brand content
+                        if brand["content"]:
+                            import html
+                            escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F5F5F5;
+                                    border: 1px solid #CCCCCC;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 200px;
+                                    font-size: 0.9rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                '>
+                                    {escaped_content}
+                                </div>
+                            """, unsafe_allow_html=True)
+            
+            # Add spacing between rows
+            st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+    
+    # Save button
+    if st.button("Save Brand Truths to Dashboard", key=f"save_brand_truths_{segment['id']}"):
+        if not brand_title:
+            st.error("Please provide a title for the view.")
+        else:
+            # Delete existing
+            delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
+            
+            # Save configuration
+            config_data = json.dumps({
+                "title": brand_title,
+                "description": brand_description,
+                "brands": [{
+                    "number": b["number"],
+                    "name": b["name"],
+                    "content": b["content"]
+                } for b in brands_data]
+            })
+            
+            save_table(
+                name="Brand Truths View",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Brand Truths",
+                filter_json=config_data,
+                comment=""
+            )
+            st.success("Brand Truths saved to dashboard!")
+
+    
+    st.markdown("---")
+    st.markdown("### Brand Truths - Section 2")
+    st.caption("Create another brand comparison view (optional)")
+    
+    # Title and main description for section 2
+    brand_title_2 = st.text_input(
+        "View Title (Section 2)",
+        value="",
+        placeholder="e.g., Growth Opportunities & Market Dynamics",
+        key=f"brand_title_2_{segment['id']}"
+    )
+    
+    brand_description_2 = st.text_area(
+        "Main Description (Section 2)",
+        placeholder="Enter description for second brand comparison...",
+        height=100,
+        key=f"brand_desc_2_{segment['id']}"
+    )
+    
+    # Number of brand sections for section 2
+    num_brands_2 = st.number_input(
+        "Number of Brand Sections (1-8)",
+        min_value=1,
+        max_value=8,
+        value=3,
+        key=f"brand_num_sections_2_{segment['id']}"
+    )
+    
+    # Brand section inputs for section 2
+    brands_data_2 = []
+    for i in range(num_brands_2):
+        st.markdown(f"**Brand Section {i+1}:**")
+        
+        col_name, col_content = st.columns([1, 3])
+        
+        with col_name:
+            brand_name = st.text_input(
+                f"Brand Name",
+                value="",
+                placeholder="e.g., Royal Challenge",
+                key=f"brand_sec2_{i}_name_{segment['id']}"
+            )
+        
+        with col_content:
+            brand_content = st.text_area(
+                f"Brand insights/bullet points",
+                placeholder="Enter brand insights...",
+                height=150,
+                key=f"brand_sec2_{i}_content_{segment['id']}"
+            )
+        
+        brands_data_2.append({
+            "number": i + 1,
+            "name": brand_name,
+            "content": brand_content
+        })
+    
+    # Preview for section 2
+    if brand_title_2 or brand_description_2 or any(b["content"] for b in brands_data_2):
+        st.markdown("---")
+        st.markdown("**Preview (Section 2):**")
+        
+        if brand_title_2:
+            st.markdown(f"### {brand_title_2}")
+        
+        if brand_description_2:
+            import html
+            escaped_desc = html.escape(brand_description_2).replace('\n', '<br>')
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #FFF9E6 0%, #FFF3D6 100%);
+                    border: 1px solid #E8D7A0;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    text-align: center;
+                    font-size: 1rem;
+                    line-height: 1.6;
+                    color: #2C2C2C;
+                '>
+                    {escaped_desc}
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display brand sections with intelligent layout
+        total_brands_2 = len(brands_data_2)
+        
+        # Determine layout based on number of brands
+        if total_brands_2 <= 4:
+            layout_2 = [total_brands_2]
+        elif total_brands_2 == 5:
+            layout_2 = [3, 2]
+        elif total_brands_2 == 6:
+            layout_2 = [3, 3]
+        elif total_brands_2 == 7:
+            layout_2 = [4, 3]
+        else:  # 8
+            layout_2 = [4, 4]
+        
+        # Display brands according to layout
+        brand_idx_2 = 0
+        for row_size in layout_2:
+            row_brands = brands_data_2[brand_idx_2:brand_idx_2 + row_size]
+            cols = st.columns(row_size)
+            brand_idx_2 += row_size
+            
+            for idx, (col, brand) in enumerate(zip(cols, row_brands)):
+                with col:
+                    if brand["name"] or brand["content"]:
+                        # Brand name as header
+                        if brand["name"]:
+                            st.markdown(f"### {brand['name']}")
+                        
+                        # Brand content
+                        if brand["content"]:
+                            import html
+                            escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F5F5F5;
+                                    border: 1px solid #CCCCCC;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 200px;
+                                    font-size: 0.9rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                '>
+                                    {escaped_content}
+                                </div>
+                            """, unsafe_allow_html=True)
+            
+            # Add spacing between rows
+            st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+    
+    # Save button for section 2
+    if st.button("Save Brand Truths Section 2 to Dashboard", key=f"save_brand_truths_2_{segment['id']}"):
+        if not brand_title_2:
+            st.error("Please provide a title for section 2.")
+        else:
+            # Delete existing section 2
+            delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View 2")
+            
+            # Save configuration
+            config_data = json.dumps({
+                "title": brand_title_2,
+                "description": brand_description_2,
+                "brands": [{
+                    "number": b["number"],
+                    "name": b["name"],
+                    "content": b["content"]
+                } for b in brands_data_2]
+            })
+            
+            save_table(
+                name="Brand Truths View 2",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Brand Truths",
+                filter_json=config_data,
+                comment=""
+            )
+            st.success("Brand Truths Section 2 saved to dashboard!")
