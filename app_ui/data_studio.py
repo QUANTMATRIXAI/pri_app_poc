@@ -146,18 +146,19 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         key=f"ns_pivot_years_{segment['id']}"
     )
     
-    pivot_comment = st.text_area(
-        "Add comment for pivot table (optional)",
-        key=f"ns_pivot_comment_{segment['id']}",
-        placeholder="Add insights or notes about the manufacturing view..."
-    )
-    
     # Preview pivot
     if selected_years_pivot:
         preview_pivot = create_manufacturing_pivot(df_filtered, selected_years_pivot)
         if preview_pivot is not None:
             st.markdown("**Preview:**")
             st.dataframe(preview_pivot, use_container_width=True, hide_index=True)
+    
+    # Comment box AFTER preview
+    pivot_comment = st.text_area(
+        "Add comment for pivot table (optional)",
+        key=f"ns_pivot_comment_{segment['id']}",
+        placeholder="Add insights or notes about the manufacturing view..."
+    )
     
     if st.button("Save Manufacturing Pivot to Dashboard", key=f"save_ns_pivot_{segment['id']}"):
         if not selected_years_pivot:
@@ -214,12 +215,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         else:
             selected_brands = []
             st.info("Select Brand Family first")
-    
-    chart_comment = st.text_area(
-        "Add comment for chart (optional)",
-        key=f"ns_chart_comment_{segment['id']}",
-        placeholder="Add insights about brand performance..."
-    )
     
     # Preview chart
     if selected_brands:
@@ -279,6 +274,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             )
             st.plotly_chart(fig, use_container_width=True)
     
+    # Comment box AFTER chart preview
+    chart_comment = st.text_area(
+        "Add comment for chart (optional)",
+        key=f"ns_chart_comment_{segment['id']}",
+        placeholder="Add insights about brand performance..."
+    )
+    
     if st.button("Save Brand Chart to Dashboard", key=f"save_ns_chart_{segment['id']}"):
         if not selected_families or not selected_brands:
             st.error("Please select Brand Families and at least one Brand.")
@@ -324,12 +326,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             df_zonal = df_zonal[df_zonal["Brand"].isin(selected_brands)]
             
             if not df_zonal.empty:
-                zonal_comment = st.text_area(
-                    "Add comment for zonal table (optional)",
-                    key=f"ns_zonal_comment_{segment['id']}",
-                    placeholder="Add insights about zonal performance..."
-                )
-                
                 # Preview zonal table
                 preview_zonal = create_zonal_pivot(df_zonal, selected_families, selected_brands)
                 if preview_zonal is not None:
@@ -402,6 +398,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
                 
+                # Comment box AFTER zonal preview
+                zonal_comment = st.text_area(
+                    "Add comment for zonal table (optional)",
+                    key=f"ns_zonal_comment_{segment['id']}",
+                    placeholder="Add insights about zonal performance..."
+                )
+                
                 if st.button("Save Zonal Table to Dashboard", key=f"save_ns_zonal_{segment['id']}"):
                     # Delete existing zonal table
                     delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
@@ -470,33 +473,27 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     
                     summary_styled = preview_all_states['state_summary'].style.apply(highlight_zone_row, axis=1).applymap(color_negatives_summary)
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding NORTH zone row)
+                    sorted_states = preview_all_states['state_summary'][preview_all_states['state_summary']['State'] != 'NORTH']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table
+                north_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    key=f"ns_north_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
                 
                 st.markdown("---")
                 
-                # Then let user select states for deep-dive
+                # Then let user select states for deep-dive - use sorted states as default
                 selected_states = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=states_in_north,
-                    default=states_in_north[:4] if len(states_in_north) > 4 else states_in_north,
+                    options=sorted_states if preview_all_states else states_in_north,
+                    default=sorted_states[:4] if (preview_all_states and len(sorted_states) > 4) else (sorted_states if preview_all_states else states_in_north[:4]),
                     key=f"ns_north_states_{segment['id']}"
                 )
-                
-                # Two separate comment boxes
-                col1, col2 = st.columns(2)
-                with col1:
-                    north_comment_top = st.text_area(
-                        "Comment for State Summary Table (optional)",
-                        key=f"ns_north_comment_top_{segment['id']}",
-                        placeholder="Add insights about state-level performance...",
-                        height=100
-                    )
-                with col2:
-                    north_comment_bottom = st.text_area(
-                        "Comment for Brand Deep-Dive (optional)",
-                        key=f"ns_north_comment_bottom_{segment['id']}",
-                        placeholder="Add insights about brand performance by state...",
-                        height=100
-                    )
                 
                 if selected_states:
                     # Preview deep-dive
@@ -556,6 +553,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             if row_start + states_per_row < len(selected_states):
                                 st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
                 
+                # Comment for brand deep-dive AFTER preview
+                st.markdown("---")
+                north_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    key=f"ns_north_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
+                
                 if st.button("Save NORTH Zone Drill-Down to Dashboard", key=f"save_ns_north_{segment['id']}"):
                     if not selected_states:
                         st.error("Please select at least one state for deep-dive.")
@@ -613,31 +619,26 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if preview_all_west:
                     summary_styled = style_state_summary(preview_all_west['state_summary'])
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding zone row)
+                    sorted_states_west = preview_all_west['state_summary'][preview_all_west['state_summary']['State'] != 'WEST+CSD']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table
+                west_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    key=f"ns_west_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
                 
                 st.markdown("---")
                 
                 selected_states_west = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=states_in_west,
-                    default=states_in_west[:4] if len(states_in_west) > 4 else states_in_west,
+                    options=sorted_states_west if preview_all_west else states_in_west,
+                    default=sorted_states_west[:4] if (preview_all_west and len(sorted_states_west) > 4) else (sorted_states_west if preview_all_west else states_in_west[:4]),
                     key=f"ns_west_states_{segment['id']}"
                 )
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    west_comment_top = st.text_area(
-                        "Comment for State Summary Table (optional)",
-                        key=f"ns_west_comment_top_{segment['id']}",
-                        placeholder="Add insights about state-level performance...",
-                        height=100
-                    )
-                with col2:
-                    west_comment_bottom = st.text_area(
-                        "Comment for Brand Deep-Dive (optional)",
-                        key=f"ns_west_comment_bottom_{segment['id']}",
-                        placeholder="Add insights about brand performance by state...",
-                        height=100
-                    )
                 
                 if selected_states_west:
                     st.markdown("**Preview - State Deep-Dive:**")
@@ -645,6 +646,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     
                     if preview_west and preview_west['state_details']:
                         render_state_drilldown_preview(preview_west, selected_states_west)
+                
+                # Comment for brand deep-dive AFTER preview
+                st.markdown("---")
+                west_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    key=f"ns_west_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
                 
                 if st.button("Save WEST+CSD Zone Drill-Down to Dashboard", key=f"save_ns_west_{segment['id']}"):
                     if not selected_states_west:
@@ -696,31 +706,26 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if preview_all_east:
                     summary_styled = style_state_summary(preview_all_east['state_summary'])
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding zone row)
+                    sorted_states_east = preview_all_east['state_summary'][preview_all_east['state_summary']['State'] != 'EAST']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table
+                east_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    key=f"ns_east_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
                 
                 st.markdown("---")
                 
                 selected_states_east = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=states_in_east,
-                    default=states_in_east[:4] if len(states_in_east) > 4 else states_in_east,
+                    options=sorted_states_east if preview_all_east else states_in_east,
+                    default=sorted_states_east[:4] if (preview_all_east and len(sorted_states_east) > 4) else (sorted_states_east if preview_all_east else states_in_east[:4]),
                     key=f"ns_east_states_{segment['id']}"
                 )
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    east_comment_top = st.text_area(
-                        "Comment for State Summary Table (optional)",
-                        key=f"ns_east_comment_top_{segment['id']}",
-                        placeholder="Add insights about state-level performance...",
-                        height=100
-                    )
-                with col2:
-                    east_comment_bottom = st.text_area(
-                        "Comment for Brand Deep-Dive (optional)",
-                        key=f"ns_east_comment_bottom_{segment['id']}",
-                        placeholder="Add insights about brand performance by state...",
-                        height=100
-                    )
                 
                 if selected_states_east:
                     st.markdown("**Preview - State Deep-Dive:**")
@@ -728,6 +733,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     
                     if preview_east and preview_east['state_details']:
                         render_state_drilldown_preview(preview_east, selected_states_east)
+                
+                # Comment for brand deep-dive AFTER preview
+                st.markdown("---")
+                east_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    key=f"ns_east_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
                 
                 if st.button("Save EAST Zone Drill-Down to Dashboard", key=f"save_ns_east_{segment['id']}"):
                     if not selected_states_east:
@@ -779,31 +793,26 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if preview_all_south:
                     summary_styled = style_state_summary(preview_all_south['state_summary'])
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding zone row)
+                    sorted_states_south = preview_all_south['state_summary'][preview_all_south['state_summary']['State'] != 'SOUTH']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table
+                south_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    key=f"ns_south_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
                 
                 st.markdown("---")
                 
                 selected_states_south = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=states_in_south,
-                    default=states_in_south[:4] if len(states_in_south) > 4 else states_in_south,
+                    options=sorted_states_south if preview_all_south else states_in_south,
+                    default=sorted_states_south[:4] if (preview_all_south and len(sorted_states_south) > 4) else (sorted_states_south if preview_all_south else states_in_south[:4]),
                     key=f"ns_south_states_{segment['id']}"
                 )
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    south_comment_top = st.text_area(
-                        "Comment for State Summary Table (optional)",
-                        key=f"ns_south_comment_top_{segment['id']}",
-                        placeholder="Add insights about state-level performance...",
-                        height=100
-                    )
-                with col2:
-                    south_comment_bottom = st.text_area(
-                        "Comment for Brand Deep-Dive (optional)",
-                        key=f"ns_south_comment_bottom_{segment['id']}",
-                        placeholder="Add insights about brand performance by state...",
-                        height=100
-                    )
                 
                 if selected_states_south:
                     st.markdown("**Preview - State Deep-Dive:**")
@@ -811,6 +820,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     
                     if preview_south and preview_south['state_details']:
                         render_state_drilldown_preview(preview_south, selected_states_south)
+                
+                # Comment for brand deep-dive AFTER preview
+                st.markdown("---")
+                south_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    key=f"ns_south_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
                 
                 if st.button("Save SOUTH Zone Drill-Down to Dashboard", key=f"save_ns_south_{segment['id']}"):
                     if not selected_states_south:
@@ -1748,11 +1766,11 @@ def format_extra_comments(extras: list[str] | None) -> str:
 def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Segment Trends: Carousel Images"""
     st.markdown("#### Segment Trends Configuration")
-    st.caption("Upload images that will be displayed in a carousel (scrollable pages)")
+    st.caption("Upload images that will be displayed as tabs/pages")
     
     # Image uploads
     st.markdown("**Upload Images:**")
-    st.caption("Upload multiple images - users can scroll through them like pages")
+    st.caption("Upload multiple images - each will become a tab on the dashboard")
     
     uploaded_images = st.file_uploader(
         "Upload Images (multiple allowed)",
@@ -1761,19 +1779,33 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         key=f"seg_trends_images_{segment['id']}"
     )
     
-    # Preview uploaded images
+    # Page names input for each uploaded image
+    page_names = []
     if uploaded_images:
-        st.markdown(f"**Preview ({len(uploaded_images)} images uploaded):**")
-        st.caption("Images will be displayed in a carousel on the dashboard")
+        st.markdown("**Name each page/tab:**")
+        for idx, img in enumerate(uploaded_images):
+            page_name = st.text_input(
+                f"Page {idx+1} name",
+                value=f"Page {idx+1}",
+                key=f"seg_trends_page_name_{segment['id']}_{idx}",
+                placeholder=f"Enter name for page {idx+1}"
+            )
+            page_names.append(page_name)
         
-        # Show preview in tabs (like carousel)
+        # Preview uploaded images with custom names
+        st.markdown(f"**Preview ({len(uploaded_images)} images uploaded):**")
+        
         if len(uploaded_images) > 1:
-            preview_tabs = st.tabs([f"Page {i+1}" for i in range(len(uploaded_images))])
+            preview_tabs = st.tabs(page_names)
             for idx, (tab, img) in enumerate(zip(preview_tabs, uploaded_images)):
                 with tab:
-                    st.image(img, caption=f"Image {idx+1}", use_container_width=True)
+                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                    with col2:
+                        st.image(img, use_container_width=True)
         else:
-            st.image(uploaded_images[0], caption="Image 1", use_container_width=True)
+            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+            with col2:
+                st.image(uploaded_images[0], use_container_width=True)
     
     # Save button
     if st.button("Save Segment Trends Images to Dashboard", key=f"save_seg_trends_{segment['id']}"):
@@ -1785,15 +1817,199 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             # Delete existing images for this section
             delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
             
-            # Save all uploaded images
+            # Save all uploaded images with custom page names
             for idx, uploaded_img in enumerate(uploaded_images):
+                page_name = page_names[idx] if idx < len(page_names) else f"Page {idx+1}"
                 save_media_upload(
                     uploaded_file=uploaded_img,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=f"Page {idx+1}",
+                    comment=page_name,  # Store page name in comment field
                     label="Segment Trends Carousel"
                 )
             
             st.success(f"{len(uploaded_images)} image(s) saved to dashboard!")
+
+    
+    st.markdown("---")
+    st.markdown("### Custom Trends View Builder")
+    st.caption("Create a custom view with title, description, and numbered sections")
+    
+    # Title and main description
+    trends_title = st.text_input(
+        "View Title",
+        value="",
+        placeholder="e.g., Premium Whisky Trends in L1Y",
+        key=f"trends_title_{segment['id']}"
+    )
+    
+    trends_description = st.text_area(
+        "Main Description",
+        placeholder="e.g., Premium whisky consumption in A25 @ 45%, increasing vs LY...",
+        height=100,
+        key=f"trends_desc_{segment['id']}"
+    )
+    
+    # Number of sections
+    num_sections = st.number_input(
+        "Number of Sections (1-8)",
+        min_value=1,
+        max_value=8,
+        value=4,
+        key=f"trends_num_sections_{segment['id']}"
+    )
+    
+    # Section inputs
+    sections_data = []
+    for i in range(num_sections):
+        st.markdown(f"**Section {i+1}:**")
+        
+        # Option to customize section number/label
+        col_num, col_left, col_right = st.columns([1, 2, 2])
+        
+        with col_num:
+            section_label = st.text_input(
+                f"Label",
+                value=str(i + 1),
+                key=f"trends_sec{i}_label_{segment['id']}",
+                help="Default is number, but you can use any text"
+            )
+        
+        with col_left:
+            left_content = st.text_area(
+                f"Left content",
+                placeholder="Enter content for left side...",
+                height=100,
+                key=f"trends_sec{i}_left_{segment['id']}"
+            )
+        
+        with col_right:
+            right_content = st.text_area(
+                f"Right content",
+                placeholder="Enter content for right side...",
+                height=100,
+                key=f"trends_sec{i}_right_{segment['id']}"
+            )
+        
+        sections_data.append({
+            "number": section_label,
+            "left": left_content,
+            "right": right_content
+        })
+    
+    # Preview
+    if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
+        st.markdown("---")
+        st.markdown("**Preview:**")
+        
+        if trends_title:
+            st.markdown(f"### {trends_title}")
+        
+        if trends_description:
+            # Escape HTML and preserve line breaks
+            import html
+            escaped_desc = html.escape(trends_description).replace('\n', '<br>')
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                    border: 1px solid #CCCCCC;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    text-align: center;
+                '>
+                    <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                        {escaped_desc}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display sections
+        for section in sections_data:
+            if section["left"] or section["right"]:
+                cols = st.columns([0.3, 3, 3])
+                
+                with cols[0]:
+                    st.markdown(f"""
+                        <div style='
+                            width: 60px;
+                            height: 60px;
+                            border-radius: 50%;
+                            background-color: #FFFFFF;
+                            border: 3px solid #666666;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 1.5rem;
+                            font-weight: bold;
+                            color: #666666;
+                            margin-top: 1rem;
+                        '>
+                            {section["number"]}
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                with cols[1]:
+                    if section["left"]:
+                        import html
+                        escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                        st.markdown(f"""
+                            <div style='
+                                background: #E3F2FD;
+                                border: 1px solid #90CAF9;
+                                padding: 1rem;
+                                margin: 0.5rem 0;
+                                border-radius: 8px;
+                                min-height: 100px;
+                            '>
+                                <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                    {escaped_left}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                with cols[2]:
+                    if section["right"]:
+                        import html
+                        escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                        st.markdown(f"""
+                            <div style='
+                                background: #F3E5F5;
+                                border: 1px solid #CE93D8;
+                                padding: 1rem;
+                                margin: 0.5rem 0;
+                                border-radius: 8px;
+                                min-height: 100px;
+                            '>
+                                <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                    {escaped_right}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+    
+    # Save button
+    if st.button("Save Custom Trends View to Dashboard", key=f"save_trends_view_{segment['id']}"):
+        if not trends_title:
+            st.error("Please provide a title for the view.")
+        else:
+            # Save as a table entry with JSON config
+            delete_tables_for_section(segment["id"], "Segment Trends", "Custom Trends View")
+            
+            config_data = json.dumps({
+                "title": trends_title,
+                "description": trends_description,
+                "sections": sections_data
+            })
+            
+            save_table(
+                name="Custom Trends View",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Segment Trends",
+                filter_json=config_data,
+                comment=""
+            )
+            st.success("Custom Trends View saved to dashboard!")

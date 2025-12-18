@@ -1278,37 +1278,40 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
 
 
 def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
-    """Render Segment Trends section with carousel images"""
+    """Render Segment Trends section with carousel images and custom view"""
     from app_core.media import get_media_for_segment, delete_media_for_section
+    from app_core.tables import get_tables_for_segment
     
     # Get images for this section
     media_items = get_media_for_segment(segment["id"])
     seg_trends_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
     
-    if not seg_trends_images:
+    # Get custom trends view
+    tables = get_tables_for_segment(segment["id"])
+    custom_view = next((t for t in tables if t["section"] == "Segment Trends" and t["name"] == "Custom Trends View"), None)
+    
+    if not seg_trends_images and not custom_view:
         st.info("No content published for Segment Trends yet. Editors can configure it in Data Studio.")
         return
     
     st.markdown("### Segment Trends")
     
-    # Use tabs for fast navigation (no page reload)
     if len(seg_trends_images) > 1:
-        # Create tabs labeled as "Image 1", "Image 2", etc.
-        tab_labels = [f"Image {i+1}" for i in range(len(seg_trends_images))]
+        # Tabs for navigation - use custom page names from comment field
+        tab_labels = [media.get("comment", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(seg_trends_images)]
         image_tabs = st.tabs(tab_labels)
         
         for idx, (tab, media) in enumerate(zip(image_tabs, seg_trends_images)):
             with tab:
                 file_path = media.get("file_path")
                 if file_path and os.path.exists(file_path):
-                    # Center the image with controlled width
                     col1, col2, col3 = st.columns([0.5, 2, 0.5])
                     with col2:
                         st.image(file_path, use_container_width=True)
                 else:
                     st.warning(f"Image {idx+1} not found.")
     else:
-        # Single image with controlled width
+        # Single image
         file_path = seg_trends_images[0].get("file_path")
         if file_path and os.path.exists(file_path):
             col1, col2, col3 = st.columns([0.5, 2, 0.5])
@@ -1318,7 +1321,7 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
             st.warning("Image not found.")
     
     # Delete button for editors
-    if is_editor:
+    if is_editor and seg_trends_images:
         if st.button("Delete Segment Trends Images", key=f"del_seg_trends_{segment['id']}"):
             delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
             st.success("Segment Trends images removed")
@@ -1326,3 +1329,109 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                 st.rerun()
             else:
                 st.experimental_rerun()
+    
+    # Render custom trends view if exists
+    if custom_view:
+        st.markdown("---")
+        try:
+            config = json.loads(custom_view["filter_json"]) if custom_view["filter_json"] else {}
+            title = config.get("title", "")
+            description = config.get("description", "")
+            sections = config.get("sections", [])
+            
+            if title:
+                st.markdown(f"### {title}")
+            
+            if description:
+                # Escape HTML and preserve line breaks
+                import html
+                escaped_desc = html.escape(description).replace('\n', '<br>')
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                        border: 1px solid #CCCCCC;
+                        padding: 1rem 1.5rem;
+                        margin: 1rem 0;
+                        border-radius: 8px;
+                        text-align: center;
+                    '>
+                        <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                            {escaped_desc}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Display sections
+            for section in sections:
+                if section.get("left") or section.get("right"):
+                    cols = st.columns([0.3, 3, 3])
+                    
+                    with cols[0]:
+                        st.markdown(f"""
+                            <div style='
+                                width: 60px;
+                                height: 60px;
+                                border-radius: 50%;
+                                background-color: #FFFFFF;
+                                border: 3px solid #666666;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 1.5rem;
+                                font-weight: bold;
+                                color: #666666;
+                                margin-top: 1rem;
+                            '>
+                                {section.get("number", "")}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with cols[1]:
+                        if section.get("left"):
+                            import html
+                            escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #E3F2FD;
+                                    border: 1px solid #90CAF9;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 100px;
+                                '>
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {escaped_left}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with cols[2]:
+                        if section.get("right"):
+                            import html
+                            escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F3E5F5;
+                                    border: 1px solid #CE93D8;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 100px;
+                                '>
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {escaped_right}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+            
+            # Delete button for custom view
+            if is_editor:
+                if st.button("Delete Custom Trends View", key=f"del_custom_trends_{segment['id']}"):
+                    delete_table(custom_view["id"])
+                    st.success("Custom Trends View removed")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Error rendering custom view: {str(e)}")
