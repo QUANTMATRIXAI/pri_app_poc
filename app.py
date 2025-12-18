@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 from app_core.auth import create_default_users
@@ -8,12 +9,15 @@ from app_core.database import (
     ensure_media_table,
     ensure_battleground_notes_table,
     ensure_uploads_segment_column,
+    ensure_uploads_data_path_column,
+    clear_all_data,
     init_db,
     migrate_charts_table,
     get_connection,
 )
 from app_core.segments import create_default_segments, get_segment, get_segments
 from app_core.tables import get_tables_for_segment
+from app_core.uploads import save_upload
 from app_ui.auth import login_panel
 from app_ui.data_studio import render_data_upload
 from app_ui.dashboard import draw_dashboard
@@ -39,6 +43,7 @@ def bootstrap() -> None:
     ensure_tables_table()
     ensure_media_table()
     ensure_battleground_notes_table()
+    ensure_uploads_data_path_column()
     with get_connection() as conn:
         if default_segment_id:
             conn.execute("UPDATE uploads SET segment_id = ? WHERE segment_id IS NULL", (default_segment_id,))
@@ -83,7 +88,33 @@ def main() -> None:
         unsafe_allow_html=True,
     )
     st.sidebar.success(f"Logged in as {current_user['username']} ({current_user['role']})")
-    if current_user["role"] != "editor":
+    # Global upload for editors (reused across segments)
+    if current_user["role"] == "editor":
+        uploaded_global = st.sidebar.file_uploader("Upload data file (CSV/XLSX)", type=["csv", "xlsx", "xls"])
+        if uploaded_global:
+            spinner_slot = st.sidebar.empty()
+            try:
+                with spinner_slot, st.spinner("Preparing file..."):
+                    if uploaded_global.name.endswith(".csv"):
+                        df_global = pd.read_csv(uploaded_global)
+                    else:
+                        df_global = pd.read_excel(uploaded_global)
+                    # Coerce object columns to string to avoid parquet type errors
+                    for col in df_global.select_dtypes(include=["object"]).columns:
+                        df_global[col] = df_global[col].astype("string")
+                    save_upload(uploaded_global.name, df_global, current_user["username"])
+                spinner_slot.empty()
+                st.sidebar.success(
+                    f"Saved {uploaded_global.name} for all segments (rows: {len(df_global)}, cols: {len(df_global.columns)})."
+                )
+            except Exception as exc:  # noqa: BLE001
+                spinner_slot.empty()
+                st.sidebar.error(f"Failed to process file: {exc}")
+        if st.sidebar.button("Clear all data (uploads + dashboard)", key="clear_all_data"):
+            clear_all_data()
+            st.sidebar.success("All data cleared.")
+            trigger_rerun()
+    else:
         if st.sidebar.button("Refresh dashboard"):
             trigger_rerun()
     if st.sidebar.button("Log out"):

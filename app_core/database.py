@@ -205,6 +205,33 @@ def ensure_uploads_segment_column(default_segment_id: Optional[int]) -> None:
             conn.commit()
 
 
+def ensure_uploads_data_path_column() -> None:
+    """Add a column to track on-disk storage for uploads."""
+    with get_connection() as conn:
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(uploads)").fetchall()]
+        if "data_path" not in cols:
+            conn.execute("ALTER TABLE uploads ADD COLUMN data_path TEXT DEFAULT ''")
+            conn.commit()
+
+
+def clear_all_data() -> None:
+    """Dangerous: delete uploads, charts, tables, media and drop stored files."""
+    from .uploads import DATA_UPLOAD_DIR
+
+    with get_connection() as conn:
+        conn.execute("DELETE FROM charts")
+        conn.execute("DELETE FROM tables")
+        conn.execute("DELETE FROM media")
+        conn.execute("DELETE FROM uploads")
+        conn.commit()
+    if DATA_UPLOAD_DIR.exists():
+        for f in DATA_UPLOAD_DIR.glob("*"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+
 def ensure_battleground_notes_table() -> None:
     """Ensure table for battleground JTBD text blocks exists."""
     with get_connection() as conn:

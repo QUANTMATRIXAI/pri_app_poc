@@ -27,12 +27,13 @@ def apply_filters(df: pd.DataFrame, filters: dict | None) -> pd.DataFrame:
         filtered["month"] = pd.to_numeric(filtered["month"], errors="coerce").astype("Int64")
 
     if view_mode == "yearly":
-        group_cols = ["year"]
-        if "brand" in filtered.columns:
-            group_cols.append("brand")
-        num_cols = filtered.select_dtypes(include="number").columns.tolist()
-        agg_dict = {col: "sum" for col in num_cols if col not in group_cols}
-        filtered = filtered.groupby(group_cols, dropna=True).agg(agg_dict).reset_index()
+        if "year" in filtered.columns:
+            group_cols = ["year"]
+            if "brand" in filtered.columns:
+                group_cols.append("brand")
+            num_cols = filtered.select_dtypes(include="number").columns.tolist()
+            agg_dict = {col: "sum" for col in num_cols if col not in group_cols}
+            filtered = filtered.groupby(group_cols, dropna=True).agg(agg_dict).reset_index()
     else:
         # monthly view: add a period column for plotting convenience
         if "year" in filtered.columns and "month" in filtered.columns:

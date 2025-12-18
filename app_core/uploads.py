@@ -1,43 +1,62 @@
 import datetime
+from pathlib import Path
 from typing import Optional, Tuple
 
 import pandas as pd
+import duckdb
 
 from .database import get_connection
 
+DATA_UPLOAD_DIR = Path("data/uploads")
+DATA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def persist_upload_file(upload_id: int, df: pd.DataFrame) -> None:
+    """Write the dataset to parquet and update the row."""
+    path = DATA_UPLOAD_DIR / f"{upload_id}.parquet"
+    df.to_parquet(path, index=False, engine="pyarrow", compression="snappy")
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE uploads SET data_path = ?, data_json = ?, uploaded_at = ? WHERE id = ?",
+            (str(path), "", datetime.datetime.utcnow().isoformat(), upload_id),
+        )
+        conn.commit()
+
 
 def save_upload(filename: str, df: pd.DataFrame, uploaded_by: str) -> int:
-    data_json = df.to_json(orient="records")
     with get_connection() as conn:
         cursor = conn.execute(
             "INSERT INTO uploads (filename, data_json, uploaded_by, uploaded_at, segment_id) VALUES (?, ?, ?, ?, ?)",
             (
                 filename,
-                data_json,
+                "",
                 uploaded_by,
                 datetime.datetime.utcnow().isoformat(),
                 None,
             ),
         )
         conn.commit()
-    return int(cursor.lastrowid)
+    upload_id = int(cursor.lastrowid)
+    persist_upload_file(upload_id, df)
+    return upload_id
 
 
 def save_upload_for_segment(filename: str, df: pd.DataFrame, uploaded_by: str, segment_id: int) -> int:
-    data_json = df.to_json(orient="records")
     with get_connection() as conn:
         cursor = conn.execute(
             "INSERT INTO uploads (filename, data_json, uploaded_by, uploaded_at, segment_id) VALUES (?, ?, ?, ?, ?)",
             (
                 filename,
-                data_json,
+                "",
                 uploaded_by,
                 datetime.datetime.utcnow().isoformat(),
                 segment_id,
             ),
         )
         conn.commit()
-    return int(cursor.lastrowid)
+    upload_id = int(cursor.lastrowid)
+    persist_upload_file(upload_id, df)
+    return upload_id
 
 
 def get_upload_history(limit: int = 10, segment_id: int | None = None):
@@ -81,10 +100,17 @@ def get_uploads(segment_id: int | None = None):
 def load_dataset(upload_id: int) -> Optional[pd.DataFrame]:
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT data_json FROM uploads WHERE id = ?",
+            "SELECT data_json, data_path FROM uploads WHERE id = ?",
             (upload_id,),
         ).fetchone()
     if not row:
+        return None
+    if row["data_path"]:
+        try:
+            return pd.read_parquet(row["data_path"])
+        except (ValueError, FileNotFoundError):
+            pass
+    if not row["data_json"]:
         return None
     try:
         return pd.read_json(row["data_json"])
@@ -95,10 +121,15 @@ def load_dataset(upload_id: int) -> Optional[pd.DataFrame]:
 def load_latest_dataset() -> Tuple[Optional[int], Optional[pd.DataFrame]]:
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id, data_json FROM uploads ORDER BY uploaded_at DESC LIMIT 1"
+            "SELECT id, data_json, data_path FROM uploads ORDER BY uploaded_at DESC LIMIT 1"
         ).fetchone()
     if not row:
         return None, None
+    if row["data_path"]:
+        try:
+            return row["id"], pd.read_parquet(row["data_path"])
+        except (ValueError, FileNotFoundError):
+            pass
     try:
         return row["id"], pd.read_json(row["data_json"])
     except ValueError:
@@ -153,13 +184,25 @@ def get_dataset_usage(upload_id: int) -> tuple[int, int]:
 
 def overwrite_dataset(upload_id: int, df: pd.DataFrame) -> None:
     """Persist edited dataframe back to the uploads table."""
-    data_json = df.to_json(orient="records")
-    with get_connection() as conn:
-        conn.execute(
-            "UPDATE uploads SET data_json = ?, uploaded_at = ? WHERE id = ?",
-            (data_json, datetime.datetime.utcnow().isoformat(), upload_id),
-        )
-        conn.commit()
+    persist_upload_file(upload_id, df)
+
+
+def query_segment_filtered(upload_path: str, segment_key: str, years: list[str]) -> pd.DataFrame:
+    """Use DuckDB to filter the parquet by Revised Seg and PRI Year, returning a pandas DataFrame."""
+    con = duckdb.connect()
+    seg_key = segment_key.strip().lower()
+    year_list = ", ".join([f"'{y}'" for y in years]) if years else "'A23','A24','A25'"
+    query = f"""
+        SELECT *
+        FROM read_parquet('{upload_path}')
+        WHERE lower(trim("Revised Seg")) = '{seg_key}'
+          AND "PRI Year" IN ({year_list})
+    """
+    try:
+        df = con.execute(query).fetch_df()
+    finally:
+        con.close()
+    return df
 
 
 def delete_upload(upload_id: int) -> tuple[bool, str]:

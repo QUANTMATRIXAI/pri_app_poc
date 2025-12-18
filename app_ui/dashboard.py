@@ -4,6 +4,7 @@ import re
 import uuid
 from typing import Dict, List
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -13,82 +14,32 @@ from app_core.filters import apply_filters
 from app_core.media import delete_media_for_section, get_media_for_segment
 from app_core.battlegrounds import get_battleground_notes
 from app_core.tables import build_table_preview, delete_table
-from app_core.uploads import count_uploads_for_segment, load_dataset, overwrite_dataset
+from app_core.uploads import count_uploads_for_segment, overwrite_dataset, get_uploads, query_segment_filtered, load_dataset
 
 from .charts import plot_chart
 
 
 def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> None:
     st.subheader(f"Dashboard · {segment['name']}")
-    search = st.text_input(
-        "Search charts/tables",
-        placeholder="Search by name, dataset, or note...",
-        key=f"dash_search_{segment['id']}",
-    )
-    uploads_total = count_uploads_for_segment(segment["id"])
-    charts_total = count_charts_for_segment(segment["id"])
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown(
-            f"""
-            <div class="info-card">
-                <div class="pill">Datasets</div>
-                <div class="metric-value">{uploads_total}</div>
-                <div class="stCaption">Uploaded for this segment</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with col_b:
-        st.markdown(
-            f"""
-            <div class="info-card">
-                <div class="pill">Published blocks</div>
-                <div class="metric-value">{charts_total + len(tables)}</div>
-                <div class="stCaption">Charts and tables on this dashboard</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    st.markdown("")
-
-    search_lower = (search or "").strip().lower()
-    section_tabs = st.tabs(SECTIONS)
-    charts_by_section = group_by_section(charts)
-    tables_by_section = group_by_section(tables)
-    media_by_section = group_by_section(get_media_for_segment(segment["id"]))
-
-    for section, tab in zip(SECTIONS, section_tabs):
-        with tab:
-            section_charts = [dict(row) for row in charts_by_section.get(section, [])]
-            section_tables = [dict(row) for row in tables_by_section.get(section, [])]
-            section_media_items = [dict(row) for row in media_by_section.get(section, [])]
-            blocks = (
-                [{"type": "chart", **row} for row in section_charts]
-                + [{"type": "table", **row} for row in section_tables]
-            )
-            if section_media_items:
-                if section == "NS Landscape":
-                    names = sorted({m["name"] for m in section_media_items})
-                    for name in names:
-                        filtered = [m for m in section_media_items if m["name"] == name]
-                        blocks.append({"type": "media", "section": section, "items": filtered, "name": name})
-                else:
-                    blocks.append({"type": "media", "section": section, "items": section_media_items, "name": section})
-            # Brand Truths and Segment Trends are image-only
-            if section in {"Brand Truths", "Segment Trends"}:
-                blocks = [b for b in blocks if b["type"] == "media"]
-            blocks = filter_blocks(blocks, search_lower)
-            blocks = sorted(blocks, key=lambda b: b.get("created_at", ""), reverse=True)
-            if not blocks:
-                if section == "Battlegrounds":
-                    render_battleground_tabs_view(segment["id"], is_editor)
-                else:
-                    st.info("No content yet. Publish from Data Studio.")
-                continue
-            render_blocks(blocks, is_editor, media_by_section, current_section=section, segment_id=segment["id"])
-
-
+    
+    # Check if there's any published content
+    if not charts and not tables:
+        st.info("No content published yet. Editors can publish content from the Data Studio.")
+        return
+    
+    # Show published content in tabs
+    st.markdown("### Published Content")
+    tabs = st.tabs(["NS Landscape", "Segment Truths", "Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"])
+    
+    # NS Landscape tab
+    with tabs[0]:
+        render_ns_landscape_dashboard(segment, charts, tables, is_editor)
+    
+    # Other tabs
+    for idx in range(1, 6):
+        with tabs[idx]:
+            section_name = ["Segment Truths", "Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"][idx-1]
+            st.info(f"No content published for {section_name} yet.")
 def group_by_section(rows) -> Dict[str, List]:
     grouped = {}
     for row in rows:
@@ -369,3 +320,722 @@ def render_battleground_tabs_view(segment_id: int, is_editor: bool) -> None:
             with cols[1]:
                 st.markdown("**JTBDs**")
                 st.markdown(f"<div class='comment-box'>{format_comment(note.get('jtbd_text',''))}</div>", unsafe_allow_html=True)
+
+
+def render_section_placeholder(section: str) -> None:
+    st.info(f"No content configured yet for {section}.")
+
+
+def map_segment_name(name: str) -> str:
+    seg_map = {
+        "value": "admix value",
+        "deluxe": "admix deluxe",
+        "premium": "admix premium",
+        "spib": "s& pib",
+        "sp bio": "sp+ib",
+        "spbio": "sp+ib",
+    }
+    return seg_map.get(name.strip().lower(), name.strip().lower())
+
+
+def get_latest_upload_row(segment_id: int):
+    uploads = get_uploads(segment_id=segment_id)
+    if uploads:
+        return sorted(uploads, key=lambda r: r["uploaded_at"], reverse=True)[0]
+    all_uploads = get_uploads()
+    if all_uploads:
+        return sorted(all_uploads, key=lambda r: r["uploaded_at"], reverse=True)[0]
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def get_filtered_df_for_segment(upload_id: int, upload_path: str, segment_name: str):
+    required_cols = {"revised seg", "pri year", "ns m inr", "mfg com"}
+    seg_key = map_segment_name(segment_name)
+    years = ["A23", "A24", "A25"]
+    df = query_segment_filtered(upload_path, seg_key, years)
+    cols = {c.lower() for c in df.columns}
+    if not required_cols.issubset(cols):
+        return None, []
+    years_available = [y for y in years if y in df["PRI Year"].unique().tolist()]
+    return df, years_available
+
+
+def render_segment_ns_pivot(segment: Dict) -> bool:
+    """Render NS Landscape manufacturing pivot with YoY and 2yr CAGR for the segment. Returns True if shown."""
+    upload_row = get_latest_upload_row(segment["id"])
+    if not upload_row:
+        st.info("Upload a dataset to render this view.")
+        return False
+
+    df, years_available = get_filtered_df_for_segment(upload_row["id"], upload_row["data_path"], segment["name"])
+    if df is None or df.empty:
+        st.info("No rows for this segment in the uploaded file.")
+        return False
+
+    selected_years = st.multiselect(
+        "Fiscal years to include",
+        options=years_available,
+        default=years_available,
+        key=f"ns_years_{segment['id']}",
+    )
+    if not selected_years:
+        st.info("Select at least one fiscal year.")
+        return False
+    df = df[df["PRI Year"].isin(selected_years)]
+    if df.empty:
+        st.info("No data for the selected years.")
+        return False
+
+    pivot_mfs = pd.pivot_table(
+        df,
+        index="Mfg Com",
+        columns="PRI Year",
+        values="NS M INR",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    pivot_mfs = pivot_mfs.reindex(columns=selected_years).fillna(0)
+
+    segment_total = pivot_mfs.sum(axis=0).to_frame().T
+    segment_total.index = ["Segment Total"]
+    pivot_mfs = pd.concat([pivot_mfs, segment_total], axis=0)
+
+    # YoY growth for consecutive years
+    yoy_df = pivot_mfs[selected_years].pct_change(axis=1) * 100
+    if len(selected_years) > 1:
+        yoy_df = yoy_df.iloc[:, 1:].round(2)
+        yoy_df.columns = [f"{col} Growth %" for col in selected_years[1:]]
+    else:
+        yoy_df = pd.DataFrame(index=pivot_mfs.index)
+
+    # 2-year CAGR (A23 -> A25) when both present
+    if "A23" in selected_years and "A25" in selected_years:
+        start = pivot_mfs["A23"]
+        end = pivot_mfs["A25"]
+        cagr_vals = np.where(start > 0, ((end / start) ** 0.5 - 1) * 100, np.nan)
+        cagr_series = pd.Series(cagr_vals, index=pivot_mfs.index, name="2 Yr CAGR %").round(2)
+    else:
+        cagr_series = pd.Series([np.nan] * len(pivot_mfs), index=pivot_mfs.index, name="2 Yr CAGR %")
+
+    # Formatting
+    pivot_fmt = pivot_mfs[selected_years].applymap(lambda x: f"{x:.0f}" if pd.notnull(x) else "")
+    yoy_fmt = yoy_df.applymap(lambda x: f"{x:.2f}%" if pd.notnull(x) else "")
+    cagr_fmt = cagr_series.apply(lambda x: f"{x:.2f}%" if pd.notnull(x) else "")
+    cagr_fmt = cagr_fmt.to_frame()
+
+    final_table = pd.concat([pivot_fmt, yoy_fmt, cagr_fmt], axis=1).reset_index()
+    final_table.rename(columns={"index": "Mfg Com"}, inplace=True)
+
+    custom_order = ["Segment Total", "PRI", "Diageo", "Others"]
+    final_table["Mfg Com"] = pd.Categorical(final_table["Mfg Com"], categories=custom_order, ordered=True)
+    final_table = final_table.sort_values("Mfg Com").reset_index(drop=True)
+
+    st.markdown(f"#### Manufacturing View ({segment['name']})")
+    st.dataframe(final_table, use_container_width=True)
+    growth_rows = final_table[final_table["Mfg Com"].isin(custom_order)].copy()
+    if not growth_rows.empty:
+        growth_rows["Mfg Com"] = growth_rows["Mfg Com"].replace({"Segment Total": "Segment"})
+        growth_cols = [col for col in ["A24 Growth %", "A25 Growth %", "2 Yr CAGR %"] if col in growth_rows.columns]
+        if growth_cols:
+            growth_display = growth_rows[["Mfg Com"] + growth_cols].copy()
+            rename_map = {"Mfg Com": "Segment", "A24 Growth %": "A24", "A25 Growth %": "A25", "2 Yr CAGR %": "2Yr CAGR"}
+            growth_display = growth_display.rename(columns={k: v for k, v in rename_map.items() if k in growth_display.columns})
+            st.markdown(f"#### {segment['name']} growth summary")
+            st.table(growth_display)
+    return True
+
+
+def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_editor: bool) -> None:
+    """Render NS Landscape section with Manufacturing Pivot and Brand Chart"""
+    import plotly.graph_objects as go
+    
+    # Filter for NS Landscape content
+    ns_charts = [c for c in charts if c["section"] == "NS Landscape"]
+    ns_tables = [t for t in tables if t["section"] == "NS Landscape"]
+    
+    if not ns_charts and not ns_tables:
+        st.info("No content published for NS Landscape yet. Editors can configure it in Data Studio.")
+        return
+    
+    # Render side by side in 2 columns
+    pivot_table = next((t for t in ns_tables if t["name"] == "Manufacturing Pivot"), None)
+    brand_chart = next((c for c in ns_charts if c["name"] == "Brand Performance"), None)
+    zonal_table = next((t for t in ns_tables if t["name"] == "Zonal Pivot"), None)
+    north_drilldown = next((t for t in ns_tables if t["name"] == "NORTH State Drill-Down"), None)
+    west_drilldown = next((t for t in ns_tables if t["name"] == "WEST+CSD State Drill-Down"), None)
+    east_drilldown = next((t for t in ns_tables if t["name"] == "EAST State Drill-Down"), None)
+    south_drilldown = next((t for t in ns_tables if t["name"] == "SOUTH State Drill-Down"), None)
+    
+    if pivot_table and brand_chart:
+        # Both exist - show side by side
+        col1, col2 = st.columns(2)
+        with col1:
+            render_manufacturing_pivot_dashboard(pivot_table, segment, is_editor)
+        with col2:
+            render_brand_chart_dashboard(brand_chart, segment, is_editor)
+    elif pivot_table:
+        # Only pivot
+        render_manufacturing_pivot_dashboard(pivot_table, segment, is_editor)
+    elif brand_chart:
+        # Only chart
+        render_brand_chart_dashboard(brand_chart, segment, is_editor)
+    
+    # Render zonal table below (full width)
+    if zonal_table:
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        render_zonal_pivot_dashboard(zonal_table, segment, is_editor)
+    
+    # Render zone state drill-downs
+    if north_drilldown:
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        render_zone_drilldown_dashboard(north_drilldown, segment, is_editor, "North Zone")
+    
+    if west_drilldown:
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        render_zone_drilldown_dashboard(west_drilldown, segment, is_editor, "West+CSD Zone")
+    
+    if east_drilldown:
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        render_zone_drilldown_dashboard(east_drilldown, segment, is_editor, "East Zone")
+    
+    if south_drilldown:
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        render_zone_drilldown_dashboard(south_drilldown, segment, is_editor, "South Zone")
+
+
+def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
+    """Render the manufacturing pivot table with YoY and CAGR"""
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>Manufacturing Pivot - NS M INR by Company & Year</h4>", unsafe_allow_html=True)
+    
+    # Show comment if exists
+    comment = table_row["comment"] if table_row["comment"] else ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
+    
+    # Load data and apply filters
+    df = load_dataset(table_row["dataset_id"])
+    if df is None or df.empty:
+        st.warning("Dataset not found.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Filter by segment
+    seg_name = map_segment_name(segment["name"])
+    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    
+    # Get year filter from config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
+    df = df[df["PRI Year"].isin(selected_years)]
+    
+    if df.empty:
+        st.warning("No data available for selected filters.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Create pivot
+    pivot = pd.pivot_table(
+        df,
+        index="Mfg Com",
+        columns="PRI Year",
+        values="NS M INR",
+        aggfunc="sum",
+        fill_value=0
+    )
+    pivot = pivot.reindex(columns=selected_years, fill_value=0)
+    
+    # Add Segment Total
+    segment_total = pivot.sum(axis=0).to_frame().T
+    segment_total.index = ["Segment Total"]
+    pivot = pd.concat([pivot, segment_total], axis=0)
+    
+    # Keep only growth columns and CAGR (no base year)
+    columns_to_keep = ["Mfg Com"]
+    
+    # Calculate YoY Growth
+    for i in range(1, len(selected_years)):
+        prev_year = selected_years[i-1]
+        curr_year = selected_years[i]
+        col_name = f"{curr_year} Growth %"
+        pivot[col_name] = ((pivot[curr_year] - pivot[prev_year]) / pivot[prev_year] * 100).replace([np.inf, -np.inf], 0).fillna(0).round(1)
+        columns_to_keep.append(col_name)
+    
+    # Calculate 2-Year CAGR
+    if "A23" in selected_years and "A25" in selected_years:
+        start = pivot["A23"]
+        end = pivot["A25"]
+        pivot["2 Yr CAGR %"] = np.where(
+            start > 0,
+            ((end / start) ** 0.5 - 1) * 100,
+            0
+        ).round(1)
+        columns_to_keep.append("2 Yr CAGR %")
+    
+    # Format and sort
+    pivot = pivot.reset_index()
+    pivot = pivot.rename(columns={"index": "Mfg Com"})
+    
+    custom_order = ["Segment Total", "PRI", "Diageo", "Others"]
+    pivot["sort_key"] = pivot["Mfg Com"].apply(lambda x: custom_order.index(x) if x in custom_order else 999)
+    pivot = pivot.sort_values("sort_key").drop(columns=["sort_key"]).reset_index(drop=True)
+    
+    # Select only required columns
+    final_columns = [col for col in columns_to_keep if col in pivot.columns]
+    pivot_display = pivot[final_columns]
+    
+    # Display without index
+    st.dataframe(pivot_display, use_container_width=True, hide_index=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Pivot Table", key=f"del_pivot_{table_row['id']}"):
+            delete_table(table_row["id"])
+            st.success("Pivot table removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool) -> None:
+    """Render the brand performance multi-bar chart"""
+    import plotly.express as px
+    
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    st.markdown(f"<div class='pill'>Chart</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>Brand Performance - NS M INR by PRI Year</h4>", unsafe_allow_html=True)
+    
+    # Show comment if exists
+    comment = chart_row["comment"] if chart_row["comment"] else ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
+    
+    # Load data and apply filters
+    df = load_dataset(chart_row["dataset_id"])
+    if df is None or df.empty:
+        st.warning("Dataset not found.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Filter by segment
+    seg_name = map_segment_name(segment["name"])
+    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    
+    # Get filters from config
+    filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
+    selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
+    selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
+    
+    # Apply filters
+    df = df[df["Brand"].isin(selected_brands)]
+    df = df[df["PRI Year"].isin(selected_years)]
+    
+    if df.empty:
+        st.warning("No data available for selected brands and years.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Aggregate data
+    chart_data = df.groupby(["Brand", "PRI Year"])["NS M INR"].sum().reset_index()
+    
+    # Green color scheme - light to dark
+    color_map = {
+        "A23": "#90EE90",  # Light Green
+        "A24": "#4CAF50",  # Medium Green
+        "A25": "#1B5E20"   # Dark Green
+    }
+    
+    # Create multi-bar chart with Plotly Express
+    fig = px.bar(
+        chart_data,
+        x="Brand",
+        y="NS M INR",
+        color="PRI Year",
+        barmode="group",
+        text="NS M INR",
+        height=500,
+        color_discrete_map=color_map,
+        category_orders={"PRI Year": ["A23", "A24", "A25"]}
+    )
+    
+    # Format text on bars to show numbers
+    fig.update_traces(texttemplate='%{text:.2s}', textposition='outside')
+    fig.update_layout(
+        xaxis_title="Brand",
+        yaxis_title="NS M INR",
+        legend_title="PRI Year",
+        showlegend=True
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, key=f"brand_chart_{chart_row['id']}")
+    
+    # Show data table
+    with st.expander("View data"):
+        st.dataframe(chart_data, use_container_width=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Brand Chart", key=f"del_chart_{chart_row['id']}"):
+            delete_chart(chart_row["id"])
+            st.success("Brand chart removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
+    """Render the zonal pivot table with Brand Family x Zone"""
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>Zonal Pivot - Brand Performance by Zone (A25)</h4>", unsafe_allow_html=True)
+    
+    # Load data and apply filters
+    df = load_dataset(table_row["dataset_id"])
+    if df is None or df.empty:
+        st.warning("Dataset not found.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Filter by segment
+    seg_name = map_segment_name(segment["name"])
+    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    
+    # Get filters from config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    selected_families = filter_config.get("brand_families", []) if isinstance(filter_config, dict) else []
+    selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
+    
+    # Filter for A24 and A25 (needed for growth calculations)
+    df = df[df["PRI Year"].isin(["A24", "A25"])]
+    df = df[df["Brand Family"].isin(selected_families)]
+    df = df[df["Brand"].isin(selected_brands)]
+    
+    if df.empty:
+        st.warning("No data available for selected filters.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Check if Zone column exists
+    if "Zone" not in df.columns:
+        st.warning("Zone column not found in dataset.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Use the same function as preview
+    from app_ui.data_studio import create_zonal_pivot
+    result = create_zonal_pivot(df, selected_families, selected_brands)
+    
+    if result is None or result.empty:
+        st.warning("Unable to create zonal pivot.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Get zones
+    zones_unsorted = result.attrs.get('zones', [])
+    segment_growth = result.attrs.get('segment_growth', {})
+    pw_salience = result.attrs.get('pw_salience', {})
+    
+    # Sort zones by salience (highest first)
+    zones = sorted(zones_unsorted, key=lambda z: pw_salience.get(z, 0), reverse=True)
+    
+    # Display in 4 columns
+    if len(zones) == 4:
+        cols = st.columns(4)
+    elif len(zones) >= 2:
+        cols = st.columns(len(zones))
+    else:
+        cols = [st.container()]
+    
+    # Define colors for brand families
+    family_colors = {
+        0: "#E8F5E9",  # Light Green
+        1: "#E3F2FD",  # Light Blue
+        2: "#FFF3E0",  # Light Orange
+        3: "#F3E5F5",  # Light Purple
+        4: "#FCE4EC",  # Light Pink
+    }
+    
+    for idx, zone in enumerate(zones):
+        with cols[idx] if idx < len(cols) else cols[-1]:
+            # Big centered zone header
+            st.markdown(f"""
+                <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                    <h2 style='margin: 0; font-size: 1.8rem;'>{zone}</h2>
+                    <p style='margin: 0; font-size: 1.3rem; font-weight: bold; color: #1976D2;'>
+                        {pw_salience.get(zone, 0):.0f}% Salience
+                    </p>
+                    <p style='margin: 0; font-size: 1.1rem; font-weight: bold;'>
+                        {segment_growth.get(zone, 0):+.1f}% Gr in A25
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Filter rows for this zone
+            zone_df = result[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_BTM"]].copy()
+            
+            # Apply styling to highlight brand families and color negatives
+            def highlight_families(row):
+                row_type = zone_df.loc[row.name, 'Type']
+                if row_type == 'family':
+                    family_idx = len([i for i in zone_df.index[:row.name+1] if zone_df.loc[i, 'Type'] == 'family']) - 1
+                    color = family_colors[family_idx % len(family_colors)]
+                    return [f'background-color: {color}; font-weight: bold'] * len(row)
+                return [''] * len(row)
+            
+            def color_negatives(val):
+                """Color negative numbers red"""
+                if isinstance(val, str):
+                    # Check if string contains negative number
+                    if '-' in val or val.startswith('−'):
+                        return 'color: #D32F2F; font-weight: bold'
+                return ''
+            
+            # Drop Type column and rename
+            display_df = zone_df.drop(columns=['Type'])
+            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "BTM"]
+            
+            styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
+    
+    # Show comment box BELOW the zone tables
+    comment = table_row["comment"] if table_row["comment"] else ""
+    if comment:
+        st.markdown(f"""
+            <div style='
+                background: linear-gradient(to right, #FFFBF0 0%, #FFF9E6 100%);
+                border: 1px solid #E8D7A0;
+                border-left: 5px solid #D4A017;
+                padding: 1.2rem 1.5rem;
+                margin: 1.5rem 0 1rem 0;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            '>
+                <div style='
+                    font-size: 0.95rem;
+                    line-height: 1.7;
+                    color: #2C2C2C;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                '>
+                    {format_comment(comment)}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Zonal Table", key=f"del_zonal_{table_row['id']}"):
+            delete_table(table_row["id"])
+            st.success("Zonal table removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: bool, zone_name: str) -> None:
+    """Render zone state drill-down with state summary and brand deep-dive"""
+    zone_display = zone_name.replace(" Zone", "").replace("+", "+").upper()
+    
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{zone_display} Zone - State Drill-Down (A25)</h4>", unsafe_allow_html=True)
+    
+    # Load data and apply filters
+    df = load_dataset(table_row["dataset_id"])
+    if df is None or df.empty:
+        st.warning("Dataset not found.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Filter by segment
+    seg_name = map_segment_name(segment["name"])
+    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    
+    # Get filters from config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    selected_families = filter_config.get("brand_families", []) if isinstance(filter_config, dict) else []
+    selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
+    selected_states = filter_config.get("states", []) if isinstance(filter_config, dict) else []
+    
+    # Filter for A24 and A25 (needed for growth calculations)
+    df = df[df["PRI Year"].isin(["A24", "A25"])]
+    
+    if df.empty:
+        st.warning("No data available for selected filters.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Check required columns
+    if "Zone" not in df.columns or "State" not in df.columns:
+        st.warning("Zone or State column not found in dataset.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Get all states in zone for summary
+    df_zone = df[df["Zone"] == zone_name]
+    states_in_zone = sorted(df_zone[df_zone["PRI Year"] == "A25"]["State"].dropna().unique().tolist())
+    
+    # Use the same function as preview - first get ALL states summary
+    from app_ui.data_studio import create_zone_state_drilldown
+    result_all = create_zone_state_drilldown(df, selected_families, selected_brands, states_in_zone, zone_name)
+    
+    if result_all is None:
+        st.warning("Unable to create state drill-down.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    
+    # Define colors for brand families
+    family_colors = {
+        0: "#E8F5E9",  # Light Green
+        1: "#E3F2FD",  # Light Blue
+        2: "#FFF3E0",  # Light Orange
+        3: "#F3E5F5",  # Light Purple
+        4: "#FCE4EC",  # Light Pink
+    }
+    
+    # Show state summary for ALL states
+    st.markdown(f"**State Summary - All States in {zone_display} Zone**")
+    
+    def highlight_zone_row(row):
+        """Highlight the zone row"""
+        state_val = result_all['state_summary'].loc[row.name, 'State']
+        if state_val in ['NORTH', 'WEST+CSD', 'EAST', 'SOUTH']:
+            return ['background-color: #E3F2FD; font-weight: bold'] * len(row)
+        return [''] * len(row)
+    
+    def color_negatives_summary(val):
+        """Color negative numbers red"""
+        if isinstance(val, str):
+            if '-' in val or val.startswith('−'):
+                return 'color: #D32F2F; font-weight: bold'
+        return ''
+    
+    # Parse comments (could be JSON with top/bottom or just a string)
+    comment_text = table_row["comment"] if table_row["comment"] else ""
+    try:
+        comments = json.loads(comment_text) if comment_text else {}
+        top_comment = comments.get("top", "") if isinstance(comments, dict) else comment_text
+        bottom_comment = comments.get("bottom", "") if isinstance(comments, dict) else ""
+    except:
+        top_comment = comment_text
+        bottom_comment = ""
+    
+    # Show state summary and top comment side by side
+    if top_comment:
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            summary_styled = result_all['state_summary'].style.apply(highlight_zone_row, axis=1).applymap(color_negatives_summary)
+            st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+        with col2:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
+                    border: 1px solid #B0D4F1;
+                    border-left: 5px solid #2196F3;
+                    padding: 1rem 1.2rem;
+                    margin-top: 0;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    height: 100%;
+                '>
+                    <div style='
+                        font-size: 0.9rem;
+                        line-height: 1.6;
+                        color: #2C2C2C;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    '>
+                        {format_comment(top_comment)}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    else:
+        summary_styled = result_all['state_summary'].style.apply(highlight_zone_row, axis=1).applymap(color_negatives_summary)
+        st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+    
+    # Show state deep-dives for SELECTED states only
+    if selected_states:
+        result = create_zone_state_drilldown(df, selected_families, selected_brands, selected_states, zone_name)
+        
+        if result and result['state_details']:
+            st.markdown("---")
+            st.markdown("**State Deep-Dive - Brand Performance (Selected States)**")
+            
+            num_states = min(len(selected_states), 4)
+            cols = st.columns(num_states)
+            
+            for idx, state in enumerate(selected_states[:4]):
+                with cols[idx]:
+                    if state in result['state_details']:
+                        state_df = result['state_details'][state]
+                        
+                        # State header
+                        st.markdown(f"""
+                            <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                                <h3 style='margin: 0; font-size: 1.4rem;'>{state}</h3>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Apply styling
+                        def highlight_families(row):
+                            row_type = state_df.loc[row.name, 'Type']
+                            if row_type == 'family':
+                                family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
+                                color = family_colors[family_idx % len(family_colors)]
+                                return [f'background-color: {color}; font-weight: bold'] * len(row)
+                            return [''] * len(row)
+                        
+                        def color_negatives(val):
+                            if isinstance(val, str):
+                                if '-' in val or val.startswith('−'):
+                                    return 'color: #D32F2F; font-weight: bold'
+                            return ''
+                        
+                        # Drop Type column for display
+                        display_df = state_df.drop(columns=['Type'])
+                        styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
+                        st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+    
+    # Show bottom comment box BELOW the deep-dive tables
+    if bottom_comment:
+        st.markdown(f"""
+            <div style='
+                background: linear-gradient(to right, #FFFBF0 0%, #FFF9E6 100%);
+                border: 1px solid #E8D7A0;
+                border-left: 5px solid #D4A017;
+                padding: 1.2rem 1.5rem;
+                margin: 1.5rem 0 1rem 0;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            '>
+                <div style='
+                    font-size: 0.95rem;
+                    line-height: 1.7;
+                    color: #2C2C2C;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                '>
+                    {format_comment(bottom_comment)}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button(f"Delete {zone_display} Drill-Down", key=f"del_zone_{table_row['id']}"):
+            delete_table(table_row["id"])
+            st.success(f"{zone_display} zone drill-down removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)

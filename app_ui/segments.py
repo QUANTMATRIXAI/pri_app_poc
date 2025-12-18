@@ -3,7 +3,7 @@ import streamlit as st
 from app_core.charts import count_charts_for_segment
 from app_core.segments import SEGMENT_ORDER
 from app_core.tables import count_tables_for_segment
-from app_core.uploads import count_uploads_for_segment
+from app_core.uploads import count_uploads_for_segment, get_uploads
 
 
 def render_segment_landing(segments) -> None:
@@ -35,22 +35,20 @@ def render_segment_landing(segments) -> None:
 
 def render_segment_card(segment, rank: int, total: int) -> None:
     uploads = count_uploads_for_segment(segment["id"])
+    if uploads == 0:
+        uploads = len(get_uploads())
     charts = count_charts_for_segment(segment["id"])
     tables = count_tables_for_segment(segment["id"])
     total_blocks = charts + tables
     st.markdown(
         f"""
-        <div class="info-card" style="border-top: 5px solid {segment.get('color', '#f5b400')}; min-height: 190px;">
+        <div class="info-card" style="border-top: 5px solid {segment.get('color', '#f5b400')}; min-height: 160px;">
             <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.2rem;">
                 <div class="pill">Segment</div>
                 <div class="pill" style="background:rgba(0,0,0,0.04); border-color:rgba(0,0,0,0.08); color: var(--text);">Tier {rank}/{total}</div>
             </div>
             <h3 style="margin: 0.1rem 0;">{segment['name']}</h3>
             <p style="color: var(--muted); margin:0;">{segment.get('description','')}</p>
-            <div style="margin-top:0.7rem; display:flex; gap:0.9rem; font-size:0.9rem;">
-                <div><strong>{uploads}</strong> datasets</div>
-                <div><strong>{total_blocks}</strong> blocks</div>
-            </div>
         </div>
         """,
         unsafe_allow_html=True,
