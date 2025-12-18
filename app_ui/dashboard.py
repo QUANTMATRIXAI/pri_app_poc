@@ -35,10 +35,14 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
     with tabs[0]:
         render_ns_landscape_dashboard(segment, charts, tables, is_editor)
     
+    # Segment Truths tab
+    with tabs[1]:
+        render_segment_truths_dashboard(segment, tables, is_editor)
+    
     # Other tabs
-    for idx in range(1, 6):
+    for idx in range(2, 6):
         with tabs[idx]:
-            section_name = ["Segment Truths", "Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"][idx-1]
+            section_name = ["Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"][idx-2]
             st.info(f"No content published for {section_name} yet.")
 def group_by_section(rows) -> Dict[str, List]:
     grouped = {}
@@ -516,11 +520,6 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
     st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
     st.markdown(f"<h4 class='chart-title'>Manufacturing Pivot - NS M INR by Company & Year</h4>", unsafe_allow_html=True)
     
-    # Show comment if exists
-    comment = table_row["comment"] if table_row["comment"] else ""
-    if comment:
-        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
-    
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
     if df is None or df.empty:
@@ -595,6 +594,11 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
     # Display without index
     st.dataframe(pivot_display, use_container_width=True, hide_index=True)
     
+    # Show comment below the table
+    comment = table_row["comment"] if table_row["comment"] else ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
+    
     # Delete button for editors
     if is_editor:
         if st.button("Delete Pivot Table", key=f"del_pivot_{table_row['id']}"):
@@ -615,11 +619,6 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(f"<div class='pill'>Chart</div>", unsafe_allow_html=True)
     st.markdown(f"<h4 class='chart-title'>Brand Performance - NS M INR by PRI Year</h4>", unsafe_allow_html=True)
-    
-    # Show comment if exists
-    comment = chart_row["comment"] if chart_row["comment"] else ""
-    if comment:
-        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
     
     # Load data and apply filters
     df = load_dataset(chart_row["dataset_id"])
@@ -647,7 +646,24 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         return
     
     # Aggregate data
-    chart_data = df.groupby(["Brand", "PRI Year"])["NS M INR"].sum().reset_index()
+    chart_data = df.groupby(["Brand", "Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+    
+    # Sort brands:
+    # 1. Calculate 3-year sum for each brand
+    brand_totals = chart_data.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
+    brand_totals.columns = ["Brand", "Brand Family", "Total"]
+    
+    # 2. Calculate family totals (sum of selected brands in each family)
+    family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
+    family_totals.columns = ["Brand Family", "Family Total"]
+    family_totals = family_totals.sort_values("Family Total", ascending=False)
+    
+    # 3. Merge and sort: families by total, then brands within family by total
+    brand_totals = brand_totals.merge(family_totals, on="Brand Family")
+    brand_totals = brand_totals.sort_values(["Family Total", "Total"], ascending=[False, False])
+    
+    # Create ordered brand list
+    brand_order = brand_totals["Brand"].tolist()
     
     # Green color scheme - light to dark
     color_map = {
@@ -666,7 +682,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         text="NS M INR",
         height=500,
         color_discrete_map=color_map,
-        category_orders={"PRI Year": ["A23", "A24", "A25"]}
+        category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand": brand_order}
     )
     
     # Format text on bars to show numbers
@@ -679,6 +695,11 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     )
     
     st.plotly_chart(fig, use_container_width=True, key=f"brand_chart_{chart_row['id']}")
+    
+    # Show comment below the chart
+    comment = chart_row["comment"] if chart_row["comment"] else ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
     
     # Show data table
     with st.expander("View data"):
@@ -848,6 +869,172 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
     st.markdown("</div>", unsafe_allow_html=True)
 
 
+def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
+    """Render Segment Truths section"""
+    # Filter for Segment Truths content
+    seg_truth_table = next((t for t in tables if t["section"] == "Segment Truths" and t["name"] == "Segment Truth"), None)
+    
+    if not seg_truth_table:
+        st.info("No content published for Segment Truths yet. Editors can configure it in Data Studio.")
+        return
+    
+    # Parse configuration
+    try:
+        config = json.loads(seg_truth_table["filter_json"]) if seg_truth_table["filter_json"] else {}
+        title = config.get("title", "")
+        comment = config.get("comment", "")
+    except:
+        title = ""
+        comment = seg_truth_table.get("comment", "")
+    
+    # Display title
+    if title:
+        st.markdown(f"### {title}")
+    
+    # Comment box and table side by side
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if comment:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
+                    border: 1px solid #B0D4F1;
+                    border-left: 5px solid #2196F3;
+                    padding: 1.5rem 1.8rem;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    min-height: 500px;
+                '>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #2C2C2C;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    '>
+                        {format_comment(comment)}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    with col2:
+        # Profile data table in expander
+        with st.expander("📊 P3M Segment Profile Data", expanded=True):
+            profile_data = {
+                "Metric": [
+                "P3M Seg Profile",
+                "LDA-24",
+                "25-30",
+                "LDA-35",
+                "36-45",
+                "46+",
+                "",
+                "NCCS A",
+                "",
+                "Single",
+                "Married w/ Kids",
+                "Married w/o Kids",
+                "Single Parent",
+                "",
+                "Business Owners",
+                "Salaried",
+                "",
+                "High",
+                "Medium",
+                "Low",
+                "",
+                "NE: Directs Entrant",
+                "NE: From Beer",
+                "NE: From Whites",
+                "NE: NETT",
+                "Non-Entrant",
+                "",
+                "Core %",
+                "Repertoire %"
+                ],
+                "TBA": [
+                "",
+                "8%",
+                "43%",
+                "56%",
+                "32%",
+                "17%",
+                "",
+                "68",
+                "",
+                "28%",
+                "41%",
+                "9%",
+                "21%",
+                "",
+                "40%",
+                "56%",
+                "",
+                "63%",
+                "28%",
+                "9%",
+                "",
+                "9%",
+                "8%",
+                "10%",
+                "27%",
+                "73%",
+                "",
+                "",
+                ""
+                ],
+                "Premium Whisky": [
+                "",
+                "10%",
+                "45%",
+                "60%",
+                "31%",
+                "14%",
+                "",
+                "72",
+                "",
+                "32%",
+                "34%",
+                "7%",
+                "26%",
+                "",
+                "41%",
+                "56%",
+                "",
+                "68%",
+                "25%",
+                "6%",
+                "",
+                "10%",
+                "9%",
+                "13%",
+                "32%",
+                "68%",
+                "",
+                "42%",
+                "58%"
+                ]
+            }
+            
+            df_profile = pd.DataFrame(profile_data)
+            st.dataframe(
+                df_profile, 
+                use_container_width=True, 
+                hide_index=True,
+                height=450
+            )
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Segment Truths", key=f"del_seg_truth_{seg_truth_table['id']}"):
+            delete_table(seg_truth_table["id"])
+            st.success("Segment Truths removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+
+
 def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: bool, zone_name: str) -> None:
     """Render zone state drill-down with state summary and brand deep-dive"""
     zone_display = zone_name.replace(" Zone", "").replace("+", "+").upper()
@@ -976,40 +1163,48 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
             st.markdown("---")
             st.markdown("**State Deep-Dive - Brand Performance (Selected States)**")
             
-            num_states = min(len(selected_states), 4)
-            cols = st.columns(num_states)
-            
-            for idx, state in enumerate(selected_states[:4]):
-                with cols[idx]:
-                    if state in result['state_details']:
-                        state_df = result['state_details'][state]
-                        
-                        # State header
-                        st.markdown(f"""
-                            <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
-                                <h3 style='margin: 0; font-size: 1.4rem;'>{state}</h3>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Apply styling
-                        def highlight_families(row):
-                            row_type = state_df.loc[row.name, 'Type']
-                            if row_type == 'family':
-                                family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
-                                color = family_colors[family_idx % len(family_colors)]
-                                return [f'background-color: {color}; font-weight: bold'] * len(row)
-                            return [''] * len(row)
-                        
-                        def color_negatives(val):
-                            if isinstance(val, str):
-                                if '-' in val or val.startswith('−'):
-                                    return 'color: #D32F2F; font-weight: bold'
-                            return ''
-                        
-                        # Drop Type column for display
-                        display_df = state_df.drop(columns=['Type'])
-                        styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
-                        st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+            # Display states in rows of 4
+            states_per_row = 4
+            for row_start in range(0, len(selected_states), states_per_row):
+                row_states = selected_states[row_start:row_start + states_per_row]
+                # Always create 4 columns for consistent alignment
+                cols = st.columns(states_per_row)
+                
+                for idx, state in enumerate(row_states):
+                    with cols[idx]:
+                        if state in result['state_details']:
+                            state_df = result['state_details'][state]
+                            
+                            # State header
+                            st.markdown(f"""
+                                <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                                    <h3 style='margin: 0; font-size: 1.4rem;'>{state}</h3>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Apply styling
+                            def highlight_families(row):
+                                row_type = state_df.loc[row.name, 'Type']
+                                if row_type == 'family':
+                                    family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
+                                    color = family_colors[family_idx % len(family_colors)]
+                                    return [f'background-color: {color}; font-weight: bold'] * len(row)
+                                return [''] * len(row)
+                            
+                            def color_negatives(val):
+                                if isinstance(val, str):
+                                    if '-' in val or val.startswith('−'):
+                                        return 'color: #D32F2F; font-weight: bold'
+                                return ''
+                            
+                            # Drop Type column for display
+                            display_df = state_df.drop(columns=['Type'])
+                            styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
+                            st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+                
+                # Add spacing between rows if there are more states
+                if row_start + states_per_row < len(selected_states):
+                    st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
     
     # Show bottom comment box BELOW the deep-dive tables
     if bottom_comment:

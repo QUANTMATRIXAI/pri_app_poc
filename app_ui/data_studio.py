@@ -98,9 +98,12 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     with tabs[0]:
         render_ns_landscape_config(segment, df_filtered, latest["id"], current_user)
     
-    for idx in range(1, 6):
+    with tabs[1]:
+        render_segment_truths_config(segment, df_filtered, latest["id"], current_user)
+    
+    for idx in range(2, 6):
         with tabs[idx]:
-            section_name = ["Segment Truths", "Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"][idx-1]
+            section_name = ["Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"][idx-2]
             st.info(f"Configuration for {section_name} will be available soon.")
 
 
@@ -194,10 +197,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             brands_in_families = sorted(
                 df_filtered[df_filtered["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
             )
+            # Auto-select all brands in selected families by default
             selected_brands = st.multiselect(
                 "Select Brands to display",
                 options=brands_in_families,
-                default=brands_in_families[:5] if len(brands_in_families) > 5 else brands_in_families,
+                default=brands_in_families,  # All brands auto-selected
                 key=f"ns_chart_brands_{segment['id']}"
             )
         else:
@@ -218,7 +222,24 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         if not df_chart.empty:
             st.markdown("**Preview:**")
             # Create data for chart
-            chart_data = df_chart.groupby(["Brand", "PRI Year"])["NS M INR"].sum().reset_index()
+            chart_data = df_chart.groupby(["Brand", "Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+            
+            # Sort brands: 
+            # 1. Calculate 3-year sum for each brand
+            brand_totals = chart_data.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
+            brand_totals.columns = ["Brand", "Brand Family", "Total"]
+            
+            # 2. Calculate family totals (sum of selected brands in each family)
+            family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
+            family_totals.columns = ["Brand Family", "Family Total"]
+            family_totals = family_totals.sort_values("Family Total", ascending=False)
+            
+            # 3. Merge and sort: families by total, then brands within family by total
+            brand_totals = brand_totals.merge(family_totals, on="Brand Family")
+            brand_totals = brand_totals.sort_values(["Family Total", "Total"], ascending=[False, False])
+            
+            # Create ordered brand list
+            brand_order = brand_totals["Brand"].tolist()
             
             # Use Plotly Express with professional color scheme
             import plotly.express as px
@@ -239,7 +260,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 text="NS M INR",
                 height=450,
                 color_discrete_map=color_map,
-                category_orders={"PRI Year": ["A23", "A24", "A25"]}
+                category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand": brand_order}
             )
             
             # Format text on bars
@@ -485,41 +506,48 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             4: "#FCE4EC",  # Light Pink
                         }
                         
-                        # Show state deep-dives in columns
-                        num_states = min(len(selected_states), 4)
-                        cols = st.columns(num_states)
-                        
-                        for idx, state in enumerate(selected_states[:4]):
-                            with cols[idx]:
-                                if state in preview_north['state_details']:
-                                    state_df = preview_north['state_details'][state]
-                                    
-                                    # State header
-                                    st.markdown(f"""
-                                        <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
-                                            <h3 style='margin: 0; font-size: 1.4rem;'>{state}</h3>
-                                        </div>
-                                    """, unsafe_allow_html=True)
-                                    
-                                    # Apply styling
-                                    def highlight_families(row):
-                                        row_type = state_df.loc[row.name, 'Type']
-                                        if row_type == 'family':
-                                            family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
-                                            color = family_colors[family_idx % len(family_colors)]
-                                            return [f'background-color: {color}; font-weight: bold'] * len(row)
-                                        return [''] * len(row)
-                                    
-                                    def color_negatives(val):
-                                        if isinstance(val, str):
-                                            if '-' in val or val.startswith('−'):
-                                                return 'color: #D32F2F; font-weight: bold'
-                                        return ''
-                                    
-                                    # Drop Type column for display
-                                    display_df = state_df.drop(columns=['Type'])
-                                    styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
-                                    st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+                        # Display states in rows of 4
+                        states_per_row = 4
+                        for row_start in range(0, len(selected_states), states_per_row):
+                            row_states = selected_states[row_start:row_start + states_per_row]
+                            # Always create 4 columns for consistent alignment
+                            cols = st.columns(states_per_row)
+                            
+                            for idx, state in enumerate(row_states):
+                                with cols[idx]:
+                                    if state in preview_north['state_details']:
+                                        state_df = preview_north['state_details'][state]
+                                        
+                                        # State header
+                                        st.markdown(f"""
+                                            <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                                                <h3 style='margin: 0; font-size: 1.4rem;'>{state}</h3>
+                                            </div>
+                                        """, unsafe_allow_html=True)
+                                        
+                                        # Apply styling
+                                        def highlight_families(row):
+                                            row_type = state_df.loc[row.name, 'Type']
+                                            if row_type == 'family':
+                                                family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
+                                                color = family_colors[family_idx % len(family_colors)]
+                                                return [f'background-color: {color}; font-weight: bold'] * len(row)
+                                            return [''] * len(row)
+                                        
+                                        def color_negatives(val):
+                                            if isinstance(val, str):
+                                                if '-' in val or val.startswith('−'):
+                                                    return 'color: #D32F2F; font-weight: bold'
+                                            return ''
+                                        
+                                        # Drop Type column for display
+                                        display_df = state_df.drop(columns=['Type'])
+                                        styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
+                                        st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+                            
+                            # Add spacing between rows if there are more states
+                            if row_start + states_per_row < len(selected_states):
+                                st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
                 
                 if st.button("Save NORTH Zone Drill-Down to Dashboard", key=f"save_ns_north_{segment['id']}"):
                     if not selected_states:
@@ -803,6 +831,192 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         st.success("SOUTH Zone Drill-Down saved to dashboard!")
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
+
+
+def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
+    """Configure Segment Truths: Title, Image, Comment, and Profile Data"""
+    st.markdown("#### Segment Truths Configuration")
+    
+    # Title input
+    segment_title = st.text_input(
+        "Segment Title",
+        value="",
+        placeholder="e.g., Younger (LDA-35yo); Singles & Nuclear Families...",
+        key=f"seg_truth_title_{segment['id']}"
+    )
+    
+    # Big comment box
+    st.markdown("**Segment Insights:**")
+    segment_comment = st.text_area(
+        "Add detailed insights about the segment",
+        placeholder="• 60% Young (LDA-35) consumers; 88% Graduates\n• 57% Urban & 26% Semi-urban\n• Segment over-indexing on SEC A...",
+        height=200,
+        key=f"seg_truth_comment_{segment['id']}"
+    )
+    
+    # Preview section
+    st.markdown("---")
+    st.markdown("**Preview:**")
+    
+    if segment_title:
+        st.markdown(f"### {segment_title}")
+    
+    # Comment box and table side by side
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if segment_comment:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
+                    border: 1px solid #B0D4F1;
+                    border-left: 5px solid #2196F3;
+                    padding: 1.5rem 1.8rem;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    min-height: 500px;
+                '>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #2C2C2C;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    '>
+                        {segment_comment.replace(chr(10), '<br>')}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Comment will appear here")
+    
+    with col2:
+        st.markdown("**P3M Segment Profile Data:**")
+        # Expander with profile data
+        with st.expander("View Profile Data", expanded=True):
+            # Hardcoded data table
+            profile_data = {
+                "Metric": [
+                "P3M Seg Profile",
+                "LDA-24",
+                "25-30",
+                "LDA-35",
+                "36-45",
+                "46+",
+                "",
+                "NCCS A",
+                "",
+                "Single",
+                "Married w/ Kids",
+                "Married w/o Kids",
+                "Single Parent",
+                "",
+                "Business Owners",
+                "Salaried",
+                "",
+                "High",
+                "Medium",
+                "Low",
+                "",
+                "NE: Directs Entrant",
+                "NE: From Beer",
+                "NE: From Whites",
+                "NE: NETT",
+                "Non-Entrant",
+                "",
+                "Core %",
+                "Repertoire %"
+                ],
+                "TBA": [
+                "",
+                "8%",
+                "43%",
+                "56%",
+                "32%",
+                "17%",
+                "",
+                "68",
+                "",
+                "28%",
+                "41%",
+                "9%",
+                "21%",
+                "",
+                "40%",
+                "56%",
+                "",
+                "63%",
+                "28%",
+                "9%",
+                "",
+                "9%",
+                "8%",
+                "10%",
+                "27%",
+                "73%",
+                "",
+                "",
+                ""
+                ],
+                "Premium Whisky": [
+                "",
+                "10%",
+                "45%",
+                "60%",
+                "31%",
+                "14%",
+                "",
+                "72",
+                "",
+                "32%",
+                "34%",
+                "7%",
+                "26%",
+                "",
+                "41%",
+                "56%",
+                "",
+                "68%",
+                "25%",
+                "6%",
+                "",
+                "10%",
+                "9%",
+                "13%",
+                "32%",
+                "68%",
+                "",
+                "42%",
+                "58%"
+                ]
+            }
+            
+            df_profile = pd.DataFrame(profile_data)
+            st.dataframe(df_profile, use_container_width=True, hide_index=True, height=450)
+    
+    # Save button
+    if st.button("Save Segment Truths to Dashboard", key=f"save_seg_truths_{segment['id']}"):
+        if not segment_title:
+            st.error("Please provide a segment title.")
+        else:
+            # Save configuration as a table entry
+            delete_tables_for_section(segment["id"], "Segment Truths", "Segment Truth")
+            
+            config_data = json.dumps({
+                "title": segment_title,
+                "comment": segment_comment
+            })
+            
+            save_table(
+                name="Segment Truth",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Segment Truths",
+                filter_json=config_data,
+                comment=segment_comment
+            )
+            st.success("Segment Truths saved to dashboard!")
 
 
 def style_state_summary(state_summary: pd.DataFrame) -> pd.DataFrame:
