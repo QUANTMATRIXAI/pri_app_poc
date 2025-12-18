@@ -915,7 +915,8 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
         "BTM": f"{zone_btm:+.1f}%"
     })
     
-    # Then individual states
+    # Then individual states - collect with numeric salience for sorting
+    state_rows_with_sal = []
     for state in selected_states:
         a25_ns = state_a25.get(state, 0)
         a24_ns = state_a24.get(state, 0)
@@ -924,12 +925,21 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
         state_growth = ((a25_ns / a24_ns) - 1) * 100 if a24_ns > 0 else 0
         btm = state_growth - ai_growth
         
-        summary_rows.append({
+        state_rows_with_sal.append({
             "State": state,
             "A25 Sal % Contribution to AI": f"{sal_contribution:.0f}%",
             "A25 Gr": f"{state_growth:+.1f}%",
-            "BTM": f"{btm:+.1f}%"
+            "BTM": f"{btm:+.1f}%",
+            "_sal_numeric": sal_contribution  # For sorting
         })
+    
+    # Sort states by salience (highest first)
+    state_rows_with_sal.sort(key=lambda x: x["_sal_numeric"], reverse=True)
+    
+    # Remove the numeric sorting column and add to summary_rows
+    for row in state_rows_with_sal:
+        del row["_sal_numeric"]
+        summary_rows.append(row)
     
     state_summary = pd.DataFrame(summary_rows)
     

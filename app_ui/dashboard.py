@@ -486,22 +486,28 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
         st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
         render_zonal_pivot_dashboard(zonal_table, segment, is_editor)
     
-    # Render zone state drill-downs
+    # Render zone state drill-downs in tabs
+    zone_drilldowns = []
     if north_drilldown:
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-        render_zone_drilldown_dashboard(north_drilldown, segment, is_editor, "North Zone")
-    
+        zone_drilldowns.append(("NORTH", north_drilldown, "North Zone"))
     if west_drilldown:
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-        render_zone_drilldown_dashboard(west_drilldown, segment, is_editor, "West+CSD Zone")
-    
+        zone_drilldowns.append(("WEST+CSD", west_drilldown, "West+CSD Zone"))
     if east_drilldown:
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-        render_zone_drilldown_dashboard(east_drilldown, segment, is_editor, "East Zone")
-    
+        zone_drilldowns.append(("EAST", east_drilldown, "East Zone"))
     if south_drilldown:
+        zone_drilldowns.append(("SOUTH", south_drilldown, "South Zone"))
+    
+    if zone_drilldowns:
         st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-        render_zone_drilldown_dashboard(south_drilldown, segment, is_editor, "South Zone")
+        st.markdown("### State Drill-Down by Zone")
+        
+        # Create tabs for each zone
+        tab_labels = [zone[0] for zone in zone_drilldowns]
+        tabs = st.tabs(tab_labels)
+        
+        for idx, (zone_label, table_row, zone_name) in enumerate(zone_drilldowns):
+            with tabs[idx]:
+                render_zone_drilldown_dashboard(table_row, segment, is_editor, zone_name)
 
 
 def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
