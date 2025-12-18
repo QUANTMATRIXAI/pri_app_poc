@@ -39,11 +39,21 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
     with tabs[1]:
         render_segment_truths_dashboard(segment, tables, is_editor)
     
-    # Other tabs
-    for idx in range(2, 6):
-        with tabs[idx]:
-            section_name = ["Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"][idx-2]
-            st.info(f"No content published for {section_name} yet.")
+    # Brand Truths tab
+    with tabs[2]:
+        st.info("No content published for Brand Truths yet.")
+    
+    # Segment Trends tab
+    with tabs[3]:
+        render_segment_trends_dashboard(segment, is_editor)
+    
+    # Brand Trends tab
+    with tabs[4]:
+        st.info("No content published for Brand Trends yet.")
+    
+    # Battlegrounds tab
+    with tabs[5]:
+        st.info("No content published for Battlegrounds yet.")
 def group_by_section(rows) -> Dict[str, List]:
     grouped = {}
     for row in rows:
@@ -1024,10 +1034,34 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                 height=450
             )
     
+    # Display images one below the other
+    from app_core.media import get_media_for_segment
+    media_items = get_media_for_segment(segment["id"])
+    seg_truth_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
+    
+    if seg_truth_images:
+        st.markdown("---")
+        st.markdown("### Supporting Visuals")
+        
+        # Display images one below the other with controlled width
+        for idx, media in enumerate(seg_truth_images):
+            file_path = media.get("file_path")
+            if file_path and os.path.exists(file_path):
+                # Center images with controlled width (smaller)
+                col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                with col2:
+                    st.image(file_path, use_container_width=True)
+                # Add spacing between images
+                if idx < len(seg_truth_images) - 1:
+                    st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+    
     # Delete button for editors
     if is_editor:
         if st.button("Delete Segment Truths", key=f"del_seg_truth_{seg_truth_table['id']}"):
             delete_table(seg_truth_table["id"])
+            # Also delete associated images
+            from app_core.media import delete_media_for_section
+            delete_media_for_section(segment["id"], "Segment Truths", "Segment Truth Images")
             st.success("Segment Truths removed")
             if hasattr(st, "rerun"):
                 st.rerun()
@@ -1240,3 +1274,55 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
                 st.experimental_rerun()
     
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+
+def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
+    """Render Segment Trends section with carousel images"""
+    from app_core.media import get_media_for_segment, delete_media_for_section
+    
+    # Get images for this section
+    media_items = get_media_for_segment(segment["id"])
+    seg_trends_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
+    
+    if not seg_trends_images:
+        st.info("No content published for Segment Trends yet. Editors can configure it in Data Studio.")
+        return
+    
+    st.markdown("### Segment Trends")
+    
+    # Use tabs for fast navigation (no page reload)
+    if len(seg_trends_images) > 1:
+        # Create tabs labeled as "Image 1", "Image 2", etc.
+        tab_labels = [f"Image {i+1}" for i in range(len(seg_trends_images))]
+        image_tabs = st.tabs(tab_labels)
+        
+        for idx, (tab, media) in enumerate(zip(image_tabs, seg_trends_images)):
+            with tab:
+                file_path = media.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    # Center the image with controlled width
+                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                    with col2:
+                        st.image(file_path, use_container_width=True)
+                else:
+                    st.warning(f"Image {idx+1} not found.")
+    else:
+        # Single image with controlled width
+        file_path = seg_trends_images[0].get("file_path")
+        if file_path and os.path.exists(file_path):
+            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+            with col2:
+                st.image(file_path, use_container_width=True)
+        else:
+            st.warning("Image not found.")
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Segment Trends Images", key=f"del_seg_trends_{segment['id']}"):
+            delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
+            st.success("Segment Trends images removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()

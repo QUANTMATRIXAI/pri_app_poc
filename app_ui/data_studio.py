@@ -101,10 +101,17 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     with tabs[1]:
         render_segment_truths_config(segment, df_filtered, latest["id"], current_user)
     
-    for idx in range(2, 6):
-        with tabs[idx]:
-            section_name = ["Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"][idx-2]
-            st.info(f"Configuration for {section_name} will be available soon.")
+    with tabs[2]:
+        st.info("Configuration for Brand Truths will be available soon.")
+    
+    with tabs[3]:
+        render_segment_trends_config(segment, df_filtered, latest["id"], current_user)
+    
+    with tabs[4]:
+        st.info("Configuration for Brand Trends will be available soon.")
+    
+    with tabs[5]:
+        st.info("Configuration for Battlegrounds will be available soon.")
 
 
 def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -993,8 +1000,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             df_profile = pd.DataFrame(profile_data)
             st.dataframe(df_profile, use_container_width=True, hide_index=True, height=450)
     
-    # Save button
-    if st.button("Save Segment Truths to Dashboard", key=f"save_seg_truths_{segment['id']}"):
+    # Save button for title, comment, and profile data
+    if st.button("Save Segment Insights to Dashboard", key=f"save_seg_insights_{segment['id']}"):
         if not segment_title:
             st.error("Please provide a segment title.")
         else:
@@ -1016,7 +1023,83 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 filter_json=config_data,
                 comment=segment_comment
             )
-            st.success("Segment Truths saved to dashboard!")
+            st.success("Segment Insights saved to dashboard!")
+    
+    # Image uploads section - SEPARATE
+    st.markdown("---")
+    st.markdown("### Supporting Visuals")
+    st.markdown("**Upload Images (Optional):**")
+    st.caption("Upload up to 3 images that will be displayed one below the other")
+    
+    uploaded_image_1 = st.file_uploader(
+        "Image 1",
+        type=["png", "jpg", "jpeg"],
+        key=f"seg_truth_img1_{segment['id']}"
+    )
+    
+    uploaded_image_2 = st.file_uploader(
+        "Image 2",
+        type=["png", "jpg", "jpeg"],
+        key=f"seg_truth_img2_{segment['id']}"
+    )
+    
+    uploaded_image_3 = st.file_uploader(
+        "Image 3",
+        type=["png", "jpg", "jpeg"],
+        key=f"seg_truth_img3_{segment['id']}"
+    )
+    
+    # Preview uploaded images
+    if uploaded_image_1 or uploaded_image_2 or uploaded_image_3:
+        st.markdown("**Image Preview:**")
+        if uploaded_image_1:
+            st.image(uploaded_image_1, caption="Image 1", use_container_width=True)
+        if uploaded_image_2:
+            st.image(uploaded_image_2, caption="Image 2", use_container_width=True)
+        if uploaded_image_3:
+            st.image(uploaded_image_3, caption="Image 3", use_container_width=True)
+    
+    # Separate save button for images only
+    if st.button("Save Images to Dashboard", key=f"save_seg_images_{segment['id']}"):
+        if not (uploaded_image_1 or uploaded_image_2 or uploaded_image_3):
+            st.error("Please upload at least one image.")
+        else:
+            from app_core.media import save_media_upload
+            
+            # Delete existing images for this section
+            delete_media_for_section(segment["id"], "Segment Truths", "Segment Truth Images")
+            
+            if uploaded_image_1:
+                save_media_upload(
+                    uploaded_file=uploaded_image_1,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment="Image 1",
+                    label="Segment Truth Images"
+                )
+            
+            if uploaded_image_2:
+                save_media_upload(
+                    uploaded_file=uploaded_image_2,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment="Image 2",
+                    label="Segment Truth Images"
+                )
+            
+            if uploaded_image_3:
+                save_media_upload(
+                    uploaded_file=uploaded_image_3,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment="Image 3",
+                    label="Segment Truth Images"
+                )
+            
+            st.success("Images saved to dashboard!")
 
 
 def style_state_summary(state_summary: pd.DataFrame) -> pd.DataFrame:
@@ -1659,3 +1742,58 @@ def format_extra_comments(extras: list[str] | None) -> str:
         return ""
     bullet_lines = [f"• {c}" for c in extras]
     return "\n" + "\n".join(bullet_lines)
+
+
+
+def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
+    """Configure Segment Trends: Carousel Images"""
+    st.markdown("#### Segment Trends Configuration")
+    st.caption("Upload images that will be displayed in a carousel (scrollable pages)")
+    
+    # Image uploads
+    st.markdown("**Upload Images:**")
+    st.caption("Upload multiple images - users can scroll through them like pages")
+    
+    uploaded_images = st.file_uploader(
+        "Upload Images (multiple allowed)",
+        type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key=f"seg_trends_images_{segment['id']}"
+    )
+    
+    # Preview uploaded images
+    if uploaded_images:
+        st.markdown(f"**Preview ({len(uploaded_images)} images uploaded):**")
+        st.caption("Images will be displayed in a carousel on the dashboard")
+        
+        # Show preview in tabs (like carousel)
+        if len(uploaded_images) > 1:
+            preview_tabs = st.tabs([f"Page {i+1}" for i in range(len(uploaded_images))])
+            for idx, (tab, img) in enumerate(zip(preview_tabs, uploaded_images)):
+                with tab:
+                    st.image(img, caption=f"Image {idx+1}", use_container_width=True)
+        else:
+            st.image(uploaded_images[0], caption="Image 1", use_container_width=True)
+    
+    # Save button
+    if st.button("Save Segment Trends Images to Dashboard", key=f"save_seg_trends_{segment['id']}"):
+        if not uploaded_images:
+            st.error("Please upload at least one image.")
+        else:
+            from app_core.media import save_media_upload
+            
+            # Delete existing images for this section
+            delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
+            
+            # Save all uploaded images
+            for idx, uploaded_img in enumerate(uploaded_images):
+                save_media_upload(
+                    uploaded_file=uploaded_img,
+                    segment_id=segment["id"],
+                    section="Segment Trends",
+                    created_by=current_user["username"],
+                    comment=f"Page {idx+1}",
+                    label="Segment Trends Carousel"
+                )
+            
+            st.success(f"{len(uploaded_images)} image(s) saved to dashboard!")
