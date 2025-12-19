@@ -1934,8 +1934,6 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     from app_core.media import get_media_for_segment
     existing_media = get_media_for_segment(segment["id"])
     seg_trends_media = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
-    # Reverse to show in upload order (oldest first)
-    seg_trends_media = list(reversed(seg_trends_media))
     
     if seg_trends_media:
         st.info(f"✅ {len(seg_trends_media)} image(s) already uploaded. Upload new images to replace them.")
@@ -1985,29 +1983,24 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         if not uploaded_images:
             st.error("Please upload at least one image.")
         else:
-            from app_core.media import save_media_uploads_batch
+            from app_core.media import save_media_upload
             
             # Delete existing images for this section
             delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
             
-            # Prepare all images with their page names
-            images_with_names = []
+            # Save all uploaded images with custom page names
             for idx, uploaded_img in enumerate(uploaded_images):
                 page_name = page_names[idx] if idx < len(page_names) else f"Page {idx+1}"
-                images_with_names.append((uploaded_img, page_name))
-            
-            # Save all images in a single batch
-            try:
-                saved_count = save_media_uploads_batch(
-                    images_with_names=images_with_names,
+                save_media_upload(
+                    uploaded_file=uploaded_img,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
+                    comment=page_name,  # Store page name in comment field
                     label="Segment Trends Carousel"
                 )
-                st.success(f"{saved_count} image(s) saved to dashboard!")
-            except Exception as e:
-                st.error(f"Error saving images: {e}")
+            
+            st.success(f"{len(uploaded_images)} image(s) saved to dashboard!")
 
     
     st.markdown("---")
@@ -2060,27 +2053,16 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         saved_left = saved_section.get("left", "")
         saved_right = saved_section.get("right", "")
         
-        # Section number label (visible but not editable)
+        # Option to customize section number/label - pre-populated with saved value
         col_num, col_left, col_right = st.columns([1, 2, 2])
-        section_label = str(i + 1)  # Fixed label based on section number
         
         with col_num:
-            st.markdown(f"**Label**")
-            st.markdown(f"""
-                <div style='
-                    background: #E8E8E8;
-                    border: 1px solid #CCCCCC;
-                    padding: 0.5rem 1rem;
-                    border-radius: 4px;
-                    text-align: center;
-                    font-size: 1.2rem;
-                    font-weight: bold;
-                    color: #333;
-                    margin-top: 0.2rem;
-                '>
-                    {section_label}
-                </div>
-            """, unsafe_allow_html=True)
+            section_label = st.text_input(
+                f"Label",
+                value=saved_label,
+                key=f"trends_sec{i}_label_{segment['id']}",
+                help="Default is number, but you can use any text"
+            )
         
         with col_left:
             left_content = st.text_area(

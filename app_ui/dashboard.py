@@ -1030,6 +1030,7 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     
     if seg_truth_images:
         st.markdown("---")
+        st.markdown("### Supporting Visuals")
         
         # Display images one below the other with controlled width
         for idx, media in enumerate(seg_truth_images):
@@ -1273,8 +1274,6 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     # Get images for this section
     media_items = get_media_for_segment(segment["id"])
     seg_trends_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
-    # Reverse to show in upload order (oldest first)
-    seg_trends_images = list(reversed(seg_trends_images))
     
     # Get custom trends view
     tables = get_tables_for_segment(segment["id"])
@@ -1286,8 +1285,7 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     
     st.markdown("### Segment Trends")
     
-    # Show tabs if there are images
-    if seg_trends_images:
+    if len(seg_trends_images) > 1:
         # Tabs for navigation - use custom page names from comment field
         tab_labels = [media.get("comment", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(seg_trends_images)]
         image_tabs = st.tabs(tab_labels)
@@ -1301,6 +1299,15 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                         st.image(file_path, use_container_width=True)
                 else:
                     st.warning(f"Image {idx+1} not found.")
+    else:
+        # Single image
+        file_path = seg_trends_images[0].get("file_path")
+        if file_path and os.path.exists(file_path):
+            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+            with col2:
+                st.image(file_path, use_container_width=True)
+        else:
+            st.warning("Image not found.")
     
     # Delete button for editors
     if is_editor and seg_trends_images:
@@ -1520,8 +1527,7 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
                                 padding: 1rem;
                                 margin: 0.5rem 0;
                                 border-radius: 8px;
-                                height: 250px;
-                                overflow-y: auto;
+                                min-height: 200px;
                             '>
                                 <div style='font-size: 0.9rem; line-height: 1.6; color: #1A1A1A;'>
                                     {escaped_content}
