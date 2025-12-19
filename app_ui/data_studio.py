@@ -135,16 +135,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 1. Manufacturing Pivot Table")
     st.caption("Pivot table showing NS M INR by Manufacturing Company and PRI Year with YoY Growth and CAGR")
     
-    # Year filter
+    # Editable title
+    pivot_title = st.text_input(
+        "Table Title (editable)",
+        value="NS Overview",
+        key=f"ns_pivot_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    # Year filter - automatically use all available years
     available_years = ["A23", "A24", "A25"]
     years_in_data = [y for y in available_years if y in df_filtered["PRI Year"].unique()]
-    
-    selected_years_pivot = st.multiselect(
-        "Select PRI Years",
-        options=years_in_data,
-        default=years_in_data,
-        key=f"ns_pivot_years_{segment['id']}"
-    )
+    selected_years_pivot = years_in_data  # Use all available years by default
     
     # Preview pivot
     if selected_years_pivot:
@@ -167,8 +169,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Delete existing pivot for this section
             delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
             
-            # Save configuration
-            filter_config = json.dumps({"years": selected_years_pivot})
+            # Save configuration with title
+            filter_config = json.dumps({
+                "years": selected_years_pivot,
+                "title": pivot_title
+            })
             save_table(
                 name="Manufacturing Pivot",
                 dataset_id=dataset_id,
@@ -314,6 +319,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 3. Zonal Pivot Table (Brand Family x Zone)")
     st.caption("Pivot table showing NS M INR for A25 by Brand Family, Brand, and Zone")
     
+    # Editable title
+    zonal_title = st.text_input(
+        "Table Title (editable)",
+        value="NS Zonal View",
+        key=f"ns_zonal_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
     # Use same brand families and brands from chart
     if selected_families and selected_brands:
         # Check if Zone column exists
@@ -409,11 +422,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Delete existing zonal table
                     delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
                     
-                    # Save configuration
+                    # Save configuration with title
                     filter_config = json.dumps({
                         "brand_families": selected_families,
                         "brands": selected_brands,
-                        "year": "A25"
+                        "year": "A25",
+                        "title": zonal_title
                     })
                     save_table(
                         name="Zonal Pivot",
@@ -436,6 +450,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 4. NORTH Zone State Drill-Down
     st.markdown("### 4. NORTH Zone - State Drill-Down")
     st.caption("State-level performance within NORTH zone with brand deep-dive")
+    
+    # Editable title
+    north_title = st.text_input(
+        "Table Title (editable)",
+        value="Battleground in North",
+        key=f"ns_north_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
     
     if selected_families and selected_brands:
         # Check if State column exists
@@ -575,12 +597,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             "bottom": north_comment_bottom
                         })
                         
-                        # Save configuration
+                        # Save configuration with title
                         filter_config = json.dumps({
                             "brand_families": selected_families,
                             "brands": selected_brands,
                             "states": selected_states,
-                            "zone": "North Zone"
+                            "zone": "North Zone",
+                            "title": north_title
                         })
                         save_table(
                             name="NORTH State Drill-Down",
@@ -601,6 +624,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 5. WEST+CSD Zone State Drill-Down
     st.markdown("### 5. WEST+CSD Zone - State Drill-Down")
     st.caption("State-level performance within WEST+CSD zone with brand deep-dive")
+    
+    # Editable title
+    west_title = st.text_input(
+        "Table Title (editable)",
+        value="Battleground in West+CSD",
+        key=f"ns_west_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
     
     if selected_families and selected_brands:
         if "State" not in df_filtered.columns:
@@ -667,7 +698,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             "brand_families": selected_families,
                             "brands": selected_brands,
                             "states": selected_states_west,
-                            "zone": "West+CSD Zone"
+                            "zone": "West+CSD Zone",
+                            "title": west_title
                         })
                         save_table(
                             name="WEST+CSD State Drill-Down",
@@ -688,6 +720,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 6. EAST Zone State Drill-Down
     st.markdown("### 6. EAST Zone - State Drill-Down")
     st.caption("State-level performance within EAST zone with brand deep-dive")
+    
+    # Editable title
+    east_title = st.text_input(
+        "Table Title (editable)",
+        value="Battleground in East",
+        key=f"ns_east_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
     
     if selected_families and selected_brands:
         if "State" not in df_filtered.columns:
@@ -754,7 +794,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             "brand_families": selected_families,
                             "brands": selected_brands,
                             "states": selected_states_east,
-                            "zone": "East Zone"
+                            "zone": "East Zone",
+                            "title": east_title
                         })
                         save_table(
                             name="EAST State Drill-Down",
@@ -775,6 +816,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 7. SOUTH Zone State Drill-Down
     st.markdown("### 7. SOUTH Zone - State Drill-Down")
     st.caption("State-level performance within SOUTH zone with brand deep-dive")
+    
+    # Editable title
+    south_title = st.text_input(
+        "Table Title (editable)",
+        value="Battleground in South",
+        key=f"ns_south_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
     
     if selected_families and selected_brands:
         if "State" not in df_filtered.columns:
@@ -841,7 +890,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             "brand_families": selected_families,
                             "brands": selected_brands,
                             "states": selected_states_south,
-                            "zone": "South Zone"
+                            "zone": "South Zone",
+                            "title": south_title
                         })
                         save_table(
                             name="SOUTH State Drill-Down",
@@ -864,10 +914,11 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Title input
     segment_title = st.text_input(
-        "Segment Title",
-        value="",
+        "Segment Title (editable)",
+        value="Segment Profile Summary",
         placeholder="e.g., Younger (LDA-35yo); Singles & Nuclear Families...",
-        key=f"seg_truth_title_{segment['id']}"
+        key=f"seg_truth_title_{segment['id']}",
+        help="This title will appear on the dashboard"
     )
     
     # Big comment box
@@ -2023,10 +2074,11 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Title and main description
     jtbd_title = st.text_input(
-        "View Title",
-        value="",
+        "View Title (editable)",
+        value="Jobs To Be Done",
         placeholder="e.g., Battlegrounds JTBDs: BP to Secure & Grow",
-        key=f"jtbd_title_{segment['id']}"
+        key=f"jtbd_title_{segment['id']}",
+        help="This title will appear on the dashboard"
     )
     
     jtbd_description = st.text_area(
@@ -2269,10 +2321,11 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Title and main description
     brand_title = st.text_input(
-        "View Title",
-        value="",
+        "View Title (editable)",
+        value="Brand Truths Summary - Competitor View",
         placeholder="e.g., Double Whammy for BP – Threat on NE & Laterals",
-        key=f"brand_title_{segment['id']}"
+        key=f"brand_title_{segment['id']}",
+        help="This title will appear on the dashboard"
     )
     
     brand_description = st.text_area(
@@ -2442,10 +2495,11 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Title and main description for section 2
     brand_title_2 = st.text_input(
-        "View Title (Section 2)",
-        value="",
+        "View Title (Section 2) - editable",
+        value="Brand Truths Summary - Brand Family View",
         placeholder="e.g., Growth Opportunities & Market Dynamics",
-        key=f"brand_title_2_{segment['id']}"
+        key=f"brand_title_2_{segment['id']}",
+        help="This title will appear on the dashboard"
     )
     
     brand_description_2 = st.text_area(

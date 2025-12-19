@@ -526,9 +526,13 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
 
 def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
     """Render the manufacturing pivot table with YoY and CAGR"""
+    # Get custom title from config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    custom_title = filter_config.get("title", "NS Overview") if isinstance(filter_config, dict) else "NS Overview"
+    
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>Manufacturing Pivot - NS M INR by Company & Year</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{custom_title}</h4>", unsafe_allow_html=True)
     
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
@@ -730,9 +734,13 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
 
 def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
     """Render the zonal pivot table with Brand Family x Zone"""
+    # Get custom title from config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    custom_title = filter_config.get("title", "NS Zonal View") if isinstance(filter_config, dict) else "NS Zonal View"
+    
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>Zonal Pivot - Brand Performance by Zone (A25)</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{custom_title}</h4>", unsafe_allow_html=True)
     
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
@@ -1071,11 +1079,15 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
 
 def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: bool, zone_name: str) -> None:
     """Render zone state drill-down with state summary and brand deep-dive"""
-    zone_display = zone_name.replace(" Zone", "").replace("+", "+").upper()
+    # Get custom title from config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    zone_display = zone_name.replace(" Zone", "").replace("+", "+")
+    default_title = f"Battleground in {zone_display}"
+    custom_title = filter_config.get("title", default_title) if isinstance(filter_config, dict) else default_title
     
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{zone_display} Zone - State Drill-Down (A25)</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h4 class='chart-title'>{custom_title}</h4>", unsafe_allow_html=True)
     
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
