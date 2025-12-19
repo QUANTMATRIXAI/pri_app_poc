@@ -129,16 +129,34 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         st.error(f"Missing required columns: {', '.join(missing_cols)}")
         return
     
+    # Load existing saved configurations
+    existing_tables = get_tables_for_segment(segment["id"])
+    existing_charts = get_charts_for_segment(segment["id"])
+    
+    # Get saved configs for each component
+    saved_pivot = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Manufacturing Pivot"), None)
+    saved_chart = next((c for c in existing_charts if c["section"] == "NS Landscape" and c["name"] == "Brand Performance"), None)
+    saved_zonal = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Zonal Pivot"), None)
+    saved_north = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "NORTH State Drill-Down"), None)
+    saved_west = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "WEST+CSD State Drill-Down"), None)
+    saved_east = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "EAST State Drill-Down"), None)
+    saved_south = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "SOUTH State Drill-Down"), None)
+    
+    # Parse saved pivot config
+    pivot_config = json.loads(saved_pivot["filter_json"]) if saved_pivot and saved_pivot["filter_json"] else {}
+    saved_pivot_title = pivot_config.get("title", "NS Overview")
+    saved_pivot_comment = saved_pivot["comment"] if saved_pivot else ""
+    
     st.markdown("---")
     
     # 1. Manufacturing Pivot Table Configuration
     st.markdown("### 1. Manufacturing Pivot Table")
     st.caption("Pivot table showing NS M INR by Manufacturing Company and PRI Year with YoY Growth and CAGR")
     
-    # Editable title
+    # Editable title - pre-populated with saved value
     pivot_title = st.text_input(
         "Table Title (editable)",
-        value="NS Overview",
+        value=saved_pivot_title,
         key=f"ns_pivot_title_{segment['id']}",
         help="This title will appear on the dashboard"
     )
@@ -155,9 +173,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             st.markdown("**Preview:**")
             st.dataframe(preview_pivot, use_container_width=True, hide_index=True)
     
-    # Comment box AFTER preview
+    # Comment box AFTER preview - pre-populated with saved value
     pivot_comment = st.text_area(
         "Add comment for pivot table (optional)",
+        value=saved_pivot_comment,
         key=f"ns_pivot_comment_{segment['id']}",
         placeholder="Add insights or notes about the manufacturing view..."
     )
@@ -192,8 +211,17 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 2. Brand Performance Chart")
     st.caption("Multi-bar chart showing NS M INR by Brand across PRI Years")
     
+    # Parse saved chart config
+    chart_config = json.loads(saved_chart["filter_json"]) if saved_chart and saved_chart["filter_json"] else {}
+    saved_families = chart_config.get("brand_families", [])
+    saved_brands = chart_config.get("brands", [])
+    saved_chart_comment = saved_chart["comment"] if saved_chart else ""
+    
     # Filters in 2 columns
     brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+    
+    # Use saved families if available, otherwise default
+    default_families = saved_families if saved_families else (brand_families[:2] if len(brand_families) > 2 else brand_families)
     
     col1, col2 = st.columns(2)
     
@@ -201,7 +229,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         selected_families = st.multiselect(
             "Select Brand Families",
             options=brand_families,
-            default=brand_families[:2] if len(brand_families) > 2 else brand_families,
+            default=default_families,
             key=f"ns_chart_families_{segment['id']}"
         )
     
@@ -210,11 +238,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             brands_in_families = sorted(
                 df_filtered[df_filtered["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
             )
-            # Auto-select all brands in selected families by default
+            # Use saved brands if available, otherwise auto-select all
+            default_brands = [b for b in saved_brands if b in brands_in_families] if saved_brands else brands_in_families
             selected_brands = st.multiselect(
                 "Select Brands to display",
                 options=brands_in_families,
-                default=brands_in_families,  # All brands auto-selected
+                default=default_brands,
                 key=f"ns_chart_brands_{segment['id']}"
             )
         else:
@@ -279,9 +308,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             )
             st.plotly_chart(fig, use_container_width=True)
     
-    # Comment box AFTER chart preview
+    # Comment box AFTER chart preview - pre-populated with saved value
     chart_comment = st.text_area(
         "Add comment for chart (optional)",
+        value=saved_chart_comment,
         key=f"ns_chart_comment_{segment['id']}",
         placeholder="Add insights about brand performance..."
     )
@@ -319,10 +349,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 3. Zonal Pivot Table (Brand Family x Zone)")
     st.caption("Pivot table showing NS M INR for A25 by Brand Family, Brand, and Zone")
     
-    # Editable title
+    # Parse saved zonal config
+    zonal_config = json.loads(saved_zonal["filter_json"]) if saved_zonal and saved_zonal["filter_json"] else {}
+    saved_zonal_title = zonal_config.get("title", "NS Zonal View")
+    saved_zonal_comment = saved_zonal["comment"] if saved_zonal else ""
+    
+    # Editable title - pre-populated with saved value
     zonal_title = st.text_input(
         "Table Title (editable)",
-        value="NS Zonal View",
+        value=saved_zonal_title,
         key=f"ns_zonal_title_{segment['id']}",
         help="This title will appear on the dashboard"
     )
@@ -411,9 +446,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
                 
-                # Comment box AFTER zonal preview
+                # Comment box AFTER zonal preview - pre-populated with saved value
                 zonal_comment = st.text_area(
                     "Add comment for zonal table (optional)",
+                    value=saved_zonal_comment,
                     key=f"ns_zonal_comment_{segment['id']}",
                     placeholder="Add insights about zonal performance..."
                 )
@@ -451,10 +487,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 4. NORTH Zone - State Drill-Down")
     st.caption("State-level performance within NORTH zone with brand deep-dive")
     
-    # Editable title
+    # Parse saved NORTH config
+    north_config = json.loads(saved_north["filter_json"]) if saved_north and saved_north["filter_json"] else {}
+    saved_north_title = north_config.get("title", "Battleground in North")
+    saved_north_states = north_config.get("states", [])
+    saved_north_comments = json.loads(saved_north["comment"]) if saved_north and saved_north["comment"] else {}
+    saved_north_comment_top = saved_north_comments.get("top", "") if isinstance(saved_north_comments, dict) else ""
+    saved_north_comment_bottom = saved_north_comments.get("bottom", "") if isinstance(saved_north_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
     north_title = st.text_input(
         "Table Title (editable)",
-        value="Battleground in North",
+        value=saved_north_title,
         key=f"ns_north_title_{segment['id']}",
         help="This title will appear on the dashboard"
     )
@@ -499,9 +543,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Get sorted states from summary (excluding NORTH zone row)
                     sorted_states = preview_all_states['state_summary'][preview_all_states['state_summary']['State'] != 'NORTH']['State'].tolist()
                 
-                # Comment for state summary table - RIGHT AFTER the table
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 north_comment_top = st.text_area(
                     "Comment for State Summary Table (optional)",
+                    value=saved_north_comment_top,
                     key=f"ns_north_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
                     height=100
@@ -509,11 +554,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 st.markdown("---")
                 
-                # Then let user select states for deep-dive - use sorted states as default
+                # Then let user select states for deep-dive - use saved states if available
+                default_north_states = saved_north_states if saved_north_states else (sorted_states[:4] if (preview_all_states and len(sorted_states) > 4) else (sorted_states if preview_all_states else states_in_north[:4]))
                 selected_states = st.multiselect(
                     "Select States for Brand Deep-Dive",
                     options=sorted_states if preview_all_states else states_in_north,
-                    default=sorted_states[:4] if (preview_all_states and len(sorted_states) > 4) else (sorted_states if preview_all_states else states_in_north[:4]),
+                    default=default_north_states,
                     key=f"ns_north_states_{segment['id']}"
                 )
                 
@@ -575,10 +621,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             if row_start + states_per_row < len(selected_states):
                                 st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
                 
-                # Comment for brand deep-dive AFTER preview
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 north_comment_bottom = st.text_area(
                     "Comment for Brand Deep-Dive (optional)",
+                    value=saved_north_comment_bottom,
                     key=f"ns_north_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
@@ -625,10 +672,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 5. WEST+CSD Zone - State Drill-Down")
     st.caption("State-level performance within WEST+CSD zone with brand deep-dive")
     
-    # Editable title
+    # Parse saved WEST config
+    west_config = json.loads(saved_west["filter_json"]) if saved_west and saved_west["filter_json"] else {}
+    saved_west_title = west_config.get("title", "Battleground in West+CSD")
+    saved_west_states = west_config.get("states", [])
+    saved_west_comments = json.loads(saved_west["comment"]) if saved_west and saved_west["comment"] else {}
+    saved_west_comment_top = saved_west_comments.get("top", "") if isinstance(saved_west_comments, dict) else ""
+    saved_west_comment_bottom = saved_west_comments.get("bottom", "") if isinstance(saved_west_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
     west_title = st.text_input(
         "Table Title (editable)",
-        value="Battleground in West+CSD",
+        value=saved_west_title,
         key=f"ns_west_title_{segment['id']}",
         help="This title will appear on the dashboard"
     )
@@ -654,9 +709,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Get sorted states from summary (excluding zone row)
                     sorted_states_west = preview_all_west['state_summary'][preview_all_west['state_summary']['State'] != 'WEST+CSD']['State'].tolist()
                 
-                # Comment for state summary table - RIGHT AFTER the table
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 west_comment_top = st.text_area(
                     "Comment for State Summary Table (optional)",
+                    value=saved_west_comment_top,
                     key=f"ns_west_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
                     height=100
@@ -664,10 +720,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 st.markdown("---")
                 
+                # Use saved states if available
+                default_west_states = saved_west_states if saved_west_states else (sorted_states_west[:4] if (preview_all_west and len(sorted_states_west) > 4) else (sorted_states_west if preview_all_west else states_in_west[:4]))
                 selected_states_west = st.multiselect(
                     "Select States for Brand Deep-Dive",
                     options=sorted_states_west if preview_all_west else states_in_west,
-                    default=sorted_states_west[:4] if (preview_all_west and len(sorted_states_west) > 4) else (sorted_states_west if preview_all_west else states_in_west[:4]),
+                    default=default_west_states,
                     key=f"ns_west_states_{segment['id']}"
                 )
                 
@@ -678,10 +736,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     if preview_west and preview_west['state_details']:
                         render_state_drilldown_preview(preview_west, selected_states_west)
                 
-                # Comment for brand deep-dive AFTER preview
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 west_comment_bottom = st.text_area(
                     "Comment for Brand Deep-Dive (optional)",
+                    value=saved_west_comment_bottom,
                     key=f"ns_west_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
@@ -721,10 +780,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 6. EAST Zone - State Drill-Down")
     st.caption("State-level performance within EAST zone with brand deep-dive")
     
-    # Editable title
+    # Parse saved EAST config
+    east_config = json.loads(saved_east["filter_json"]) if saved_east and saved_east["filter_json"] else {}
+    saved_east_title = east_config.get("title", "Battleground in East")
+    saved_east_states = east_config.get("states", [])
+    saved_east_comments = json.loads(saved_east["comment"]) if saved_east and saved_east["comment"] else {}
+    saved_east_comment_top = saved_east_comments.get("top", "") if isinstance(saved_east_comments, dict) else ""
+    saved_east_comment_bottom = saved_east_comments.get("bottom", "") if isinstance(saved_east_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
     east_title = st.text_input(
         "Table Title (editable)",
-        value="Battleground in East",
+        value=saved_east_title,
         key=f"ns_east_title_{segment['id']}",
         help="This title will appear on the dashboard"
     )
@@ -750,9 +817,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Get sorted states from summary (excluding zone row)
                     sorted_states_east = preview_all_east['state_summary'][preview_all_east['state_summary']['State'] != 'EAST']['State'].tolist()
                 
-                # Comment for state summary table - RIGHT AFTER the table
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 east_comment_top = st.text_area(
                     "Comment for State Summary Table (optional)",
+                    value=saved_east_comment_top,
                     key=f"ns_east_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
                     height=100
@@ -760,10 +828,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 st.markdown("---")
                 
+                # Use saved states if available
+                default_east_states = saved_east_states if saved_east_states else (sorted_states_east[:4] if (preview_all_east and len(sorted_states_east) > 4) else (sorted_states_east if preview_all_east else states_in_east[:4]))
                 selected_states_east = st.multiselect(
                     "Select States for Brand Deep-Dive",
                     options=sorted_states_east if preview_all_east else states_in_east,
-                    default=sorted_states_east[:4] if (preview_all_east and len(sorted_states_east) > 4) else (sorted_states_east if preview_all_east else states_in_east[:4]),
+                    default=default_east_states,
                     key=f"ns_east_states_{segment['id']}"
                 )
                 
@@ -774,10 +844,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     if preview_east and preview_east['state_details']:
                         render_state_drilldown_preview(preview_east, selected_states_east)
                 
-                # Comment for brand deep-dive AFTER preview
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 east_comment_bottom = st.text_area(
                     "Comment for Brand Deep-Dive (optional)",
+                    value=saved_east_comment_bottom,
                     key=f"ns_east_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
@@ -817,10 +888,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### 7. SOUTH Zone - State Drill-Down")
     st.caption("State-level performance within SOUTH zone with brand deep-dive")
     
-    # Editable title
+    # Parse saved SOUTH config
+    south_config = json.loads(saved_south["filter_json"]) if saved_south and saved_south["filter_json"] else {}
+    saved_south_title = south_config.get("title", "Battleground in South")
+    saved_south_states = south_config.get("states", [])
+    saved_south_comments = json.loads(saved_south["comment"]) if saved_south and saved_south["comment"] else {}
+    saved_south_comment_top = saved_south_comments.get("top", "") if isinstance(saved_south_comments, dict) else ""
+    saved_south_comment_bottom = saved_south_comments.get("bottom", "") if isinstance(saved_south_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
     south_title = st.text_input(
         "Table Title (editable)",
-        value="Battleground in South",
+        value=saved_south_title,
         key=f"ns_south_title_{segment['id']}",
         help="This title will appear on the dashboard"
     )
@@ -846,9 +925,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Get sorted states from summary (excluding zone row)
                     sorted_states_south = preview_all_south['state_summary'][preview_all_south['state_summary']['State'] != 'SOUTH']['State'].tolist()
                 
-                # Comment for state summary table - RIGHT AFTER the table
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 south_comment_top = st.text_area(
                     "Comment for State Summary Table (optional)",
+                    value=saved_south_comment_top,
                     key=f"ns_south_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
                     height=100
@@ -856,10 +936,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 st.markdown("---")
                 
+                # Use saved states if available
+                default_south_states = saved_south_states if saved_south_states else (sorted_states_south[:4] if (preview_all_south and len(sorted_states_south) > 4) else (sorted_states_south if preview_all_south else states_in_south[:4]))
                 selected_states_south = st.multiselect(
                     "Select States for Brand Deep-Dive",
                     options=sorted_states_south if preview_all_south else states_in_south,
-                    default=sorted_states_south[:4] if (preview_all_south and len(sorted_states_south) > 4) else (sorted_states_south if preview_all_south else states_in_south[:4]),
+                    default=default_south_states,
                     key=f"ns_south_states_{segment['id']}"
                 )
                 
@@ -870,10 +952,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     if preview_south and preview_south['state_details']:
                         render_state_drilldown_preview(preview_south, selected_states_south)
                 
-                # Comment for brand deep-dive AFTER preview
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 south_comment_bottom = st.text_area(
                     "Comment for Brand Deep-Dive (optional)",
+                    value=saved_south_comment_bottom,
                     key=f"ns_south_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
@@ -912,19 +995,29 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     """Configure Segment Truths: Title, Image, Comment, and Profile Data"""
     st.markdown("#### Segment Truths Configuration")
     
-    # Title input
+    # Load existing saved configuration
+    existing_tables = get_tables_for_segment(segment["id"])
+    saved_seg_truth = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "Segment Truth"), None)
+    
+    # Parse saved config
+    seg_truth_config = json.loads(saved_seg_truth["filter_json"]) if saved_seg_truth and saved_seg_truth["filter_json"] else {}
+    saved_seg_title = seg_truth_config.get("title", "Segment Profile Summary")
+    saved_seg_comment = seg_truth_config.get("comment", "")
+    
+    # Title input - pre-populated with saved value
     segment_title = st.text_input(
         "Segment Title (editable)",
-        value="Segment Profile Summary",
+        value=saved_seg_title,
         placeholder="e.g., Younger (LDA-35yo); Singles & Nuclear Families...",
         key=f"seg_truth_title_{segment['id']}",
         help="This title will appear on the dashboard"
     )
     
-    # Big comment box
+    # Big comment box - pre-populated with saved value
     st.markdown("**Segment Insights:**")
     segment_comment = st.text_area(
         "Add detailed insights about the segment",
+        value=saved_seg_comment,
         placeholder="• 60% Young (LDA-35) consumers; 88% Graduates\n• 57% Urban & 26% Semi-urban\n• Segment over-indexing on SEC A...",
         height=200,
         key=f"seg_truth_comment_{segment['id']}"
@@ -1887,16 +1980,27 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     st.markdown("### Custom Trends View Builder")
     st.caption("Create a custom view with title, description, and numbered sections")
     
-    # Title and main description
+    # Load existing saved configuration
+    existing_tables = get_tables_for_segment(segment["id"])
+    saved_custom_trends = next((t for t in existing_tables if t["section"] == "Segment Trends" and t["name"] == "Custom Trends View"), None)
+    
+    # Parse saved config
+    custom_trends_config = json.loads(saved_custom_trends["filter_json"]) if saved_custom_trends and saved_custom_trends["filter_json"] else {}
+    saved_trends_title = custom_trends_config.get("title", "")
+    saved_trends_description = custom_trends_config.get("description", "")
+    saved_trends_sections = custom_trends_config.get("sections", [])
+    
+    # Title and main description - pre-populated with saved values
     trends_title = st.text_input(
         "View Title",
-        value="",
+        value=saved_trends_title,
         placeholder="e.g., Premium Whisky Trends in L1Y",
         key=f"trends_title_{segment['id']}"
     )
     
     trends_description = st.text_area(
         "Main Description",
+        value=saved_trends_description,
         placeholder="e.g., Premium whisky consumption in A25 @ 45%, increasing vs LY...",
         height=100,
         key=f"trends_desc_{segment['id']}"
@@ -1916,13 +2020,19 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     for i in range(num_sections):
         st.markdown(f"**Section {i+1}:**")
         
-        # Option to customize section number/label
+        # Get saved section data if available
+        saved_section = saved_trends_sections[i] if i < len(saved_trends_sections) else {}
+        saved_label = saved_section.get("number", str(i + 1))
+        saved_left = saved_section.get("left", "")
+        saved_right = saved_section.get("right", "")
+        
+        # Option to customize section number/label - pre-populated with saved value
         col_num, col_left, col_right = st.columns([1, 2, 2])
         
         with col_num:
             section_label = st.text_input(
                 f"Label",
-                value=str(i + 1),
+                value=saved_label,
                 key=f"trends_sec{i}_label_{segment['id']}",
                 help="Default is number, but you can use any text"
             )
@@ -1930,6 +2040,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         with col_left:
             left_content = st.text_area(
                 f"Left content",
+                value=saved_left,
                 placeholder="Enter content for left side...",
                 height=100,
                 key=f"trends_sec{i}_left_{segment['id']}"
@@ -1938,6 +2049,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         with col_right:
             right_content = st.text_area(
                 f"Right content",
+                value=saved_right,
                 placeholder="Enter content for right side...",
                 height=100,
                 key=f"trends_sec{i}_right_{segment['id']}"
@@ -2072,10 +2184,22 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("#### Brand Trends - JTBD Configuration")
     st.caption("Create a Jobs To Be Done view with title, description, and rectangular section labels")
     
-    # Title and main description
+    # Load existing saved configuration
+    existing_tables = get_tables_for_segment(segment["id"])
+    saved_jtbd = next((t for t in existing_tables if t["section"] == "Brand Trends" and t["name"] == "JTBD View"), None)
+    
+    # Parse saved config
+    jtbd_config = json.loads(saved_jtbd["filter_json"]) if saved_jtbd and saved_jtbd["filter_json"] else {}
+    saved_jtbd_title = jtbd_config.get("title", "Jobs To Be Done")
+    saved_jtbd_description = jtbd_config.get("description", "")
+    saved_left_header = jtbd_config.get("left_header", "What's Working & Holding Us Back?")
+    saved_right_header = jtbd_config.get("right_header", "JTBDs:")
+    saved_jtbd_sections = jtbd_config.get("sections", [])
+    
+    # Title and main description - pre-populated with saved values
     jtbd_title = st.text_input(
         "View Title (editable)",
-        value="Jobs To Be Done",
+        value=saved_jtbd_title,
         placeholder="e.g., Battlegrounds JTBDs: BP to Secure & Grow",
         key=f"jtbd_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -2083,26 +2207,27 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     jtbd_description = st.text_area(
         "Main Description (optional)",
+        value=saved_jtbd_description,
         placeholder="Enter overview or context...",
         height=80,
         key=f"jtbd_desc_{segment['id']}"
     )
     
-    # Column headers (same for all sections)
+    # Column headers (same for all sections) - pre-populated with saved values
     st.markdown("**Column Headers (applies to all sections):**")
     col_left_h, col_right_h = st.columns(2)
     
     with col_left_h:
         left_header = st.text_input(
             "Left Column Header",
-            value="What's Working & Holding Us Back?",
+            value=saved_left_header,
             key=f"jtbd_left_header_{segment['id']}"
         )
     
     with col_right_h:
         right_header = st.text_input(
             "Right Column Header",
-            value="JTBDs:",
+            value=saved_right_header,
             key=f"jtbd_right_header_{segment['id']}"
         )
     
@@ -2122,12 +2247,18 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     for i in range(num_jtbd_sections):
         st.markdown(f"**JTBD Section {i+1}:**")
         
+        # Get saved section data if available
+        saved_jtbd_section = saved_jtbd_sections[i] if i < len(saved_jtbd_sections) else {}
+        saved_label = saved_jtbd_section.get("label", "LDA-40YO")
+        saved_left = saved_jtbd_section.get("left", "")
+        saved_right = saved_jtbd_section.get("right", "")
+        
         col_label, col_left, col_right = st.columns([1, 2, 2])
         
         with col_label:
             section_label = st.text_input(
                 f"Section Label",
-                value=f"LDA-40YO",
+                value=saved_label,
                 key=f"jtbd_sec{i}_label_{segment['id']}",
                 placeholder="e.g., LDA-40YO, UP-HR-MP"
             )
@@ -2135,6 +2266,7 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         with col_left:
             left_content = st.text_area(
                 f"Left Content",
+                value=saved_left,
                 placeholder="What's Working?\n• Point 1\n• Point 2\n\nWhat's Holding Us Back?\n• Issue 1\n• Issue 2",
                 height=200,
                 key=f"jtbd_sec{i}_left_{segment['id']}"
@@ -2143,6 +2275,7 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         with col_right:
             right_content = st.text_area(
                 f"Right Content (JTBDs)",
+                value=saved_right,
                 placeholder="1. First JTBD\n• Detail 1\n• Detail 2\n\n2. Second JTBD\n• Detail 1\n• Detail 2",
                 height=200,
                 key=f"jtbd_sec{i}_right_{segment['id']}"
@@ -2319,10 +2452,20 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("#### Brand Truths Configuration")
     st.caption("Create a brand comparison view with title, description, and brand sections")
     
-    # Title and main description
+    # Load existing saved configuration
+    existing_tables = get_tables_for_segment(segment["id"])
+    saved_brand_truths = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+    
+    # Parse saved config
+    brand_truths_config = json.loads(saved_brand_truths["filter_json"]) if saved_brand_truths and saved_brand_truths["filter_json"] else {}
+    saved_brand_title = brand_truths_config.get("title", "Brand Truths Summary - Competitor View")
+    saved_brand_description = brand_truths_config.get("description", "")
+    saved_brand_sections = brand_truths_config.get("brands", [])
+    
+    # Title and main description - pre-populated with saved values
     brand_title = st.text_input(
         "View Title (editable)",
-        value="Brand Truths Summary - Competitor View",
+        value=saved_brand_title,
         placeholder="e.g., Double Whammy for BP – Threat on NE & Laterals",
         key=f"brand_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -2330,6 +2473,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     brand_description = st.text_area(
         "Main Description",
+        value=saved_brand_description,
         placeholder="e.g., BP watch-outs across age groups; threat from RF & Sig on Laterals...",
         height=100,
         key=f"brand_desc_{segment['id']}"
@@ -2344,17 +2488,22 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         key=f"brand_num_sections_{segment['id']}"
     )
     
-    # Brand section inputs
+    # Brand section inputs - pre-populated with saved values
     brands_data = []
     for i in range(num_brands):
         st.markdown(f"**Brand Section {i+1}:**")
+        
+        # Get saved brand data if available
+        saved_brand = saved_brand_sections[i] if i < len(saved_brand_sections) else {}
+        saved_brand_name = saved_brand.get("name", "")
+        saved_brand_content = saved_brand.get("content", "")
         
         col_name, col_content = st.columns([1, 3])
         
         with col_name:
             brand_name = st.text_input(
                 f"Brand Name",
-                value="",
+                value=saved_brand_name,
                 placeholder="e.g., Signature",
                 key=f"brand_sec{i}_name_{segment['id']}"
             )
@@ -2362,6 +2511,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         with col_content:
             brand_content = st.text_area(
                 f"Brand insights/bullet points",
+                value=saved_brand_content,
                 placeholder="Enter brand insights, trends, threats, opportunities...",
                 height=150,
                 key=f"brand_sec{i}_content_{segment['id']}"
@@ -2493,10 +2643,19 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### Brand Truths - Section 2")
     st.caption("Create another brand comparison view (optional)")
     
-    # Title and main description for section 2
+    # Load saved configuration for section 2
+    saved_brand_truths_2 = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View 2"), None)
+    
+    # Parse saved config
+    brand_truths_config_2 = json.loads(saved_brand_truths_2["filter_json"]) if saved_brand_truths_2 and saved_brand_truths_2["filter_json"] else {}
+    saved_brand_title_2 = brand_truths_config_2.get("title", "Brand Truths Summary - Brand Family View")
+    saved_brand_description_2 = brand_truths_config_2.get("description", "")
+    saved_brand_sections_2 = brand_truths_config_2.get("brands", [])
+    
+    # Title and main description for section 2 - pre-populated with saved values
     brand_title_2 = st.text_input(
         "View Title (Section 2) - editable",
-        value="Brand Truths Summary - Brand Family View",
+        value=saved_brand_title_2,
         placeholder="e.g., Growth Opportunities & Market Dynamics",
         key=f"brand_title_2_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -2504,6 +2663,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     brand_description_2 = st.text_area(
         "Main Description (Section 2)",
+        value=saved_brand_description_2,
         placeholder="Enter description for second brand comparison...",
         height=100,
         key=f"brand_desc_2_{segment['id']}"
@@ -2518,17 +2678,22 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         key=f"brand_num_sections_2_{segment['id']}"
     )
     
-    # Brand section inputs for section 2
+    # Brand section inputs for section 2 - pre-populated with saved values
     brands_data_2 = []
     for i in range(num_brands_2):
         st.markdown(f"**Brand Section {i+1}:**")
+        
+        # Get saved brand data if available
+        saved_brand_2 = saved_brand_sections_2[i] if i < len(saved_brand_sections_2) else {}
+        saved_brand_name_2 = saved_brand_2.get("name", "")
+        saved_brand_content_2 = saved_brand_2.get("content", "")
         
         col_name, col_content = st.columns([1, 3])
         
         with col_name:
             brand_name = st.text_input(
                 f"Brand Name",
-                value="",
+                value=saved_brand_name_2,
                 placeholder="e.g., Royal Challenge",
                 key=f"brand_sec2_{i}_name_{segment['id']}"
             )
@@ -2536,6 +2701,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         with col_content:
             brand_content = st.text_area(
                 f"Brand insights/bullet points",
+                value=saved_brand_content_2,
                 placeholder="Enter brand insights...",
                 height=150,
                 key=f"brand_sec2_{i}_content_{segment['id']}"
