@@ -1574,14 +1574,13 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
         st.error(f"Error rendering Brand Truths: {str(e)}")
 
 
-def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
-    """Render Brand Trends JTBD section"""
+def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
+    """Render Battlegrounds JTBD section"""
     # Get JTBD view
-    jtbd_view = next((t for t in tables if t["section"] == "Brand Trends" and t["name"] == "JTBD View"), None)
+    jtbd_view = next((t for t in tables if t["section"] == "Battlegrounds" and t["name"] == "JTBD View"), None)
     
     if not jtbd_view:
-        st.info("No content published for Brand Trends yet. Editors can configure it in Data Studio.")
-        return
+        return  # No JTBD configured
     
     try:
         config = json.loads(jtbd_view["filter_json"]) if jtbd_view["filter_json"] else {}
@@ -1718,15 +1717,20 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
         
         # Delete button for editors
         if is_editor:
-            if st.button("Delete Brand Trends JTBD", key=f"del_jtbd_{segment['id']}"):
+            if st.button("Delete Battlegrounds JTBD", key=f"del_jtbd_{segment['id']}"):
                 delete_table(jtbd_view["id"])
-                st.success("Brand Trends JTBD removed")
+                st.success("Battlegrounds JTBD removed")
                 if hasattr(st, "rerun"):
                     st.rerun()
                 else:
                     st.experimental_rerun()
     except Exception as e:
         st.error(f"Error rendering JTBD view: {str(e)}")
+
+
+def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
+    """Render Brand Trends - JTBD has been moved to Battlegrounds"""
+    st.info("The JTBD (Jobs To Be Done) section has been moved to the Battlegrounds tab.")
 
 
 
@@ -2242,6 +2246,11 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                                 st.image(file_path, use_container_width=True)
                     else:
                         st.warning("Image 2 file not found")
+        
+        # JTBD Section at the end
+        st.markdown("---")
+        st.markdown("---")
+        render_battlegrounds_jtbd_dashboard(segment, tables, is_editor)
         
         # Delete button for editors
         if is_editor:

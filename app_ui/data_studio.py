@@ -2207,13 +2207,20 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
 
 
 def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
-    """Configure Brand Trends: JTBD view with rectangular labels and left/right sections"""
-    st.markdown("#### Brand Trends - JTBD Configuration")
+    """Configure Brand Trends - This section has been moved to Battlegrounds"""
+    st.markdown("#### Brand Trends Configuration")
+    st.info("The JTBD (Jobs To Be Done) section has been moved to the Battlegrounds tab.")
+    return
+
+
+def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
+    """Configure Battlegrounds JTBD view with rectangular labels and left/right sections"""
+    st.markdown("#### Jobs To Be Done (JTBD) Configuration")
     st.caption("Create a Jobs To Be Done view with title, description, and rectangular section labels")
     
     # Load existing saved configuration
     existing_tables = get_tables_for_segment(segment["id"])
-    saved_jtbd = next((t for t in existing_tables if t["section"] == "Brand Trends" and t["name"] == "JTBD View"), None)
+    saved_jtbd = next((t for t in existing_tables if t["section"] == "Battlegrounds" and t["name"] == "JTBD View"), None)
     
     # Parse saved config
     jtbd_config = json.loads(saved_jtbd["filter_json"]) if saved_jtbd and saved_jtbd["filter_json"] else {}
@@ -2450,7 +2457,7 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             st.error("Please provide a title for the JTBD view.")
         else:
             # Delete existing
-            delete_tables_for_section(segment["id"], "Brand Trends", "JTBD View")
+            delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
             
             # Save configuration
             config_data = json.dumps({
@@ -2467,11 +2474,11 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 columns=["Config"],
                 created_by=current_user["username"],
                 segment_id=segment["id"],
-                section="Brand Trends",
+                section="Battlegrounds",
                 filter_json=config_data,
                 comment=""
             )
-            st.success("Brand Trends JTBD saved to dashboard!")
+            st.success("Battlegrounds JTBD saved to dashboard!")
 
 
 def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -3489,3 +3496,8 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             "families": selected_families,
             "brands": selected_brands
         })
+    
+    # JTBD Section at the end
+    st.markdown("---")
+    st.markdown("---")
+    render_battlegrounds_jtbd_config(segment, df_filtered, dataset_id, current_user)
