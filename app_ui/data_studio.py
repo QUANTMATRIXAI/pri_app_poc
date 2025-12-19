@@ -111,7 +111,7 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
         render_brand_trends_config(segment, df_filtered, latest["id"], current_user)
     
     with tabs[5]:
-        st.info("Configuration for Battlegrounds will be available soon.")
+        render_battlegrounds_config(segment, df_filtered, latest["id"], current_user)
 
 
 def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -2822,3 +2822,209 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 comment=""
             )
             st.success("Brand Truths Section 2 saved to dashboard!")
+
+
+def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
+    """Configure Battlegrounds: 3 tabs with states, brands, and images"""
+    st.markdown("#### Battlegrounds Configuration")
+    st.caption("Configure 3 battleground tabs with states, brands, and images")
+    
+    if df_filtered.empty:
+        st.warning("No data available for this segment.")
+        return
+    
+    # Check required columns
+    if "State" not in df_filtered.columns or "Brand Family" not in df_filtered.columns or "Brand" not in df_filtered.columns:
+        st.error("Missing required columns: State, Brand Family, or Brand")
+        return
+    
+    # Load existing saved configuration
+    existing_tables = get_tables_for_segment(segment["id"])
+    saved_battlegrounds = next((t for t in existing_tables if t["section"] == "Battlegrounds" and t["name"] == "Battlegrounds Config"), None)
+    
+    # Parse saved config
+    bg_config = json.loads(saved_battlegrounds["filter_json"]) if saved_battlegrounds and saved_battlegrounds["filter_json"] else {}
+    saved_tabs = bg_config.get("tabs", [
+        {"name": "ADVANTAGED STATES", "states": [], "families": [], "brands": []},
+        {"name": "Watch out states", "states": [], "families": [], "brands": []},
+        {"name": "Challenged states", "states": [], "families": [], "brands": []}
+    ])
+    
+    # Get available states and brands
+    all_states = sorted(df_filtered["State"].dropna().unique().tolist())
+    brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+    
+    # Configure 3 tabs
+    st.markdown("### Configure 3 Battleground Tabs")
+    st.caption("Note: Each state can only be assigned to one tab. Brands can be reused across tabs.")
+    
+    tabs_config = []
+    # Track which states have been selected in previous tabs
+    used_states = []
+    
+    for i in range(3):
+        st.markdown(f"---")
+        st.markdown(f"### Tab {i+1} Configuration")
+        
+        # Get saved tab data
+        saved_tab = saved_tabs[i] if i < len(saved_tabs) else {"name": ["ADVANTAGED STATES", "Watch out states", "Challenged states"][i], "states": [], "families": [], "brands": []}
+        
+        # Tab name
+        tab_name = st.text_input(
+            f"Tab {i+1} Name (editable)",
+            value=saved_tab.get("name", ["ADVANTAGED STATES", "Watch out states", "Challenged states"][i]),
+            key=f"bg_tab{i}_name_{segment['id']}",
+            help="This will be the tab title on the dashboard"
+        )
+        
+        # State selection - exclude states already selected in previous tabs
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Assign States:**")
+            # Available states = all states minus those selected in previous tabs
+            available_states_for_tab = [s for s in all_states if s not in used_states or s in saved_tab.get("states", [])]
+            
+            selected_states = st.multiselect(
+                f"Select states for {tab_name}",
+                options=available_states_for_tab,
+                default=saved_tab.get("states", []),
+                key=f"bg_tab{i}_states_{segment['id']}",
+                help="States can only be assigned to one tab"
+            )
+            
+            # Add selected states to used_states for next tabs
+            used_states.extend(selected_states)
+        
+        with col2:
+            st.markdown("**Select Brands:**")
+            # Brand family selection
+            selected_families = st.multiselect(
+                "Select Brand Families",
+                options=brand_families,
+                default=saved_tab.get("families", []),
+                key=f"bg_tab{i}_families_{segment['id']}"
+            )
+            
+            # Brand selection based on families
+            if selected_families:
+                brands_in_families = sorted(
+                    df_filtered[df_filtered["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
+                )
+                default_brands = [b for b in saved_tab.get("brands", []) if b in brands_in_families]
+                selected_brands = st.multiselect(
+                    "Select Brands",
+                    options=brands_in_families,
+                    default=default_brands if default_brands else brands_in_families,
+                    key=f"bg_tab{i}_brands_{segment['id']}"
+                )
+            else:
+                selected_brands = []
+                st.info("Select Brand Families first")
+        
+        # Image uploads
+        st.markdown("**Upload Images:**")
+        st.caption("Upload 2 images for this tab (one at top, one at bottom)")
+        
+        col_img1, col_img2 = st.columns(2)
+        
+        with col_img1:
+            st.markdown("**Image 1 (Top):**")
+            uploaded_image_1 = st.file_uploader(
+                f"Upload first image",
+                type=["png", "jpg", "jpeg", "pptx"],
+                key=f"bg_tab{i}_img1_{segment['id']}",
+                label_visibility="collapsed"
+            )
+            if uploaded_image_1:
+                if uploaded_image_1.name.endswith(('.png', '.jpg', '.jpeg')):
+                    st.image(uploaded_image_1, use_container_width=True)
+                else:
+                    st.info(f"📄 {uploaded_image_1.name}")
+        
+        with col_img2:
+            st.markdown("**Image 2 (Bottom):**")
+            uploaded_image_2 = st.file_uploader(
+                f"Upload second image",
+                type=["png", "jpg", "jpeg", "pptx"],
+                key=f"bg_tab{i}_img2_{segment['id']}",
+                label_visibility="collapsed"
+            )
+            if uploaded_image_2:
+                if uploaded_image_2.name.endswith(('.png', '.jpg', '.jpeg')):
+                    st.image(uploaded_image_2, use_container_width=True)
+                else:
+                    st.info(f"📄 {uploaded_image_2.name}")
+        
+        # Save button for this tab
+        if st.button(f"Save {tab_name} to Dashboard", key=f"save_bg_tab{i}_{segment['id']}"):
+            if not selected_states and not selected_families:
+                st.error("Please assign at least some states or select brands for this tab.")
+            else:
+                # Load existing config to update just this tab
+                existing_config = bg_config.get("tabs", [
+                    {"name": "ADVANTAGED STATES", "states": [], "families": [], "brands": []},
+                    {"name": "Watch out states", "states": [], "families": [], "brands": []},
+                    {"name": "Challenged states", "states": [], "families": [], "brands": []}
+                ])
+                
+                # Update this tab's config
+                existing_config[i] = {
+                    "name": tab_name,
+                    "states": selected_states,
+                    "families": selected_families,
+                    "brands": selected_brands
+                }
+                
+                # Delete and save updated config
+                delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
+                
+                config_data = json.dumps({"tabs": existing_config})
+                
+                save_table(
+                    name="Battlegrounds Config",
+                    dataset_id=dataset_id,
+                    columns=["Config"],
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="Battlegrounds",
+                    filter_json=config_data,
+                    comment=""
+                )
+                
+                # Delete existing images for this tab
+                delete_media_for_section(segment["id"], "Battlegrounds", f"Tab {i+1} Images")
+                
+                # Save image 1
+                if uploaded_image_1:
+                    save_media_upload(
+                        uploaded_file=uploaded_image_1,
+                        segment_id=segment["id"],
+                        section="Battlegrounds",
+                        created_by=current_user["username"],
+                        comment=f"Tab {i+1} - Image 1",
+                        label=f"Tab {i+1} Images"
+                    )
+                
+                # Save image 2
+                if uploaded_image_2:
+                    save_media_upload(
+                        uploaded_file=uploaded_image_2,
+                        segment_id=segment["id"],
+                        section="Battlegrounds",
+                        created_by=current_user["username"],
+                        comment=f"Tab {i+1} - Image 2",
+                        label=f"Tab {i+1} Images"
+                    )
+                
+                # Count saved images
+                total_images = (1 if uploaded_image_1 else 0) + (1 if uploaded_image_2 else 0)
+                st.success(f"{tab_name} saved to dashboard with {total_images} image(s)!")
+        
+        # Store tab configuration for state exclusivity tracking
+        tabs_config.append({
+            "name": tab_name,
+            "states": selected_states,
+            "families": selected_families,
+            "brands": selected_brands
+        })

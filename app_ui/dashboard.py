@@ -53,7 +53,7 @@ def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> No
     
     # Battlegrounds tab
     with tabs[5]:
-        st.info("No content published for Battlegrounds yet.")
+        render_battlegrounds_dashboard(segment, tables, is_editor)
 def group_by_section(rows) -> Dict[str, List]:
     grouped = {}
     for row in rows:
@@ -1727,3 +1727,136 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
                     st.experimental_rerun()
     except Exception as e:
         st.error(f"Error rendering JTBD view: {str(e)}")
+
+
+
+def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
+    """Render Battlegrounds section with 3 tabs"""
+    # Get battlegrounds config
+    bg_config_table = next((t for t in tables if t["section"] == "Battlegrounds" and t["name"] == "Battlegrounds Config"), None)
+    
+    if not bg_config_table:
+        st.info("No content published for Battlegrounds yet. Editors can configure it in Data Studio.")
+        return
+    
+    try:
+        config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
+        tabs_config = config.get("tabs", [])
+        
+        if not tabs_config:
+            st.info("No battleground tabs configured yet.")
+            return
+        
+        # Get all media for Battlegrounds
+        from app_core.media import get_media_for_segment
+        media_items = get_media_for_segment(segment["id"])
+        bg_media = [m for m in media_items if m.get("section") == "Battlegrounds"]
+        
+        # Create tabs with custom names
+        tab_names = [tab.get("name", f"Tab {i+1}") for i, tab in enumerate(tabs_config)]
+        dashboard_tabs = st.tabs(tab_names)
+        
+        for idx, (tab, tab_config) in enumerate(zip(dashboard_tabs, tabs_config)):
+            with tab:
+                # Get images for this tab - check 'name' field (which stores the label)
+                tab_images = [m for m in bg_media if m.get("name") == f"Tab {idx+1} Images"]
+                
+                # Find images by comment
+                image_1 = None
+                image_2 = None
+                for img in tab_images:
+                    comment = img.get("comment", "")
+                    if f"Tab {idx+1} - Image 1" in comment:
+                        image_1 = img
+                    elif f"Tab {idx+1} - Image 2" in comment:
+                        image_2 = img
+                
+                # Show tab configuration info FIRST
+                st.markdown("### Configuration Summary")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**Assigned States:**")
+                    states = tab_config.get("states", [])
+                    if states:
+                        for state in states:
+                            st.markdown(f"• {state}")
+                    else:
+                        st.info("No states assigned")
+                
+                with col2:
+                    st.markdown("**Selected Brands:**")
+                    brands = tab_config.get("brands", [])
+                    if brands:
+                        for brand in brands:
+                            st.markdown(f"• {brand}")
+                    else:
+                        st.info("No brands selected")
+                
+                st.markdown("---")
+                
+                # Display Image 1 (Top) - centered and smaller like Segment Trends
+                if image_1:
+                    file_path = image_1.get("file_path")
+                    if file_path and os.path.exists(file_path):
+                        if str(file_path).lower().endswith((".ppt", ".pptx")):
+                            st.caption("📄 PPT File - Download to view")
+                            with open(file_path, "rb") as f:
+                                st.download_button(
+                                    "Download PPT",
+                                    data=f.read(),
+                                    file_name=os.path.basename(file_path),
+                                    key=f"dl_bg_img1_{segment['id']}_{idx}",
+                                )
+                        else:
+                            # Center image with columns like Segment Trends
+                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                            with col2:
+                                st.image(file_path, use_container_width=True)
+                    else:
+                        st.warning("Image 1 file not found")
+                
+                st.markdown("---")
+                
+                # Display Image 2 (Bottom) - centered and smaller like Segment Trends
+                if image_2:
+                    file_path = image_2.get("file_path")
+                    if file_path and os.path.exists(file_path):
+                        if str(file_path).lower().endswith((".ppt", ".pptx")):
+                            st.caption("📄 PPT File - Download to view")
+                            with open(file_path, "rb") as f:
+                                st.download_button(
+                                    "Download PPT",
+                                    data=f.read(),
+                                    file_name=os.path.basename(file_path),
+                                    key=f"dl_bg_img2_{segment['id']}_{idx}",
+                                )
+                        else:
+                            # Center image with columns like Segment Trends
+                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                            with col2:
+                                st.image(file_path, use_container_width=True)
+                    else:
+                        st.warning("Image 2 file not found")
+        
+        # Delete button for editors
+        if is_editor:
+            st.markdown("---")
+            if st.button("Delete Battlegrounds Configuration", key=f"del_battlegrounds_{segment['id']}"):
+                from app_core.tables import delete_table
+                from app_core.media import delete_media_for_section
+                
+                delete_table(bg_config_table["id"])
+                # Delete all battlegrounds media
+                for i in range(3):
+                    delete_media_for_section(segment["id"], "Battlegrounds", f"Tab {i+1} Images")
+                
+                st.success("Battlegrounds configuration removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    
+    except Exception as e:
+        st.error(f"Error rendering Battlegrounds: {str(e)}")
