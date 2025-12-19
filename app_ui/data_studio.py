@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict, List
 
 import numpy as np
@@ -1193,6 +1194,19 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     st.markdown("**Upload Images (Optional):**")
     st.caption("Upload up to 3 images that will be displayed one below the other")
     
+    # Show existing images if any
+    from app_core.media import get_media_for_segment
+    existing_media = get_media_for_segment(segment["id"])
+    seg_truth_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
+    
+    if seg_truth_media:
+        st.info(f"✅ {len(seg_truth_media)} image(s) already uploaded. Upload new images to replace them.")
+        with st.expander("View Current Images", expanded=False):
+            for media in seg_truth_media:
+                file_path = media.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    st.image(file_path, caption=media.get("comment", "Image"), use_container_width=True)
+    
     uploaded_image_1 = st.file_uploader(
         "Image 1",
         type=["png", "jpg", "jpeg"],
@@ -1915,6 +1929,19 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     # Image uploads
     st.markdown("**Upload Images:**")
     st.caption("Upload multiple images - each will become a tab on the dashboard")
+    
+    # Show existing images if any
+    from app_core.media import get_media_for_segment
+    existing_media = get_media_for_segment(segment["id"])
+    seg_trends_media = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
+    
+    if seg_trends_media:
+        st.info(f"✅ {len(seg_trends_media)} image(s) already uploaded. Upload new images to replace them.")
+        with st.expander("View Current Images", expanded=False):
+            for media in seg_trends_media:
+                file_path = media.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    st.image(file_path, caption=media.get("comment", "Page"), use_container_width=True)
     
     uploaded_images = st.file_uploader(
         "Upload Images (multiple allowed)",
@@ -2824,6 +2851,325 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             st.success("Brand Truths Section 2 saved to dashboard!")
 
 
+def get_india_geojson_url():
+    """Return URL to India states GeoJSON from a public source"""
+    # Using a public GeoJSON source for Indian states
+    return "https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson"
+
+
+def normalize_state_name(state_name: str) -> str:
+    """Normalize state names to match GeoJSON format"""
+    # Common mappings between data and GeoJSON
+    state_mapping = {
+        "andaman & nicobar": "Andaman & Nicobar Island",
+        "andaman and nicobar": "Andaman & Nicobar Island",
+        "a & n islands": "Andaman & Nicobar Island",
+        "andhra pradesh": "Andhra Pradesh",
+        "arunachal pradesh": "Arunanchal Pradesh",
+        "assam": "Assam",
+        "bihar": "Bihar",
+        "chandigarh": "Chandigarh",
+        "chhattisgarh": "Chhattisgarh",
+        "dadra & nagar haveli": "Dadara & Nagar Havelli",
+        "daman & diu": "Daman & Diu",
+        "delhi": "Delhi",
+        "goa": "Goa",
+        "gujarat": "Gujarat",
+        "haryana": "Haryana",
+        "himachal pradesh": "Himachal Pradesh",
+        "jammu & kashmir": "Jammu & Kashmir",
+        "jammu and kashmir": "Jammu & Kashmir",
+        "jharkhand": "Jharkhand",
+        "karnataka": "Karnataka",
+        "kerala": "Kerala",
+        "ladakh": "Ladakh",
+        "lakshadweep": "Lakshadweep",
+        "madhya pradesh": "Madhya Pradesh",
+        "maharashtra": "Maharashtra",
+        "manipur": "Manipur",
+        "meghalaya": "Meghalaya",
+        "mizoram": "Mizoram",
+        "nagaland": "Nagaland",
+        "odisha": "Odisha",
+        "puducherry": "Puducherry",
+        "punjab": "Punjab",
+        "rajasthan": "Rajasthan",
+        "sikkim": "Sikkim",
+        "tamil nadu": "Tamil Nadu",
+        "telangana": "Telangana",
+        "tripura": "Tripura",
+        "uttar pradesh": "Uttar Pradesh",
+        "uttarakhand": "Uttarakhand",
+        "west bengal": "West Bengal",
+    }
+    
+    normalized = state_name.strip().lower()
+    return state_mapping.get(normalized, state_name)
+
+
+def render_india_map_overview(all_states: List[str], tabs_config: List[Dict]) -> None:
+    """Render India map showing state assignments across tabs with GeoJSON visualization"""
+    import plotly.graph_objects as go
+    import requests
+    
+    # Map states to their tab assignments
+    state_to_tab = {}
+    
+    for idx, tab in enumerate(tabs_config):
+        tab_name = tab.get("name", f"Tab {idx+1}")
+        states = tab.get("states", [])
+        
+        for state in states:
+            # Normalize state name for GeoJSON matching
+            normalized_state = normalize_state_name(state)
+            state_to_tab[normalized_state] = {"tab_index": idx, "tab_name": tab_name, "original_name": state}
+    
+    # Create color mapping
+    tab_colors = {
+        0: "#4CAF50",  # Green - Advantaged
+        1: "#FFC107",  # Yellow - Watch out
+        2: "#F44336",  # Red - Challenged
+        -1: "#E0E0E0",  # Gray - Unassigned
+    }
+    
+    try:
+        # Fetch GeoJSON data
+        geojson_url = get_india_geojson_url()
+        response = requests.get(geojson_url, timeout=5)
+        india_geojson = response.json()
+        
+        # Prepare data for choropleth
+        states_data = []
+        colors_data = []
+        hover_text = []
+        
+        for feature in india_geojson['features']:
+            state_name = feature['properties'].get('ST_NM', '')
+            
+            if state_name in state_to_tab:
+                info = state_to_tab[state_name]
+                tab_idx = info['tab_index']
+                tab_name = info['tab_name']
+                original_name = info['original_name']
+                
+                states_data.append(state_name)
+                colors_data.append(tab_idx)
+                hover_text.append(f"{original_name}<br>Assigned to: {tab_name}")
+            else:
+                states_data.append(state_name)
+                colors_data.append(-1)
+                hover_text.append(f"{state_name}<br>Unassigned")
+        
+        # Create choropleth map
+        fig = go.Figure(go.Choroplethmapbox(
+            geojson=india_geojson,
+            locations=states_data,
+            z=colors_data,
+            featureidkey="properties.ST_NM",
+            colorscale=[
+                [0, tab_colors[-1]],      # Unassigned - Gray
+                [0.33, tab_colors[0]],    # Tab 1 - Green
+                [0.66, tab_colors[1]],    # Tab 2 - Yellow
+                [1, tab_colors[2]]        # Tab 3 - Red
+            ],
+            marker_opacity=0.7,
+            marker_line_width=1,
+            marker_line_color='white',
+            text=hover_text,
+            hovertemplate='%{text}<extra></extra>',
+            showscale=False
+        ))
+        
+        fig.update_layout(
+            mapbox_style="carto-positron",
+            mapbox_zoom=3.5,
+            mapbox_center={"lat": 22.5, "lon": 79},
+            margin={"r": 0, "t": 0, "l": 0, "b": 0},
+            height=500
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+    except Exception as e:
+        st.warning(f"Could not load India map visualization: {str(e)}")
+        st.caption("Showing state list instead:")
+    
+    # Display as a grid with colored badges (fallback or additional info)
+    st.markdown("**State Assignment by Tab:**")
+    
+    # Group states by tab
+    tab_0_states = []
+    tab_1_states = []
+    tab_2_states = []
+    
+    for idx, tab in enumerate(tabs_config):
+        states = tab.get("states", [])
+        if idx == 0:
+            tab_0_states = states
+        elif idx == 1:
+            tab_1_states = states
+        elif idx == 2:
+            tab_2_states = states
+    
+    unassigned_states = [s for s in all_states if s not in tab_0_states + tab_1_states + tab_2_states]
+    
+    # Create 3 columns for the 3 tabs
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        tab_name = tabs_config[0].get("name", "Tab 1") if len(tabs_config) > 0 else "Tab 1"
+        st.markdown(f"**{tab_name}** ({len(tab_0_states)} states)")
+        if tab_0_states:
+            for state in sorted(tab_0_states):
+                st.markdown(f"<span style='background-color: {tab_colors[0]}; color: white; padding: 0.2rem 0.5rem; border-radius: 0.3rem; margin: 0.2rem; display: inline-block;'>{state}</span>", unsafe_allow_html=True)
+            # Show brands for this tab
+            brands = tabs_config[0].get("brands", []) if len(tabs_config) > 0 else []
+            if brands:
+                st.caption(f"🏷️ Brands: {', '.join(brands[:3])}{'...' if len(brands) > 3 else ''}")
+        else:
+            st.info("No states assigned")
+    
+    with col2:
+        tab_name = tabs_config[1].get("name", "Tab 2") if len(tabs_config) > 1 else "Tab 2"
+        st.markdown(f"**{tab_name}** ({len(tab_1_states)} states)")
+        if tab_1_states:
+            for state in sorted(tab_1_states):
+                st.markdown(f"<span style='background-color: {tab_colors[1]}; color: white; padding: 0.2rem 0.5rem; border-radius: 0.3rem; margin: 0.2rem; display: inline-block;'>{state}</span>", unsafe_allow_html=True)
+            # Show brands for this tab
+            brands = tabs_config[1].get("brands", []) if len(tabs_config) > 1 else []
+            if brands:
+                st.caption(f"🏷️ Brands: {', '.join(brands[:3])}{'...' if len(brands) > 3 else ''}")
+        else:
+            st.info("No states assigned")
+    
+    with col3:
+        tab_name = tabs_config[2].get("name", "Tab 3") if len(tabs_config) > 2 else "Tab 3"
+        st.markdown(f"**{tab_name}** ({len(tab_2_states)} states)")
+        if tab_2_states:
+            for state in sorted(tab_2_states):
+                st.markdown(f"<span style='background-color: {tab_colors[2]}; color: white; padding: 0.2rem 0.5rem; border-radius: 0.3rem; margin: 0.2rem; display: inline-block;'>{state}</span>", unsafe_allow_html=True)
+            # Show brands for this tab
+            brands = tabs_config[2].get("brands", []) if len(tabs_config) > 2 else []
+            if brands:
+                st.caption(f"🏷️ Brands: {', '.join(brands[:3])}{'...' if len(brands) > 3 else ''}")
+        else:
+            st.info("No states assigned")
+    
+    # Show unassigned states
+    if unassigned_states:
+        st.markdown("**Unassigned States:**")
+        unassigned_html = " ".join([
+            f"<span style='background-color: #9E9E9E; color: white; padding: 0.2rem 0.5rem; border-radius: 0.3rem; margin: 0.2rem; display: inline-block;'>{state}</span>"
+            for state in sorted(unassigned_states)
+        ])
+        st.markdown(unassigned_html, unsafe_allow_html=True)
+
+
+def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, selected_states: List[str], selected_brands: List[str]) -> None:
+    """Preview state performance calculations for Battlegrounds
+    
+    Note: df_segment is already filtered by segment, which is correct.
+    All calculations use ALL brands within the segment (not just selected brands for denominators).
+    """
+    
+    # Filter data for A24 and A25
+    df_calc = df_segment[df_segment["PRI Year"].isin(["A24", "A25"])].copy()
+    
+    if df_calc.empty:
+        st.warning("No data available for A24 and A25")
+        return
+    
+    # Calculate All India segment metrics (using ALL brands in the segment)
+    # This is correct - df_calc is already segment-filtered
+    all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
+    all_india_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    all_india_growth = ((all_india_a25 - all_india_a24) / all_india_a24 * 100) if all_india_a24 > 0 else 0
+    
+    st.markdown(f"**All India Segment Growth (A25):** {all_india_growth:+.1f}%")
+    st.markdown("---")
+    
+    # Process each selected state
+    for state in selected_states[:3]:  # Show max 3 states in preview
+        st.markdown(f"### {state}")
+        
+        # Filter data for this state
+        df_state = df_calc[df_calc["State"] == state].copy()
+        
+        if df_state.empty:
+            st.warning(f"No data for {state}")
+            continue
+        
+        # SEGMENT-LEVEL CALCULATIONS (ALL BRANDS)
+        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
+        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
+        
+        # Segment MS (State share of All India)
+        segment_ms = (state_segment_a25 / all_india_a25 * 100) if all_india_a25 > 0 else 0
+        
+        # Segment A25 Growth
+        segment_growth = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
+        
+        # State BTM Status vs AI
+        btm_status = segment_growth - all_india_growth
+        
+        # Display state header
+        btm_color = "#4CAF50" if btm_status >= 0 else "#F44336"
+        st.markdown(f"""
+            <div style='background-color: #F5F5F5; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;'>
+                <div style='display: flex; justify-content: space-between; align-items: center;'>
+                    <div>
+                        <h4 style='margin: 0;'>{state}</h4>
+                        <p style='margin: 0.5rem 0 0 0; color: {btm_color}; font-weight: bold; font-size: 1.1rem;'>
+                            State BTM Status vs AI: {btm_status:+.1f}%
+                        </p>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Create table data
+        table_data = []
+        
+        # Segment row
+        table_data.append({
+            "": "Segment",
+            "MS (A25)": f"{segment_ms:.1f}%",
+            "A25 Growth": f"{segment_growth:+.1f}%"
+        })
+        
+        # BRAND-LEVEL CALCULATIONS (SELECTED BRANDS ONLY)
+        for brand in selected_brands:
+            df_brand = df_state[df_state["Brand"] == brand].copy()
+            
+            if df_brand.empty:
+                continue
+            
+            brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["NS M INR"].sum()
+            brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["NS M INR"].sum()
+            
+            # Brand MS (brand share of state segment - denominator uses ALL brands)
+            brand_ms = (brand_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
+            
+            # Brand A25 Growth
+            brand_growth = ((brand_a25 - brand_a24) / brand_a24 * 100) if brand_a24 > 0 else 0
+            
+            table_data.append({
+                "": brand,
+                "MS (A25)": f"{brand_ms:.1f}%",
+                "A25 Growth": f"{brand_growth:+.1f}%"
+            })
+        
+        # Display table
+        if table_data:
+            df_display = pd.DataFrame(table_data)
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+    
+    if len(selected_states) > 3:
+        st.info(f"Showing preview for first 3 states. Total {len(selected_states)} states will be displayed on dashboard.")
+
+
 def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Battlegrounds: 3 tabs with states, brands, and images"""
     st.markdown("#### Battlegrounds Configuration")
@@ -2922,37 +3268,146 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 selected_brands = []
                 st.info("Select Brand Families first")
         
+        # State Performance Calculation Section
+        st.markdown("---")
+        st.markdown("**State Performance Analysis (Between Images):**")
+        st.caption("This section will appear between the two images on the dashboard")
+        
+        # Comment for calculation section
+        saved_calc_comment = saved_tab.get("calc_comment", "")
+        calc_comment = st.text_area(
+            "Add comment for state performance section (optional)",
+            value=saved_calc_comment,
+            key=f"bg_tab{i}_calc_comment_{segment['id']}",
+            placeholder="Add insights about state performance, BTM status, brand contributions...",
+            height=100
+        )
+        
+        # Additional columns configuration
+        st.markdown("**Additional Analysis Columns:**")
+        st.caption("Configure 3 additional columns (default: SOG, 5Cs, Imagery)")
+        
+        col_config1, col_config2, col_config3 = st.columns(3)
+        
+        # Get saved additional columns config
+        saved_add_cols = saved_tab.get("additional_columns", [
+            {"name": "SOG", "comment": ""},
+            {"name": "5Cs", "comment": ""},
+            {"name": "Imagery", "comment": ""}
+        ])
+        
+        with col_config1:
+            col1_name = st.text_input(
+                "Column 1 Name",
+                value=saved_add_cols[0].get("name", "SOG") if len(saved_add_cols) > 0 else "SOG",
+                key=f"bg_tab{i}_col1_name_{segment['id']}"
+            )
+            col1_comment = st.text_area(
+                "Column 1 Content",
+                value=saved_add_cols[0].get("comment", "") if len(saved_add_cols) > 0 else "",
+                key=f"bg_tab{i}_col1_comment_{segment['id']}",
+                placeholder="Add insights for SOG...",
+                height=150
+            )
+        
+        with col_config2:
+            col2_name = st.text_input(
+                "Column 2 Name",
+                value=saved_add_cols[1].get("name", "5Cs") if len(saved_add_cols) > 1 else "5Cs",
+                key=f"bg_tab{i}_col2_name_{segment['id']}"
+            )
+            col2_comment = st.text_area(
+                "Column 2 Content",
+                value=saved_add_cols[1].get("comment", "") if len(saved_add_cols) > 1 else "",
+                key=f"bg_tab{i}_col2_comment_{segment['id']}",
+                placeholder="Add insights for 5Cs...",
+                height=150
+            )
+        
+        with col_config3:
+            col3_name = st.text_input(
+                "Column 3 Name",
+                value=saved_add_cols[2].get("name", "Imagery") if len(saved_add_cols) > 2 else "Imagery",
+                key=f"bg_tab{i}_col3_name_{segment['id']}"
+            )
+            col3_comment = st.text_area(
+                "Column 3 Content",
+                value=saved_add_cols[2].get("comment", "") if len(saved_add_cols) > 2 else "",
+                key=f"bg_tab{i}_col3_comment_{segment['id']}",
+                placeholder="Add insights for Imagery...",
+                height=150
+            )
+        
+        # Show preview if states and brands are selected
+        if selected_states and selected_brands:
+            with st.expander("📊 Preview State Performance Calculations", expanded=False):
+                render_battlegrounds_calc_preview(df_filtered, segment, selected_states, selected_brands)
+        elif selected_states or selected_brands:
+            st.info("Select both states and brands to see calculation preview")
+        
+        st.markdown("---")
+        
         # Image uploads
         st.markdown("**Upload Images:**")
         st.caption("Upload 2 images for this tab (one at top, one at bottom)")
+        
+        # Show existing images if any
+        from app_core.media import get_media_for_segment
+        existing_media = get_media_for_segment(segment["id"])
+        tab_media = [m for m in existing_media if m.get("section") == "Battlegrounds" and m.get("name") == f"Tab {i+1} Images"]
+        
+        if tab_media:
+            st.info(f"✅ {len(tab_media)} image(s) already uploaded for this tab. Upload new images to replace them.")
         
         col_img1, col_img2 = st.columns(2)
         
         with col_img1:
             st.markdown("**Image 1 (Top):**")
+            
+            # Show existing image 1 if available
+            existing_img1 = next((m for m in tab_media if "Image 1" in m.get("comment", "")), None)
+            if existing_img1 and not st.session_state.get(f"replace_img1_tab{i}_{segment['id']}", False):
+                file_path = existing_img1.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    if str(file_path).lower().endswith((".ppt", ".pptx")):
+                        st.caption(f"📄 Current: {os.path.basename(file_path)}")
+                    else:
+                        st.image(file_path, caption="Current Image 1", use_container_width=True)
+            
             uploaded_image_1 = st.file_uploader(
-                f"Upload first image",
+                f"Upload new image (replaces existing)",
                 type=["png", "jpg", "jpeg", "pptx"],
                 key=f"bg_tab{i}_img1_{segment['id']}",
                 label_visibility="collapsed"
             )
             if uploaded_image_1:
                 if uploaded_image_1.name.endswith(('.png', '.jpg', '.jpeg')):
-                    st.image(uploaded_image_1, use_container_width=True)
+                    st.image(uploaded_image_1, caption="New Image 1", use_container_width=True)
                 else:
                     st.info(f"📄 {uploaded_image_1.name}")
         
         with col_img2:
             st.markdown("**Image 2 (Bottom):**")
+            
+            # Show existing image 2 if available
+            existing_img2 = next((m for m in tab_media if "Image 2" in m.get("comment", "")), None)
+            if existing_img2 and not st.session_state.get(f"replace_img2_tab{i}_{segment['id']}", False):
+                file_path = existing_img2.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    if str(file_path).lower().endswith((".ppt", ".pptx")):
+                        st.caption(f"📄 Current: {os.path.basename(file_path)}")
+                    else:
+                        st.image(file_path, caption="Current Image 2", use_container_width=True)
+            
             uploaded_image_2 = st.file_uploader(
-                f"Upload second image",
+                f"Upload new image (replaces existing)",
                 type=["png", "jpg", "jpeg", "pptx"],
                 key=f"bg_tab{i}_img2_{segment['id']}",
                 label_visibility="collapsed"
             )
             if uploaded_image_2:
                 if uploaded_image_2.name.endswith(('.png', '.jpg', '.jpeg')):
-                    st.image(uploaded_image_2, use_container_width=True)
+                    st.image(uploaded_image_2, caption="New Image 2", use_container_width=True)
                 else:
                     st.info(f"📄 {uploaded_image_2.name}")
         
@@ -2973,7 +3428,13 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                     "name": tab_name,
                     "states": selected_states,
                     "families": selected_families,
-                    "brands": selected_brands
+                    "brands": selected_brands,
+                    "calc_comment": calc_comment,
+                    "additional_columns": [
+                        {"name": col1_name, "comment": col1_comment},
+                        {"name": col2_name, "comment": col2_comment},
+                        {"name": col3_name, "comment": col3_comment}
+                    ]
                 }
                 
                 # Delete and save updated config

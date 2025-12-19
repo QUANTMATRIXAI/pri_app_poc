@@ -1730,6 +1730,424 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
 
 
 
+def get_india_geojson_url():
+    """Return URL to India states GeoJSON from a public source"""
+    return "https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson"
+
+
+def normalize_state_name(state_name: str) -> str:
+    """Normalize state names to match GeoJSON format"""
+    state_mapping = {
+        "andaman & nicobar": "Andaman & Nicobar Island",
+        "andaman and nicobar": "Andaman & Nicobar Island",
+        "a & n islands": "Andaman & Nicobar Island",
+        "andhra pradesh": "Andhra Pradesh",
+        "arunachal pradesh": "Arunanchal Pradesh",
+        "assam": "Assam",
+        "bihar": "Bihar",
+        "chandigarh": "Chandigarh",
+        "chhattisgarh": "Chhattisgarh",
+        "dadra & nagar haveli": "Dadara & Nagar Havelli",
+        "daman & diu": "Daman & Diu",
+        "delhi": "Delhi",
+        "goa": "Goa",
+        "gujarat": "Gujarat",
+        "haryana": "Haryana",
+        "himachal pradesh": "Himachal Pradesh",
+        "jammu & kashmir": "Jammu & Kashmir",
+        "jammu and kashmir": "Jammu & Kashmir",
+        "jharkhand": "Jharkhand",
+        "karnataka": "Karnataka",
+        "kerala": "Kerala",
+        "ladakh": "Ladakh",
+        "lakshadweep": "Lakshadweep",
+        "madhya pradesh": "Madhya Pradesh",
+        "maharashtra": "Maharashtra",
+        "manipur": "Manipur",
+        "meghalaya": "Meghalaya",
+        "mizoram": "Mizoram",
+        "nagaland": "Nagaland",
+        "odisha": "Odisha",
+        "puducherry": "Puducherry",
+        "punjab": "Punjab",
+        "rajasthan": "Rajasthan",
+        "sikkim": "Sikkim",
+        "tamil nadu": "Tamil Nadu",
+        "telangana": "Telangana",
+        "tripura": "Tripura",
+        "uttar pradesh": "Uttar Pradesh",
+        "uttarakhand": "Uttarakhand",
+        "west bengal": "West Bengal",
+    }
+    normalized = state_name.strip().lower()
+    return state_mapping.get(normalized, state_name)
+
+
+def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_id: int) -> None:
+    """Render state performance calculations for a Battlegrounds tab"""
+    
+    # Get the data
+    from app_core.uploads import get_uploads, load_dataset
+    
+    uploads = get_uploads(segment_id=segment_id)
+    if not uploads:
+        uploads = get_uploads()
+    
+    if not uploads:
+        return
+    
+    latest = sorted(uploads, key=lambda r: r["uploaded_at"], reverse=True)[0]
+    df = load_dataset(latest["id"])
+    
+    if df is None or df.empty:
+        return
+    
+    # Filter by segment
+    seg_map = {
+        "value": "admix value",
+        "deluxe": "admix deluxe",
+        "premium": "admix premium",
+        "spib": "s& pib",
+        "sp bio": "sp+ib",
+        "spbio": "sp+ib",
+    }
+    seg_name = seg_map.get(segment["name"].strip().lower(), segment["name"].strip().lower())
+    df_segment = df[df.get("Revised Seg", "").astype(str).str.strip().str.lower() == seg_name]
+    
+    # Get states and brands from config
+    selected_states = tab_config.get("states", [])
+    selected_brands = tab_config.get("brands", [])
+    calc_comment = tab_config.get("calc_comment", "")
+    
+    if not selected_states or not selected_brands:
+        return
+    
+    # Filter for A24 and A25
+    df_calc = df_segment[df_segment["PRI Year"].isin(["A24", "A25"])].copy()
+    
+    if df_calc.empty:
+        return
+    
+    # Calculate All India segment metrics
+    all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
+    all_india_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    all_india_growth = ((all_india_a25 - all_india_a24) / all_india_a24 * 100) if all_india_a24 > 0 else 0
+    
+    # Show comment if exists
+    if calc_comment:
+        st.markdown(f"<div class='comment-box'>{format_comment(calc_comment)}</div>", unsafe_allow_html=True)
+    
+    st.markdown(f"**All India Segment Growth (A25):** {all_india_growth:+.1f}%")
+    st.markdown("---")
+    
+    # Create main layout: States on left, Strategic Insights on right
+    col_states, col_insights = st.columns([1.2, 2])
+    
+    with col_states:
+        st.markdown("### State Performance")
+        
+        # Process each state
+        for state in selected_states:
+            # Filter data for this state
+            df_state = df_calc[df_calc["State"] == state].copy()
+            
+            if df_state.empty:
+                continue
+            
+            # SEGMENT-LEVEL CALCULATIONS
+            state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
+            state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
+            
+            segment_ms = (state_segment_a25 / all_india_a25 * 100) if all_india_a25 > 0 else 0
+            segment_growth = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
+            btm_status = segment_growth - all_india_growth
+            
+            # State card with BTM status and brand performance
+            btm_color = "#4CAF50" if btm_status >= 0 else "#F44336"
+            btm_bg_color = "#E8F5E9" if btm_status >= 0 else "#FFEBEE"
+            
+            # Create container for state
+            with st.container():
+                # State header with BTM
+                st.markdown(f"""
+                    <div style='background-color: {btm_bg_color}; padding: 0.8rem; border-radius: 0.4rem; margin-bottom: 0.5rem; border-left: 4px solid {btm_color};'>
+                        <h4 style='margin: 0; color: #333;'>{state}</h4>
+                        <div style='margin-top: 0.3rem;'>
+                            <span style='font-size: 0.8rem; color: #666;'>BTM vs AI: </span>
+                            <span style='color: {btm_color}; font-weight: bold; font-size: 1.1rem;'>{btm_status:+.1f}%</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Build table data
+                table_data = []
+                
+                # Segment row
+                segment_growth_color = "🟢" if segment_growth >= 0 else "🔴"
+                table_data.append({
+                    "Brand": "SEGMENT",
+                    "MS & Growth": f"{segment_ms:.1f}% {segment_growth_color}({segment_growth:+.1f}%)"
+                })
+                
+                # Brand rows (up to 5)
+                brand_count = 0
+                for brand in selected_brands:
+                    if brand_count >= 5:
+                        break
+                        
+                    df_brand = df_state[df_state["Brand"] == brand].copy()
+                    
+                    if df_brand.empty:
+                        continue
+                    
+                    brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["NS M INR"].sum()
+                    brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["NS M INR"].sum()
+                    
+                    brand_ms = (brand_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
+                    brand_growth = ((brand_a25 - brand_a24) / brand_a24 * 100) if brand_a24 > 0 else 0
+                    
+                    brand_growth_icon = "🟢" if brand_growth >= 0 else "🔴"
+                    
+                    table_data.append({
+                        "Brand": brand,
+                        "MS & Growth": f"{brand_ms:.1f}% {brand_growth_icon}({brand_growth:+.1f}%)"
+                    })
+                    brand_count += 1
+                
+                # Display table with styling
+                if table_data:
+                    df_display = pd.DataFrame(table_data)
+                    
+                    # Style the dataframe - highlight segment row
+                    def highlight_segment(row):
+                        if row['Brand'] == 'SEGMENT':
+                            return ['background-color: #FFF9C4; font-weight: bold'] * len(row)
+                        return [''] * len(row)
+                    
+                    styled_df = df_display.style.apply(highlight_segment, axis=1)
+                    st.dataframe(styled_df, use_container_width=True, hide_index=True, height=min(250, (len(table_data) + 1) * 35))
+                
+                st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+    
+    with col_insights:
+        st.markdown("### Strategic Insights")
+        
+        # Show additional columns (SOG, 5Cs, Imagery) - these apply to ALL states
+        additional_cols = tab_config.get("additional_columns", [])
+        
+        for idx, col_config in enumerate(additional_cols[:3]):
+            col_name = col_config.get("name", ["SOG", "5Cs", "Imagery"][idx])
+            col_comment = col_config.get("comment", "")
+            
+            if col_comment:
+                st.markdown(f"""
+                    <div style='background-color: #E8EAF6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border-left: 4px solid #3F51B5;'>
+                        <h4 style='margin: 0 0 0.5rem 0; color: #3F51B5;'>{col_name}</h4>
+                        <div style='font-size: 0.9rem; color: #37474F;'>
+                            {format_comment(col_comment)}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                    <div style='background-color: #F5F5F5; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border-left: 4px solid #BDBDBD;'>
+                        <h4 style='margin: 0; color: #757575;'>{col_name}</h4>
+                        <p style='margin: 0.5rem 0 0 0; font-size: 0.85rem; color: #9E9E9E; font-style: italic;'>No insights added</p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+
+def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
+    """Render India map showing state assignments across tabs in dashboard"""
+    import plotly.graph_objects as go
+    import requests
+    
+    # Map states to their tab assignments
+    state_to_tab = {}
+    
+    for idx, tab in enumerate(tabs_config):
+        tab_name = tab.get("name", f"Tab {idx+1}")
+        states = tab.get("states", [])
+        
+        for state in states:
+            normalized_state = normalize_state_name(state)
+            state_to_tab[normalized_state] = {"tab_index": idx, "tab_name": tab_name, "original_name": state}
+    
+    # Create color mapping
+    tab_colors = {
+        0: "#4CAF50",  # Green - Advantaged
+        1: "#FFC107",  # Yellow - Watch out
+        2: "#F44336",  # Red - Challenged
+        -1: "#E0E0E0",  # Gray - Unassigned
+    }
+    
+    try:
+        # Fetch GeoJSON data
+        geojson_url = get_india_geojson_url()
+        response = requests.get(geojson_url, timeout=5)
+        india_geojson = response.json()
+        
+        # Prepare data for choropleth
+        states_data = []
+        colors_data = []
+        hover_text = []
+        
+        for feature in india_geojson['features']:
+            state_name = feature['properties'].get('ST_NM', '')
+            
+            if state_name in state_to_tab:
+                info = state_to_tab[state_name]
+                tab_idx = info['tab_index']
+                tab_name = info['tab_name']
+                original_name = info['original_name']
+                
+                states_data.append(state_name)
+                colors_data.append(tab_idx)
+                hover_text.append(f"{original_name}<br>Assigned to: {tab_name}")
+            else:
+                states_data.append(state_name)
+                colors_data.append(-1)
+                hover_text.append(f"{state_name}<br>Unassigned")
+        
+        # Create choropleth map
+        fig = go.Figure(go.Choroplethmapbox(
+            geojson=india_geojson,
+            locations=states_data,
+            z=colors_data,
+            featureidkey="properties.ST_NM",
+            colorscale=[
+                [0, tab_colors[-1]],      # Unassigned - Gray
+                [0.33, tab_colors[0]],    # Tab 1 - Green
+                [0.66, tab_colors[1]],    # Tab 2 - Yellow
+                [1, tab_colors[2]]        # Tab 3 - Red
+            ],
+            marker_opacity=0.8,
+            marker_line_width=2,
+            marker_line_color='white',
+            text=hover_text,
+            hovertemplate='%{text}<extra></extra>',
+            showscale=False
+        ))
+        
+        fig.update_layout(
+            mapbox_style="carto-positron",
+            mapbox_zoom=3.5,
+            mapbox_center={"lat": 22, "lon": 82},
+            margin={"r": 0, "t": 0, "l": 0, "b": 0},
+            height=700,
+            uirevision='constant',  # Prevents zoom changes
+            mapbox=dict(
+                bearing=0,
+                pitch=0
+            )
+        )
+        
+        # Disable zoom and pan to keep map stable
+        fig.update_layout(
+            dragmode=False,
+            mapbox_accesstoken=None
+        )
+        
+        # Group states by tab for the side panel
+        tab_0_states = []
+        tab_1_states = []
+        tab_2_states = []
+        
+        for idx, tab in enumerate(tabs_config):
+            states = tab.get("states", [])
+            if idx == 0:
+                tab_0_states = states
+            elif idx == 1:
+                tab_1_states = states
+            elif idx == 2:
+                tab_2_states = states
+        
+        # Create two columns: map on left, state list on right
+        map_col, states_col = st.columns([1.6, 1])
+        
+        with map_col:
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with states_col:
+            st.markdown("### State Assignments")
+            
+            # Tab 1
+            tab_name = tabs_config[0].get("name", "Tab 1") if len(tabs_config) > 0 else "Tab 1"
+            st.markdown(f"""
+                <div style='background-color: {tab_colors[0]}; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                    <h4 style='color: white; margin: 0;'>{tab_name}</h4>
+                    <p style='color: white; margin: 0; font-size: 0.9rem;'>{len(tab_0_states)} states</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if tab_0_states:
+                # Display states in 2 columns
+                states_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.5rem;'>"
+                for state in sorted(tab_0_states):
+                    states_html += f"<div style='background-color: #E8F5E9; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[0]};'>• {state}</div>"
+                states_html += "</div>"
+                st.markdown(states_html, unsafe_allow_html=True)
+                
+                brands = tabs_config[0].get("brands", []) if len(tabs_config) > 0 else []
+                if brands:
+                    st.markdown(f"<div style='font-size: 0.85rem; color: #666; margin-bottom: 1rem;'>🏷️ <b>Brands:</b> {', '.join(brands)}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("No states assigned")
+            
+            st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+            
+            # Tab 2
+            tab_name = tabs_config[1].get("name", "Tab 2") if len(tabs_config) > 1 else "Tab 2"
+            st.markdown(f"""
+                <div style='background-color: {tab_colors[1]}; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                    <h4 style='color: white; margin: 0;'>{tab_name}</h4>
+                    <p style='color: white; margin: 0; font-size: 0.9rem;'>{len(tab_1_states)} states</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if tab_1_states:
+                # Display states in 2 columns
+                states_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.5rem;'>"
+                for state in sorted(tab_1_states):
+                    states_html += f"<div style='background-color: #FFF8E1; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[1]};'>• {state}</div>"
+                states_html += "</div>"
+                st.markdown(states_html, unsafe_allow_html=True)
+                
+                brands = tabs_config[1].get("brands", []) if len(tabs_config) > 1 else []
+                if brands:
+                    st.markdown(f"<div style='font-size: 0.85rem; color: #666; margin-bottom: 1rem;'>🏷️ <b>Brands:</b> {', '.join(brands)}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("No states assigned")
+            
+            st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+            
+            # Tab 3
+            tab_name = tabs_config[2].get("name", "Tab 3") if len(tabs_config) > 2 else "Tab 3"
+            st.markdown(f"""
+                <div style='background-color: {tab_colors[2]}; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                    <h4 style='color: white; margin: 0;'>{tab_name}</h4>
+                    <p style='color: white; margin: 0; font-size: 0.9rem;'>{len(tab_2_states)} states</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if tab_2_states:
+                # Display states in 2 columns
+                states_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.5rem;'>"
+                for state in sorted(tab_2_states):
+                    states_html += f"<div style='background-color: #FFEBEE; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[2]};'>• {state}</div>"
+                states_html += "</div>"
+                st.markdown(states_html, unsafe_allow_html=True)
+                
+                brands = tabs_config[2].get("brands", []) if len(tabs_config) > 2 else []
+                if brands:
+                    st.markdown(f"<div style='font-size: 0.85rem; color: #666; margin-bottom: 1rem;'>🏷️ <b>Brands:</b> {', '.join(brands)}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("No states assigned")
+        
+    except Exception as e:
+        st.warning(f"Could not load India map visualization: {str(e)}")
+
+
 def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
     """Render Battlegrounds section with 3 tabs"""
     # Get battlegrounds config
@@ -1746,6 +2164,11 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
         if not tabs_config:
             st.info("No battleground tabs configured yet.")
             return
+        
+        # Show India Map at the top
+        st.markdown("### 📍 India Map - Battlegrounds Overview")
+        render_india_map_dashboard(tabs_config)
+        st.markdown("---")
         
         # Get all media for Battlegrounds
         from app_core.media import get_media_for_segment
@@ -1770,32 +2193,6 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                         image_1 = img
                     elif f"Tab {idx+1} - Image 2" in comment:
                         image_2 = img
-                
-                # Show tab configuration info FIRST
-                st.markdown("### Configuration Summary")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("**Assigned States:**")
-                    states = tab_config.get("states", [])
-                    if states:
-                        for state in states:
-                            st.markdown(f"• {state}")
-                    else:
-                        st.info("No states assigned")
-                
-                with col2:
-                    st.markdown("**Selected Brands:**")
-                    brands = tab_config.get("brands", [])
-                    if brands:
-                        for brand in brands:
-                            st.markdown(f"• {brand}")
-                    else:
-                        st.info("No brands selected")
-                
-                st.markdown("---")
-                
                 # Display Image 1 (Top) - centered and smaller like Segment Trends
                 if image_1:
                     file_path = image_1.get("file_path")
@@ -1816,6 +2213,12 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                                 st.image(file_path, use_container_width=True)
                     else:
                         st.warning("Image 1 file not found")
+                
+                st.markdown("---")
+                
+                # STATE PERFORMANCE CALCULATIONS (Between Images)
+                st.markdown("### 📊 State Performance Analysis")
+                render_battlegrounds_calculations(segment, tab_config, segment["id"])
                 
                 st.markdown("---")
                 
