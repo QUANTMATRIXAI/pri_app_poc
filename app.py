@@ -55,10 +55,10 @@ def bootstrap() -> None:
 def render_header() -> None:
     st.markdown(
         """
-        <div class="info-card" style="margin-bottom: 1rem;">
+        <div class="info-card" style="margin-bottom: 1rem; background: white; padding: 2rem; border: 1px solid rgba(0,0,0,0.08);">
             <div class="pill">Secure Workspace</div>
-            <h1 style="margin-bottom:0.2rem;">Trinity - Data Science Democratised</h1>
-            <p style="color: var(--muted); margin-bottom:0;">Editors manage data and publish charts; viewers see the live dashboard only.</p>
+            <h1 style="margin-bottom:0.5rem; margin-top:0.8rem; color: #1d2733; font-size: 2.5rem; font-weight: 700; letter-spacing: -0.5px;">Strategic Alignment Dashboard</h1>
+            <p style="color: #f5b400; margin-bottom:0; font-size: 1.1rem; font-weight: 600;">For Pernod Ricard India</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -67,7 +67,7 @@ def render_header() -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Trinity - Data Science Democratised",
+        page_title="Strategic Alignment Dashboard",
         page_icon=":bar_chart:",
         layout="wide",
     )

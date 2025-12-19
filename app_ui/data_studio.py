@@ -1062,7 +1062,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     with col2:
         st.markdown("**P3M Segment Profile Data:**")
         # Expander with profile data
-        with st.expander("View Profile Data", expanded=True):
+        with st.expander("View Profile Data", expanded=False):
             # Hardcoded data table
             profile_data = {
                 "Metric": [
@@ -1934,6 +1934,8 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     from app_core.media import get_media_for_segment
     existing_media = get_media_for_segment(segment["id"])
     seg_trends_media = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
+    # Reverse to show in upload order (oldest first)
+    seg_trends_media = list(reversed(seg_trends_media))
     
     if seg_trends_media:
         st.info(f"✅ {len(seg_trends_media)} image(s) already uploaded. Upload new images to replace them.")
@@ -1983,24 +1985,29 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         if not uploaded_images:
             st.error("Please upload at least one image.")
         else:
-            from app_core.media import save_media_upload
+            from app_core.media import save_media_uploads_batch
             
             # Delete existing images for this section
             delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
             
-            # Save all uploaded images with custom page names
+            # Prepare all images with their page names
+            images_with_names = []
             for idx, uploaded_img in enumerate(uploaded_images):
                 page_name = page_names[idx] if idx < len(page_names) else f"Page {idx+1}"
-                save_media_upload(
-                    uploaded_file=uploaded_img,
+                images_with_names.append((uploaded_img, page_name))
+            
+            # Save all images in a single batch
+            try:
+                saved_count = save_media_uploads_batch(
+                    images_with_names=images_with_names,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=page_name,  # Store page name in comment field
                     label="Segment Trends Carousel"
                 )
-            
-            st.success(f"{len(uploaded_images)} image(s) saved to dashboard!")
+                st.success(f"{saved_count} image(s) saved to dashboard!")
+            except Exception as e:
+                st.error(f"Error saving images: {e}")
 
     
     st.markdown("---")

@@ -20,15 +20,14 @@ from .charts import plot_chart
 
 
 def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> None:
-    st.subheader(f"Dashboard · {segment['name']}")
+    st.subheader(f"Segment: {segment['name']}")
     
     # Check if there's any published content
     if not charts and not tables:
         st.info("No content published yet. Editors can publish content from the Data Studio.")
         return
     
-    # Show published content in tabs
-    st.markdown("### Published Content")
+    # Show content in tabs
     tabs = st.tabs(["NS Landscape", "Segment Truths", "Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"])
     
     # NS Landscape tab
@@ -153,9 +152,7 @@ def render_chart_block(chart, is_editor: bool) -> None:
     df = apply_filters(df, filters)
     y_cols = json.loads(chart["y_cols"])
     dataset_label = get_dataset_label(chart["dataset_id"])
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(f"<div class='pill'>Chart</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{chart['name']}</h4>", unsafe_allow_html=True)
+    st.markdown(f"### {chart['name']}")
     st.markdown(
         f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
         unsafe_allow_html=True,
@@ -174,14 +171,11 @@ def render_chart_block(chart, is_editor: bool) -> None:
                 st.rerun()
             else:
                 st.experimental_rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_table_block(table, is_editor: bool) -> None:
     dataset_label = get_dataset_label(table["dataset_id"])
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{table['name']}</h4>", unsafe_allow_html=True)
+    st.markdown(f"### {table['name']}")
     st.markdown(
         f"<div class='meta-line'><span class='pill'>Dataset</span> {dataset_label}</div>",
         unsafe_allow_html=True,
@@ -225,7 +219,6 @@ def render_table_block(table, is_editor: bool) -> None:
                 st.rerun()
             else:
                 st.experimental_rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def highlight_extremes(series: pd.Series):
@@ -254,7 +247,6 @@ def render_media_block(block, is_editor: bool) -> None:
     prefix_base = f"media_{block.get('section','').replace(' ', '_')}_{block.get('name','').replace(' ', '_')}".strip("_")
     if items and items[0].get("segment_id"):
         prefix_base = f"{prefix_base}_{items[0]['segment_id']}"
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(f"<div class='pill'>Image</div>", unsafe_allow_html=True)
     title_label = block.get("name") or block.get("section", "Image")
     st.markdown(f"<h4 class='chart-title'>{title_label}</h4>", unsafe_allow_html=True)
@@ -302,7 +294,6 @@ def render_media_item(media, is_editor: bool, key_prefix: str = "media") -> None
                 st.rerun()
             else:
                 st.experimental_rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_media_tabs(items, is_editor: bool, title: str = "Images", key_prefix: str = "media_tabs") -> None:
@@ -513,7 +504,6 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
     
     if zone_drilldowns:
         st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-        st.markdown("### State Drill-Down by Zone")
         
         # Create tabs for each zone
         tab_labels = [zone[0] for zone in zone_drilldowns]
@@ -530,15 +520,13 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
     filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
     custom_title = filter_config.get("title", "NS Overview") if isinstance(filter_config, dict) else "NS Overview"
     
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{custom_title}</h4>", unsafe_allow_html=True)
+    st.markdown(f"### {custom_title}")
     
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
     if df is None or df.empty:
         st.warning("Dataset not found.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Filter by segment
@@ -552,7 +540,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
     
     if df.empty:
         st.warning("No data available for selected filters.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Create pivot
@@ -622,23 +610,19 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
                 st.rerun()
             else:
                 st.experimental_rerun()
-    
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool) -> None:
     """Render the brand performance multi-bar chart"""
     import plotly.express as px
     
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(f"<div class='pill'>Chart</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>Brand Performance - NS M INR by PRI Year</h4>", unsafe_allow_html=True)
+    st.markdown(f"### Brand Performance - NS M INR by PRI Year")
     
     # Load data and apply filters
     df = load_dataset(chart_row["dataset_id"])
     if df is None or df.empty:
         st.warning("Dataset not found.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Filter by segment
@@ -656,7 +640,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     
     if df.empty:
         st.warning("No data available for selected brands and years.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Aggregate data
@@ -729,7 +713,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             else:
                 st.experimental_rerun()
     
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
@@ -738,15 +722,12 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
     filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
     custom_title = filter_config.get("title", "NS Zonal View") if isinstance(filter_config, dict) else "NS Zonal View"
     
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{custom_title}</h4>", unsafe_allow_html=True)
+    st.markdown(f"### {custom_title}")
     
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
     if df is None or df.empty:
         st.warning("Dataset not found.")
-        st.markdown("</div>", unsafe_allow_html=True)
         return
     
     # Filter by segment
@@ -765,13 +746,13 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
     
     if df.empty:
         st.warning("No data available for selected filters.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Check if Zone column exists
     if "Zone" not in df.columns:
         st.warning("Zone column not found in dataset.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Use the same function as preview
@@ -780,7 +761,7 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
     
     if result is None or result.empty:
         st.warning("Unable to create zonal pivot.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Get zones
@@ -884,7 +865,7 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
             else:
                 st.experimental_rerun()
     
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
@@ -1049,7 +1030,6 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     
     if seg_truth_images:
         st.markdown("---")
-        st.markdown("### Supporting Visuals")
         
         # Display images one below the other with controlled width
         for idx, media in enumerate(seg_truth_images):
@@ -1086,14 +1066,13 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     custom_title = filter_config.get("title", default_title) if isinstance(filter_config, dict) else default_title
     
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(f"<div class='pill'>Table</div>", unsafe_allow_html=True)
     st.markdown(f"<h4 class='chart-title'>{custom_title}</h4>", unsafe_allow_html=True)
     
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
     if df is None or df.empty:
         st.warning("Dataset not found.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Filter by segment
@@ -1111,13 +1090,13 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     
     if df.empty:
         st.warning("No data available for selected filters.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Check required columns
     if "Zone" not in df.columns or "State" not in df.columns:
         st.warning("Zone or State column not found in dataset.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Get all states in zone for summary
@@ -1130,7 +1109,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     
     if result_all is None:
         st.warning("Unable to create state drill-down.")
-        st.markdown("</div>", unsafe_allow_html=True)
+
         return
     
     # Define colors for brand families
@@ -1143,8 +1122,6 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     }
     
     # Show state summary for ALL states
-    st.markdown(f"**State Summary - All States in {zone_display} Zone**")
-    
     def highlight_zone_row(row):
         """Highlight the zone row"""
         state_val = result_all['state_summary'].loc[row.name, 'State']
@@ -1207,7 +1184,6 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
         
         if result and result['state_details']:
             st.markdown("---")
-            st.markdown("**State Deep-Dive - Brand Performance (Selected States)**")
             
             # Display states in rows of 4
             states_per_row = 4
@@ -1285,7 +1261,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
             else:
                 st.experimental_rerun()
     
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
@@ -1297,6 +1273,8 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     # Get images for this section
     media_items = get_media_for_segment(segment["id"])
     seg_trends_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
+    # Reverse to show in upload order (oldest first)
+    seg_trends_images = list(reversed(seg_trends_images))
     
     # Get custom trends view
     tables = get_tables_for_segment(segment["id"])
@@ -1308,7 +1286,8 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     
     st.markdown("### Segment Trends")
     
-    if len(seg_trends_images) > 1:
+    # Show tabs if there are images
+    if seg_trends_images:
         # Tabs for navigation - use custom page names from comment field
         tab_labels = [media.get("comment", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(seg_trends_images)]
         image_tabs = st.tabs(tab_labels)
@@ -1322,15 +1301,6 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                         st.image(file_path, use_container_width=True)
                 else:
                     st.warning(f"Image {idx+1} not found.")
-    else:
-        # Single image
-        file_path = seg_trends_images[0].get("file_path")
-        if file_path and os.path.exists(file_path):
-            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-            with col2:
-                st.image(file_path, use_container_width=True)
-        else:
-            st.warning("Image not found.")
     
     # Delete button for editors
     if is_editor and seg_trends_images:
