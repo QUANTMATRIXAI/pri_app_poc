@@ -2060,16 +2060,27 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         saved_left = saved_section.get("left", "")
         saved_right = saved_section.get("right", "")
         
-        # Option to customize section number/label - pre-populated with saved value
+        # Section number label (visible but not editable)
         col_num, col_left, col_right = st.columns([1, 2, 2])
+        section_label = str(i + 1)  # Fixed label based on section number
         
         with col_num:
-            section_label = st.text_input(
-                f"Label",
-                value=saved_label,
-                key=f"trends_sec{i}_label_{segment['id']}",
-                help="Default is number, but you can use any text"
-            )
+            st.markdown(f"**Label**")
+            st.markdown(f"""
+                <div style='
+                    background: #E8E8E8;
+                    border: 1px solid #CCCCCC;
+                    padding: 0.5rem 1rem;
+                    border-radius: 4px;
+                    text-align: center;
+                    font-size: 1.2rem;
+                    font-weight: bold;
+                    color: #333;
+                    margin-top: 0.2rem;
+                '>
+                    {section_label}
+                </div>
+            """, unsafe_allow_html=True)
         
         with col_left:
             left_content = st.text_area(

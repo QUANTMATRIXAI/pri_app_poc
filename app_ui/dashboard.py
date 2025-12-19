@@ -1520,7 +1520,8 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
                                 padding: 1rem;
                                 margin: 0.5rem 0;
                                 border-radius: 8px;
-                                min-height: 200px;
+                                height: 250px;
+                                overflow-y: auto;
                             '>
                                 <div style='font-size: 0.9rem; line-height: 1.6; color: #1A1A1A;'>
                                     {escaped_content}
