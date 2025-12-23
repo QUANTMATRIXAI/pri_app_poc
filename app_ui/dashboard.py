@@ -597,10 +597,24 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
     
     # Select only required columns
     final_columns = [col for col in columns_to_keep if col in pivot.columns]
-    pivot_display = pivot[final_columns]
+    pivot_display = pivot[final_columns].copy()
     
-    # Display without index
-    st.dataframe(pivot_display, use_container_width=True, hide_index=True)
+    # Format growth and CAGR columns to show % symbol
+    for col in pivot_display.columns:
+        if 'Growth %' in col or 'CAGR %' in col:
+            pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+    
+    # Apply styling to highlight Segment Total row
+    def highlight_segment_total(row):
+        """Highlight the Segment Total row with golden background"""
+        mfg_com = pivot_display.loc[row.name, 'Mfg Com']
+        if mfg_com == "Segment Total":
+            return ['background-color: #FFF3CD; font-weight: bold; border-top: 3px solid #f5b400; border-bottom: 3px solid #f5b400; color: #856404'] * len(row)
+        return [''] * len(row)
+    
+    # Display with styling
+    styled_pivot = pivot_display.style.apply(highlight_segment_total, axis=1)
+    st.dataframe(styled_pivot, use_container_width=True, hide_index=True)
     
     # Show comment below the table
     comment = table_row["comment"] if table_row["comment"] else ""
@@ -925,109 +939,80 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     with col2:
         # Profile data table in expander
         with st.expander("📊 P3M Segment Profile Data", expanded=True):
-            profile_data = {
-                "Metric": [
-                "P3M Seg Profile",
-                "LDA-24",
-                "25-30",
-                "LDA-35",
-                "36-45",
-                "46+",
-                "",
-                "NCCS A",
-                "",
-                "Single",
-                "Married w/ Kids",
-                "Married w/o Kids",
-                "Single Parent",
-                "",
-                "Business Owners",
-                "Salaried",
-                "",
-                "High",
-                "Medium",
-                "Low",
-                "",
-                "NE: Directs Entrant",
-                "NE: From Beer",
-                "NE: From Whites",
-                "NE: NETT",
-                "Non-Entrant",
-                "",
-                "Core %",
-                "Repertoire %"
-                ],
-                "TBA": [
-                "",
-                "8%",
-                "43%",
-                "56%",
-                "32%",
-                "17%",
-                "",
-                "68",
-                "",
-                "28%",
-                "41%",
-                "9%",
-                "21%",
-                "",
-                "40%",
-                "56%",
-                "",
-                "63%",
-                "28%",
-                "9%",
-                "",
-                "9%",
-                "8%",
-                "10%",
-                "27%",
-                "73%",
-                "",
-                "",
-                ""
-                ],
-                "Premium Whisky": [
-                "",
-                "10%",
-                "45%",
-                "60%",
-                "31%",
-                "14%",
-                "",
-                "72",
-                "",
-                "32%",
-                "34%",
-                "7%",
-                "26%",
-                "",
-                "41%",
-                "56%",
-                "",
-                "68%",
-                "25%",
-                "6%",
-                "",
-                "10%",
-                "9%",
-                "13%",
-                "32%",
-                "68%",
-                "",
-                "42%",
-                "58%"
-                ]
-            }
+            # Load P3M profile data from database
+            from app_core.tables import get_tables_for_segment
+            existing_tables = get_tables_for_segment(segment["id"])
+            saved_p3m_profile = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "P3M Segment Profile"), None)
             
-            df_profile = pd.DataFrame(profile_data)
-            st.dataframe(
-                df_profile, 
-                use_container_width=True, 
-                hide_index=True,
-                height=450
-            )
+            if saved_p3m_profile and saved_p3m_profile["filter_json"]:
+                try:
+                    # Load saved CSV data
+                    profile_dict = json.loads(saved_p3m_profile["filter_json"])
+                    df_profile = pd.DataFrame(profile_dict)
+                    
+                    # Calculate index for conditional formatting
+                    def calculate_index(row):
+                        """Calculate index from TBA and Premium Whisky values"""
+                        try:
+                            tba_val = str(row["TBA"]).replace("%", "").strip()
+                            pw_val = str(row["Premium Whisky"]).replace("%", "").strip()
+                            
+                            if not tba_val or not pw_val or tba_val == "" or pw_val == "":
+                                return None
+                            
+                            tba_num = float(tba_val)
+                            pw_num = float(pw_val)
+                            
+                            if tba_num == 0:
+                                return None
+                            
+                            return (pw_num / tba_num) * 100
+                        except:
+                            return None
+                    
+                    # Add index column
+                    df_profile["_index"] = df_profile.apply(calculate_index, axis=1)
+                    
+                    # Function to apply conditional formatting
+                    def color_premium_whisky(row):
+                        """Apply background color to Premium Whisky column based on index value"""
+                        idx_val = row["_index"]
+                        
+                        if idx_val is None:
+                            return [""] * len(row)
+                        
+                        try:
+                            if idx_val > 110:
+                                color = "background-color: #90EE90; font-weight: bold;"
+                            elif idx_val >= 105:
+                                color = "background-color: #D4EDDA; font-weight: bold;"
+                            elif idx_val < 75:
+                                color = "background-color: #FFB380; font-weight: bold;"
+                            else:
+                                color = ""
+                            
+                            # Apply color only to Premium Whisky column (index 2)
+                            return ["", "", color, ""]
+                        except:
+                            return [""] * len(row)
+                    
+                    # Apply styling
+                    styled_df = df_profile.style.apply(color_premium_whisky, axis=1)
+                    
+                    # Display only first 3 columns (hide _index)
+                    display_df = df_profile[["Metric", "TBA", "Premium Whisky"]].copy()
+                    
+                    st.dataframe(
+                        styled_df, 
+                        use_container_width=True, 
+                        hide_index=True,
+                        height=450,
+                        column_order=["Metric", "TBA", "Premium Whisky"]
+                    )
+                except Exception as e:
+                    st.error(f"Error loading P3M profile data: {str(e)}")
+            else:
+                st.info("No P3M Segment Profile data uploaded yet. Please upload CSV in Data Studio.")
     
     # Display images one below the other
     from app_core.media import get_media_for_segment
@@ -1220,10 +1205,15 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
         if result and result['state_details']:
             st.markdown("---")
             
+            # Get states in the order they appear in state_summary (which is already sorted by salience for non-North zones)
+            state_summary_df = result['state_summary']
+            # Filter out the zone row (NORTH, WEST+CSD, etc.) to get just state names
+            states_ordered = [s for s in state_summary_df['State'].tolist() if s not in ['NORTH', 'WEST+CSD', 'EAST', 'SOUTH']]
+            
             # Display states in rows of 4
             states_per_row = 4
-            for row_start in range(0, len(selected_states), states_per_row):
-                row_states = selected_states[row_start:row_start + states_per_row]
+            for row_start in range(0, len(states_ordered), states_per_row):
+                row_states = states_ordered[row_start:row_start + states_per_row]
                 # Always create 4 columns for consistent alignment
                 cols = st.columns(states_per_row)
                 
@@ -1323,26 +1313,88 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     st.markdown("### Segment Trends")
     
     if len(seg_trends_images) > 1:
-        # Tabs for navigation - use custom page names from comment field
-        tab_labels = [media.get("comment", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(seg_trends_images)]
+        # Tabs for navigation - use titles from database
+        tab_labels = [media.get("title", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(seg_trends_images)]
         image_tabs = st.tabs(tab_labels)
         
         for idx, (tab, media) in enumerate(zip(image_tabs, seg_trends_images)):
             with tab:
                 file_path = media.get("file_path")
+                comment = media.get("comment", "")
+                
                 if file_path and os.path.exists(file_path):
-                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                    with col2:
-                        st.image(file_path, use_container_width=True)
+                    # Display image and comment side by side if comment exists
+                    if comment:
+                        col_img, col_comment = st.columns([1, 1])
+                        
+                        with col_img:
+                            st.image(file_path, use_container_width=True)
+                        
+                        with col_comment:
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F8F9FA;
+                                    border-left: 4px solid #f5b400;
+                                    padding: 1.5rem;
+                                    margin: 1.5rem 0 1rem 0;
+                                    border-radius: 8px;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                '>
+                                    <div style='
+                                        font-size: 0.95rem;
+                                        line-height: 1.7;
+                                        color: #2C2C2C;
+                                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                    '>
+                                        {format_comment(comment)}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        # No comment, center the image
+                        col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                        with col2:
+                            st.image(file_path, use_container_width=True)
                 else:
                     st.warning(f"Image {idx+1} not found.")
     elif len(seg_trends_images) == 1:
         # Single image
         file_path = seg_trends_images[0].get("file_path")
+        comment = seg_trends_images[0].get("comment", "")
+        
         if file_path and os.path.exists(file_path):
-            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-            with col2:
-                st.image(file_path, use_container_width=True)
+            # Display image and comment side by side if comment exists
+            if comment:
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    st.markdown(f"""
+                        <div style='
+                            background: #F8F9FA;
+                            border-left: 4px solid #f5b400;
+                            padding: 1.5rem;
+                            margin: 1.5rem 0 1rem 0;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                        '>
+                            <div style='
+                                font-size: 0.95rem;
+                                line-height: 1.7;
+                                color: #2C2C2C;
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            '>
+                                {format_comment(comment)}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                # No comment, center the image
+                col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                with col2:
+                    st.image(file_path, use_container_width=True)
         else:
             st.warning("Image not found.")
     
@@ -1474,23 +1526,134 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
     # Get brand truths views
     brand_view = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
     brand_view_2 = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View 2"), None)
+    brand_profile_table = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Profile Comparison"), None)
     
-    if not brand_view and not brand_view_2:
+    # Render Brand Profile Comparison Table first (if exists)
+    if brand_profile_table:
+        try:
+            profile_config = json.loads(brand_profile_table["filter_json"]) if brand_profile_table["filter_json"] else {}
+            profile_title = profile_config.get("title", "Brand Profile Comparison")
+            profile_data = profile_config.get("data", {})
+            format_column = profile_config.get("format_column", "")
+            base_column = profile_config.get("base_column", "")
+            
+            if profile_title:
+                st.markdown(f"### {profile_title}")
+            
+            if profile_data:
+                df_profile = pd.DataFrame(profile_data)
+                
+                # Calculate index for conditional formatting
+                def calculate_brand_index(row):
+                    """Calculate index comparing format column to base column"""
+                    try:
+                        base_val = str(row[base_column]).replace("%", "").strip()
+                        compare_val = str(row[format_column]).replace("%", "").strip()
+                        
+                        if not base_val or not compare_val or base_val == "" or compare_val == "":
+                            return None
+                        
+                        base_num = float(base_val)
+                        compare_num = float(compare_val)
+                        
+                        if base_num == 0:
+                            return None
+                        
+                        return (compare_num / base_num) * 100
+                    except:
+                        return None
+                
+                # Add index column for calculation only
+                df_profile["_index"] = df_profile.apply(calculate_brand_index, axis=1)
+                
+                # Function to apply conditional formatting
+                def color_brand_column(row):
+                    """Apply background color to format column based on index value"""
+                    idx_val = row["_index"]
+                    
+                    if idx_val is None:
+                        return [""] * len(row)
+                    
+                    try:
+                        if idx_val > 110:
+                            color = "background-color: #90EE90; font-weight: bold;"
+                        elif idx_val >= 105:
+                            color = "background-color: #D4EDDA; font-weight: bold;"
+                        elif idx_val < 75:
+                            color = "background-color: #FFB380; font-weight: bold;"
+                        else:
+                            color = ""
+                        
+                        # Apply color to the format column
+                        format_col_idx = df_profile.columns.get_loc(format_column)
+                        styles = [""] * len(row)
+                        styles[format_col_idx] = color
+                        return styles
+                    except:
+                        return [""] * len(row)
+                
+                # Apply styling to dataframe with _index column
+                styled_df = df_profile.style.apply(color_brand_column, axis=1)
+                
+                # Get list of columns to display (exclude _index)
+                display_columns = [col for col in df_profile.columns if col != "_index"]
+                
+                # Display only the visible columns
+                st.dataframe(
+                    styled_df, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    height=600,
+                    column_order=display_columns
+                )
+                
+                # Delete button for editors
+                if is_editor:
+                    if st.button("Delete Brand Profile Table", key=f"del_brand_profile_{segment['id']}"):
+                        delete_table(brand_profile_table["id"])
+                        st.success("Brand Profile table removed")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+            
+            st.markdown("---")
+        except Exception as e:
+            st.error(f"Error rendering Brand Profile table: {str(e)}")
+    
+    if not brand_view and not brand_view_2 and not brand_profile_table:
         st.info("No content published for Brand Truths yet. Editors can configure it in Data Studio.")
         return
     
-    # Render first section
+    # Render first section (without S&V)
     if brand_view:
-        render_brand_truths_section(brand_view, is_editor, segment, "1")
+        render_brand_truths_section(brand_view, is_editor, segment, "1", show_sv=False)
     
-    # Render second section
+    # Render second section (without S&V)
     if brand_view_2:
         if brand_view:
             st.markdown("---")
-        render_brand_truths_section(brand_view_2, is_editor, segment, "2")
+        render_brand_truths_section(brand_view_2, is_editor, segment, "2", show_sv=False)
+    
+    # Render S&V section at the very end (only from Section 1 config)
+    if brand_view:
+        try:
+            config = json.loads(brand_view["filter_json"]) if brand_view["filter_json"] else {}
+            sv_data = config.get("strengths_vulnerabilities", {})
+            if sv_data and (sv_data.get("strength_content") or sv_data.get("vuln_content")):
+                st.markdown("---")
+                render_sv_section(sv_data)
+            
+            # Render SWOT section after S&V
+            swot_data = config.get("swot_analysis", {})
+            if swot_data and (swot_data.get("strengths") or swot_data.get("weaknesses") or swot_data.get("opportunities") or swot_data.get("threats")):
+                st.markdown("---")
+                render_swot_section(swot_data)
+        except Exception as e:
+            st.error(f"Error rendering S&V/SWOT: {str(e)}")
 
 
-def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict, section_num: str) -> None:
+def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict, section_num: str, show_sv: bool = True) -> None:
     """Render a single brand truths section"""
     
     try:
@@ -1577,7 +1740,7 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
         
         # Delete button for editors
         if is_editor:
-            if st.button("Delete Brand Truths", key=f"del_brand_truths_{segment['id']}"):
+            if st.button("Delete Brand Truths", key=f"del_brand_truths_{segment['id']}_{section_num}"):
                 delete_table(brand_view["id"])
                 st.success("Brand Truths removed")
                 if hasattr(st, "rerun"):
@@ -1586,6 +1749,328 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
                     st.experimental_rerun()
     except Exception as e:
         st.error(f"Error rendering Brand Truths: {str(e)}")
+
+
+def render_sv_section(sv_data: Dict) -> None:
+    """Render Strengths & Vulnerabilities section"""
+    # Main title
+    sv_main_title = sv_data.get("main_title", "PRI Strengths & Vulnerabilities:")
+    st.markdown(f"### {sv_main_title}")
+    
+    # Two columns for strengths and vulnerabilities
+    col_strength, col_vuln = st.columns(2)
+    
+    with col_strength:
+        strength_title = sv_data.get("strength_title", "Brand Strengths")
+        strength_content = sv_data.get("strength_content", "")
+        
+        if strength_content:
+            st.markdown(f"""
+                <div style='
+                    position: relative;
+                    margin: 1rem 0;
+                '>
+                    <svg width="100%" height="100%" style="position: absolute; top: 0; left: 0; pointer-events: none;" preserveAspectRatio="none">
+                        <polygon points="0,0 100%,0 100%,85% 50%,100% 0,85%" 
+                            fill="url(#greenGrad)" 
+                            stroke="#4CAF50" 
+                            stroke-width="3" 
+                            stroke-dasharray="10,5"
+                            vector-effect="non-scaling-stroke"/>
+                        <defs>
+                            <linearGradient id="greenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#E8F5E9;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#C8E6C9;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div style='
+                        padding: 2rem 2.5rem 4rem 2.5rem;
+                        position: relative;
+                        z-index: 1;
+                    '>
+                        <h4 style='
+                            color: #2E7D32;
+                            margin: 0 0 1.5rem 0;
+                            font-size: 1.4rem;
+                            font-weight: 700;
+                            text-align: center;
+                        '>{strength_title}</h4>
+                        <div style='
+                            font-size: 0.95rem;
+                            line-height: 1.8;
+                            color: #1B5E20;
+                        '>
+                            {format_comment(strength_content)}
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    with col_vuln:
+        vuln_title = sv_data.get("vuln_title", "Brand Vulnerabilities")
+        vuln_content = sv_data.get("vuln_content", "")
+        
+        if vuln_content:
+            st.markdown(f"""
+                <div style='
+                    position: relative;
+                    margin: 1rem 0;
+                '>
+                    <svg width="100%" height="100%" style="position: absolute; top: 0; left: 0; pointer-events: none;" preserveAspectRatio="none">
+                        <polygon points="0,0 100%,0 100%,85% 50%,100% 0,85%" 
+                            fill="url(#pinkGrad)" 
+                            stroke="#E91E63" 
+                            stroke-width="3" 
+                            stroke-dasharray="10,5"
+                            vector-effect="non-scaling-stroke"/>
+                        <defs>
+                            <linearGradient id="pinkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#FCE4EC;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#F8BBD0;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div style='
+                        padding: 2rem 2.5rem 4rem 2.5rem;
+                        position: relative;
+                        z-index: 1;
+                    '>
+                        <h4 style='
+                            color: #C2185B;
+                            margin: 0 0 1.5rem 0;
+                            font-size: 1.4rem;
+                            font-weight: 700;
+                            text-align: center;
+                        '>{vuln_title}</h4>
+                        <div style='
+                            font-size: 0.95rem;
+                            line-height: 1.8;
+                            color: #880E4F;
+                        '>
+                            {format_comment(vuln_content)}
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+
+
+def render_swot_section(swot_data: Dict) -> None:
+    """Render SWOT Analysis section with 4 quadrants"""
+    # Main title
+    swot_main_title = swot_data.get("main_title", "PRI Portfolio SWOT")
+    st.markdown(f"### {swot_main_title}")
+    
+    # Container for SWOT with centered letters
+    st.markdown("""
+        <div style='position: relative; padding: 2rem 0;'>
+    """, unsafe_allow_html=True)
+    
+    # Top row: Strengths and Weaknesses
+    col_s, col_w = st.columns(2)
+    
+    with col_s:
+        strengths = swot_data.get("strengths", "")
+        if strengths:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+                    border: 3px solid #2196F3;
+                    border-radius: 15px;
+                    padding: 2rem;
+                    min-height: 300px;
+                    box-shadow: 0 4px 6px rgba(33, 150, 243, 0.2);
+                    position: relative;
+                '>
+                    <div style='
+                        position: absolute;
+                        bottom: 15px;
+                        right: 15px;
+                        background: #2196F3;
+                        color: white;
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 1.8rem;
+                        font-weight: 900;
+                        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                        z-index: 10;
+                    '>S</div>
+                    <div style='
+                        text-align: center;
+                        font-size: 1.5rem;
+                        font-weight: 700;
+                        color: #1565C0;
+                        margin-bottom: 1.5rem;
+                        letter-spacing: 1px;
+                    '>STRENGTHS</div>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #0D47A1;
+                    '>
+                        {format_comment(strengths)}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    with col_w:
+        weaknesses = swot_data.get("weaknesses", "")
+        if weaknesses:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+                    border: 3px solid #FF9800;
+                    border-radius: 15px;
+                    padding: 2rem;
+                    min-height: 300px;
+                    box-shadow: 0 4px 6px rgba(255, 152, 0, 0.2);
+                    position: relative;
+                '>
+                    <div style='
+                        position: absolute;
+                        bottom: 15px;
+                        left: 15px;
+                        background: #FF9800;
+                        color: white;
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 1.8rem;
+                        font-weight: 900;
+                        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                        z-index: 10;
+                    '>W</div>
+                    <div style='
+                        text-align: center;
+                        font-size: 1.5rem;
+                        font-weight: 700;
+                        color: #E65100;
+                        margin-bottom: 1.5rem;
+                        letter-spacing: 1px;
+                    '>WEAKNESS</div>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #BF360C;
+                    '>
+                        {format_comment(weaknesses)}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+    
+    # Bottom row: Opportunities and Threats
+    col_o, col_t = st.columns(2)
+    
+    with col_o:
+        opportunities = swot_data.get("opportunities", "")
+        if opportunities:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+                    border: 3px solid #4CAF50;
+                    border-radius: 15px;
+                    padding: 2rem;
+                    min-height: 300px;
+                    box-shadow: 0 4px 6px rgba(76, 175, 80, 0.2);
+                    position: relative;
+                '>
+                    <div style='
+                        position: absolute;
+                        bottom: 15px;
+                        right: 15px;
+                        background: #4CAF50;
+                        color: white;
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 1.8rem;
+                        font-weight: 900;
+                        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                        z-index: 10;
+                    '>O</div>
+                    <div style='
+                        text-align: center;
+                        font-size: 1.5rem;
+                        font-weight: 700;
+                        color: #2E7D32;
+                        margin-bottom: 1.5rem;
+                        letter-spacing: 1px;
+                    '>OPPORTUNITIES</div>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #1B5E20;
+                    '>
+                        {format_comment(opportunities)}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    with col_t:
+        threats = swot_data.get("threats", "")
+        if threats:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+                    border: 3px solid #F44336;
+                    border-radius: 15px;
+                    padding: 2rem;
+                    min-height: 300px;
+                    box-shadow: 0 4px 6px rgba(244, 67, 54, 0.2);
+                    position: relative;
+                '>
+                    <div style='
+                        position: absolute;
+                        bottom: 15px;
+                        left: 15px;
+                        background: #F44336;
+                        color: white;
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 1.8rem;
+                        font-weight: 900;
+                        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                        z-index: 10;
+                    '>T</div>
+                    <div style='
+                        text-align: center;
+                        font-size: 1.5rem;
+                        font-weight: 700;
+                        color: #C62828;
+                        margin-bottom: 1.5rem;
+                        letter-spacing: 1px;
+                    '>THREATS</div>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #B71C1C;
+                    '>
+                        {format_comment(threats)}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+
 
 
 def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
@@ -1743,8 +2228,119 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
 
 
 def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
-    """Render Brand Trends - JTBD has been moved to Battlegrounds"""
-    st.info("The JTBD (Jobs To Be Done) section has been moved to the Battlegrounds tab.")
+    """Render Brand Trends - Multiple Custom Trends Views"""
+    # Get all custom trends views (View 1, View 2, etc.)
+    custom_trends_views = [t for t in tables if t["section"] == "Brand Trends" and t["name"].startswith("Custom Trends View")]
+    
+    if not custom_trends_views:
+        st.info("No content published for Brand Trends yet. Editors can configure it in Data Studio.")
+        return
+    
+    # Sort views by number (View 1, View 2, etc.)
+    custom_trends_views.sort(key=lambda x: int(x["name"].replace("Custom Trends View ", "")) if x["name"].replace("Custom Trends View ", "").isdigit() else 0)
+    
+    # Render each view
+    for view_idx, view in enumerate(custom_trends_views):
+        if view_idx > 0:
+            st.markdown("---")
+            st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+        
+        try:
+            config = json.loads(view["filter_json"]) if view["filter_json"] else {}
+            title = config.get("title", "")
+            description = config.get("description", "")
+            sections = config.get("sections", [])
+            
+            if title:
+                st.markdown(f"### {title}")
+            
+            if description:
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                        border: 1px solid #CCCCCC;
+                        padding: 1rem 1.5rem;
+                        margin: 1rem 0;
+                        border-radius: 8px;
+                        text-align: center;
+                    '>
+                        <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                            {format_comment(description)}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Display sections
+            for section in sections:
+                if section.get("left") or section.get("right"):
+                    cols = st.columns([0.3, 3, 3])
+                    
+                    with cols[0]:
+                        st.markdown(f"""
+                            <div style='
+                                width: 60px;
+                                height: 60px;
+                                border-radius: 50%;
+                                background-color: #FFFFFF;
+                                border: 3px solid #666666;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 1.5rem;
+                                font-weight: bold;
+                                color: #666666;
+                                margin-top: 1rem;
+                            '>
+                                {section.get("number", "")}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with cols[1]:
+                        if section.get("left"):
+                            st.markdown(f"""
+                                <div style='
+                                    background: #E3F2FD;
+                                    border: 1px solid #90CAF9;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 100px;
+                                '>
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {format_comment(section["left"])}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with cols[2]:
+                        if section.get("right"):
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F3E5F5;
+                                    border: 1px solid #CE93D8;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 100px;
+                                '>
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {format_comment(section["right"])}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+            
+            # Delete button for editors (for each view)
+            if is_editor:
+                view_name = view["name"]
+                if st.button(f"Delete {view_name}", key=f"del_brand_trends_{view['id']}_{segment['id']}"):
+                    delete_table(view["id"])
+                    st.success(f"{view_name} removed")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Error rendering {view['name']}: {str(e)}")
 
 
 
@@ -1950,29 +2546,245 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
     with col_insights:
         st.markdown("### Strategic Insights")
         
-        # Show additional columns (SOG, 5Cs, Imagery) - these apply to ALL states
-        additional_cols = tab_config.get("additional_columns", [])
+        # Add scrollable container for insights
+        st.markdown("""
+            <style>
+            .insights-scroll-container {
+                max-height: 800px;
+                overflow-y: auto;
+                padding-right: 0.5rem;
+            }
+            .insights-scroll-container::-webkit-scrollbar {
+                width: 8px;
+            }
+            .insights-scroll-container::-webkit-scrollbar-track {
+                background: #F0F0F0;
+                border-radius: 4px;
+            }
+            .insights-scroll-container::-webkit-scrollbar-thumb {
+                background: #BDBDBD;
+                border-radius: 4px;
+            }
+            .insights-scroll-container::-webkit-scrollbar-thumb:hover {
+                background: #9E9E9E;
+            }
+            </style>
+        """, unsafe_allow_html=True)
         
-        for idx, col_config in enumerate(additional_cols[:3]):
-            col_name = col_config.get("name", ["SOG", "5Cs", "Imagery"][idx])
-            col_comment = col_config.get("comment", "")
+        # Get state-specific columns configuration
+        state_columns = tab_config.get("state_columns", {})
+        
+        if state_columns:
+            # Start scrollable container
+            st.markdown('<div class="insights-scroll-container">', unsafe_allow_html=True)
             
-            if col_comment:
-                st.markdown(f"""
-                    <div style='background-color: #E8EAF6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border-left: 4px solid #3F51B5;'>
-                        <h4 style='margin: 0 0 0.5rem 0; color: #3F51B5;'>{col_name}</h4>
-                        <div style='font-size: 0.9rem; color: #37474F;'>
-                            {format_comment(col_comment)}
+            # Display insights for each state
+            for idx, state in enumerate(selected_states):
+                state_data = state_columns.get(state, {})
+                
+                if any(state_data.values()):  # If any content exists for this state
+                    # State header - clean and professional
+                    st.markdown(f"""
+                        <div style='
+                            background-color: #F8F9FA;
+                            padding: 0.9rem 1.5rem;
+                            border-radius: 6px;
+                            margin: 1.5rem 0 1rem 0;
+                            border-left: 5px solid #3498DB;
+                            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                        '>
+                            <h4 style='
+                                margin: 0;
+                                color: #2C3E50;
+                                font-size: 1.1rem;
+                                font-weight: 600;
+                                letter-spacing: 0.3px;
+                            '>{state}</h4>
                         </div>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                    <div style='background-color: #F5F5F5; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border-left: 4px solid #BDBDBD;'>
-                        <h4 style='margin: 0; color: #757575;'>{col_name}</h4>
-                        <p style='margin: 0.5rem 0 0 0; font-size: 0.85rem; color: #9E9E9E; font-style: italic;'>No insights added</p>
-                    </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+                    
+                    # Create 3 columns for SOG, 5Cs, Imagery
+                    col_sog, col_5cs, col_imagery = st.columns(3)
+                    
+                    with col_sog:
+                        sog_content = state_data.get("SOG", "")
+                        if sog_content:
+                            st.markdown(f"""
+                                <div style='
+                                    background-color: #FFFFFF;
+                                    padding: 1.2rem;
+                                    border-radius: 4px;
+                                    border: 1px solid #E8E8E8;
+                                    border-top: 3px solid #27AE60;
+                                    height: 200px;
+                                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+                                    display: flex;
+                                    flex-direction: column;
+                                '>
+                                    <h5 style='
+                                        margin: 0 0 0.8rem 0;
+                                        color: #27AE60;
+                                        font-size: 0.9rem;
+                                        font-weight: 700;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.8px;
+                                    '>SOG</h5>
+                                    <div style='
+                                        font-size: 0.85rem;
+                                        color: #4A4A4A;
+                                        line-height: 1.7;
+                                        overflow-y: auto;
+                                        flex: 1;
+                                        padding-right: 0.5rem;
+                                    '>
+                                        {format_comment(sog_content)}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                                <div style='
+                                    background-color: #F8F9FA;
+                                    padding: 1.2rem;
+                                    border-radius: 4px;
+                                    border: 1px solid #E8E8E8;
+                                    border-top: 3px solid #D0D0D0;
+                                    height: 200px;
+                                '>
+                                    <h5 style='
+                                        margin: 0 0 0.8rem 0;
+                                        color: #A0A0A0;
+                                        font-size: 0.9rem;
+                                        font-weight: 700;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.8px;
+                                    '>SOG</h5>
+                                    <p style='margin: 0; font-size: 0.8rem; color: #B0B0B0; font-style: italic;'>No data available</p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with col_5cs:
+                        fivecs_content = state_data.get("5Cs", "")
+                        if fivecs_content:
+                            st.markdown(f"""
+                                <div style='
+                                    background-color: #FFFFFF;
+                                    padding: 1.2rem;
+                                    border-radius: 4px;
+                                    border: 1px solid #E8E8E8;
+                                    border-top: 3px solid #3498DB;
+                                    height: 200px;
+                                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+                                    display: flex;
+                                    flex-direction: column;
+                                '>
+                                    <h5 style='
+                                        margin: 0 0 0.8rem 0;
+                                        color: #3498DB;
+                                        font-size: 0.9rem;
+                                        font-weight: 700;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.8px;
+                                    '>5Cs</h5>
+                                    <div style='
+                                        font-size: 0.85rem;
+                                        color: #4A4A4A;
+                                        line-height: 1.7;
+                                        overflow-y: auto;
+                                        flex: 1;
+                                        padding-right: 0.5rem;
+                                    '>
+                                        {format_comment(fivecs_content)}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                                <div style='
+                                    background-color: #F8F9FA;
+                                    padding: 1.2rem;
+                                    border-radius: 4px;
+                                    border: 1px solid #E8E8E8;
+                                    border-top: 3px solid #D0D0D0;
+                                    height: 200px;
+                                '>
+                                    <h5 style='
+                                        margin: 0 0 0.8rem 0;
+                                        color: #A0A0A0;
+                                        font-size: 0.9rem;
+                                        font-weight: 700;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.8px;
+                                    '>5Cs</h5>
+                                    <p style='margin: 0; font-size: 0.8rem; color: #B0B0B0; font-style: italic;'>No data available</p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with col_imagery:
+                        imagery_content = state_data.get("Imagery", "")
+                        if imagery_content:
+                            st.markdown(f"""
+                                <div style='
+                                    background-color: #FFFFFF;
+                                    padding: 1.2rem;
+                                    border-radius: 4px;
+                                    border: 1px solid #E8E8E8;
+                                    border-top: 3px solid #E67E22;
+                                    height: 200px;
+                                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+                                    display: flex;
+                                    flex-direction: column;
+                                '>
+                                    <h5 style='
+                                        margin: 0 0 0.8rem 0;
+                                        color: #E67E22;
+                                        font-size: 0.9rem;
+                                        font-weight: 700;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.8px;
+                                    '>Imagery</h5>
+                                    <div style='
+                                        font-size: 0.85rem;
+                                        color: #4A4A4A;
+                                        line-height: 1.7;
+                                        overflow-y: auto;
+                                        flex: 1;
+                                        padding-right: 0.5rem;
+                                    '>
+                                        {format_comment(imagery_content)}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                                <div style='
+                                    background-color: #F8F9FA;
+                                    padding: 1.2rem;
+                                    border-radius: 4px;
+                                    border: 1px solid #E8E8E8;
+                                    border-top: 3px solid #D0D0D0;
+                                    height: 200px;
+                                '>
+                                    <h5 style='
+                                        margin: 0 0 0.8rem 0;
+                                        color: #A0A0A0;
+                                        font-size: 0.9rem;
+                                        font-weight: 700;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.8px;
+                                    '>Imagery</h5>
+                                    <p style='margin: 0; font-size: 0.8rem; color: #B0B0B0; font-style: italic;'>No data available</p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Add spacing between states
+                    if idx < len(selected_states) - 1:
+                        st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+            
+            # Close scrollable container
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("No strategic insights configured for this tab.")
 
 
 def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
@@ -1991,13 +2803,12 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
             normalized_state = normalize_state_name(state)
             state_to_tab[normalized_state] = {"tab_index": idx, "tab_name": tab_name, "original_name": state}
     
-    # Create color mapping
-    tab_colors = {
-        0: "#4CAF50",  # Green - Advantaged
-        1: "#FFC107",  # Yellow - Watch out
-        2: "#F44336",  # Red - Challenged
-        -1: "#E0E0E0",  # Gray - Unassigned
-    }
+    # Create color mapping from tab configs (use custom colors if available)
+    default_colors = ["#4CAF50", "#FFC107", "#F44336"]  # Green, Yellow, Red
+    tab_colors = {}
+    for idx, tab in enumerate(tabs_config):
+        tab_colors[idx] = tab.get("color", default_colors[idx] if idx < len(default_colors) else "#808080")
+    tab_colors[-1] = "#E0E0E0"  # Gray - Unassigned
     
     try:
         # Fetch GeoJSON data
@@ -2089,8 +2900,19 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
         with states_col:
             st.markdown("### State Assignments")
             
+            # Helper function to lighten color for background
+            def lighten_color(hex_color, amount=0.9):
+                """Lighten a hex color by mixing with white"""
+                hex_color = hex_color.lstrip('#')
+                r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+                r = int(r + (255 - r) * amount)
+                g = int(g + (255 - g) * amount)
+                b = int(b + (255 - b) * amount)
+                return f'#{r:02x}{g:02x}{b:02x}'
+            
             # Tab 1
             tab_name = tabs_config[0].get("name", "Tab 1") if len(tabs_config) > 0 else "Tab 1"
+            tab_bg_color = lighten_color(tab_colors[0])
             st.markdown(f"""
                 <div style='background-color: {tab_colors[0]}; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
                     <h4 style='color: white; margin: 0;'>{tab_name}</h4>
@@ -2102,7 +2924,7 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
                 # Display states in 2 columns
                 states_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.5rem;'>"
                 for state in sorted(tab_0_states):
-                    states_html += f"<div style='background-color: #E8F5E9; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[0]};'>• {state}</div>"
+                    states_html += f"<div style='background-color: {tab_bg_color}; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[0]};'>• {state}</div>"
                 states_html += "</div>"
                 st.markdown(states_html, unsafe_allow_html=True)
             else:
@@ -2112,6 +2934,7 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
             
             # Tab 2
             tab_name = tabs_config[1].get("name", "Tab 2") if len(tabs_config) > 1 else "Tab 2"
+            tab_bg_color = lighten_color(tab_colors[1])
             st.markdown(f"""
                 <div style='background-color: {tab_colors[1]}; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
                     <h4 style='color: white; margin: 0;'>{tab_name}</h4>
@@ -2123,7 +2946,7 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
                 # Display states in 2 columns
                 states_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.5rem;'>"
                 for state in sorted(tab_1_states):
-                    states_html += f"<div style='background-color: #FFF8E1; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[1]};'>• {state}</div>"
+                    states_html += f"<div style='background-color: {tab_bg_color}; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[1]};'>• {state}</div>"
                 states_html += "</div>"
                 st.markdown(states_html, unsafe_allow_html=True)
             else:
@@ -2133,6 +2956,7 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
             
             # Tab 3
             tab_name = tabs_config[2].get("name", "Tab 3") if len(tabs_config) > 2 else "Tab 3"
+            tab_bg_color = lighten_color(tab_colors[2])
             st.markdown(f"""
                 <div style='background-color: {tab_colors[2]}; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
                     <h4 style='color: white; margin: 0;'>{tab_name}</h4>
@@ -2144,7 +2968,7 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
                 # Display states in 2 columns
                 states_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.5rem;'>"
                 for state in sorted(tab_2_states):
-                    states_html += f"<div style='background-color: #FFEBEE; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[2]};'>• {state}</div>"
+                    states_html += f"<div style='background-color: {tab_bg_color}; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[2]};'>• {state}</div>"
                 states_html += "</div>"
                 st.markdown(states_html, unsafe_allow_html=True)
             else:
@@ -2199,9 +3023,14 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                         image_1 = img
                     elif f"Tab {idx+1} - Image 2" in comment:
                         image_2 = img
-                # Display Image 1 (Top) - centered and smaller like Segment Trends
+                # Display Image 1 (Top) with title and comment
                 if image_1:
                     file_path = image_1.get("file_path")
+                    title = image_1.get("title", "")
+                    # Extract actual comment (remove the "Tab X - Image 1" prefix)
+                    raw_comment = image_1.get("comment", "")
+                    comment = raw_comment.replace(f"Tab {idx+1} - Image 1", "").strip()
+                    
                     if file_path and os.path.exists(file_path):
                         if str(file_path).lower().endswith((".ppt", ".pptx")):
                             st.caption("📄 PPT File - Download to view")
@@ -2213,10 +3042,42 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                                     key=f"dl_bg_img1_{segment['id']}_{idx}",
                                 )
                         else:
-                            # Center image with columns like Segment Trends
-                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                            with col2:
-                                st.image(file_path, use_container_width=True)
+                            # Show title if exists
+                            if title:
+                                st.markdown(f"### {title}")
+                            
+                            # Display image and comment side by side if comment exists
+                            if comment:
+                                col_img, col_comment = st.columns([1, 1])
+                                
+                                with col_img:
+                                    st.image(file_path, use_container_width=True)
+                                
+                                with col_comment:
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F8F9FA;
+                                            border-left: 4px solid #f5b400;
+                                            padding: 1.5rem;
+                                            margin: 1.5rem 0 1rem 0;
+                                            border-radius: 8px;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                        '>
+                                            <div style='
+                                                font-size: 0.95rem;
+                                                line-height: 1.7;
+                                                color: #2C2C2C;
+                                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                            '>
+                                                {format_comment(comment)}
+                                            </div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                # No comment, center the image
+                                col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                                with col2:
+                                    st.image(file_path, use_container_width=True)
                     else:
                         st.warning("Image 1 file not found")
                 
@@ -2228,9 +3089,14 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                 
                 st.markdown("---")
                 
-                # Display Image 2 (Bottom) - centered and smaller like Segment Trends
+                # Display Image 2 (Bottom) with title and comment
                 if image_2:
                     file_path = image_2.get("file_path")
+                    title = image_2.get("title", "")
+                    # Extract actual comment (remove the "Tab X - Image 2" prefix)
+                    raw_comment = image_2.get("comment", "")
+                    comment = raw_comment.replace(f"Tab {idx+1} - Image 2", "").strip()
+                    
                     if file_path and os.path.exists(file_path):
                         if str(file_path).lower().endswith((".ppt", ".pptx")):
                             st.caption("📄 PPT File - Download to view")
@@ -2242,10 +3108,42 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                                     key=f"dl_bg_img2_{segment['id']}_{idx}",
                                 )
                         else:
-                            # Center image with columns like Segment Trends
-                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                            with col2:
-                                st.image(file_path, use_container_width=True)
+                            # Show title if exists
+                            if title:
+                                st.markdown(f"### {title}")
+                            
+                            # Display image and comment side by side if comment exists
+                            if comment:
+                                col_img, col_comment = st.columns([1, 1])
+                                
+                                with col_img:
+                                    st.image(file_path, use_container_width=True)
+                                
+                                with col_comment:
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F8F9FA;
+                                            border-left: 4px solid #f5b400;
+                                            padding: 1.5rem;
+                                            margin: 1.5rem 0 1rem 0;
+                                            border-radius: 8px;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                        '>
+                                            <div style='
+                                                font-size: 0.95rem;
+                                                line-height: 1.7;
+                                                color: #2C2C2C;
+                                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                            '>
+                                                {format_comment(comment)}
+                                            </div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                # No comment, center the image
+                                col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                                with col2:
+                                    st.image(file_path, use_container_width=True)
                     else:
                         st.warning("Image 2 file not found")
         

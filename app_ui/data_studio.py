@@ -232,7 +232,17 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         preview_pivot = create_manufacturing_pivot(df_filtered, selected_years_pivot)
         if preview_pivot is not None:
             st.markdown("**Preview:**")
-            st.dataframe(preview_pivot, use_container_width=True, hide_index=True)
+            
+            # Apply styling to highlight Segment Total row
+            def highlight_segment_total(row):
+                """Highlight the Segment Total row with golden background"""
+                mfg_com = preview_pivot.loc[row.name, 'Mfg Com']
+                if mfg_com == "Segment Total":
+                    return ['background-color: #FFF3CD; font-weight: bold; border-top: 3px solid #f5b400; border-bottom: 3px solid #f5b400; color: #856404'] * len(row)
+                return [''] * len(row)
+            
+            styled_preview = preview_pivot.style.apply(highlight_segment_total, axis=1)
+            st.dataframe(styled_preview, use_container_width=True, hide_index=True)
     
     # Comment box AFTER preview - pre-populated with saved value
     pivot_comment = st.text_area(
@@ -1148,108 +1158,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             st.info("Comment will appear here")
     
     with col2:
-        st.markdown("**P3M Segment Profile Data:**")
-        # Expander with profile data
-        with st.expander("View Profile Data", expanded=False):
-            # Hardcoded data table
-            profile_data = {
-                "Metric": [
-                "P3M Seg Profile",
-                "LDA-24",
-                "25-30",
-                "LDA-35",
-                "36-45",
-                "46+",
-                "",
-                "NCCS A",
-                "",
-                "Single",
-                "Married w/ Kids",
-                "Married w/o Kids",
-                "Single Parent",
-                "",
-                "Business Owners",
-                "Salaried",
-                "",
-                "High",
-                "Medium",
-                "Low",
-                "",
-                "NE: Directs Entrant",
-                "NE: From Beer",
-                "NE: From Whites",
-                "NE: NETT",
-                "Non-Entrant",
-                "",
-                "Core %",
-                "Repertoire %"
-                ],
-                "TBA": [
-                "",
-                "8%",
-                "43%",
-                "56%",
-                "32%",
-                "17%",
-                "",
-                "68",
-                "",
-                "28%",
-                "41%",
-                "9%",
-                "21%",
-                "",
-                "40%",
-                "56%",
-                "",
-                "63%",
-                "28%",
-                "9%",
-                "",
-                "9%",
-                "8%",
-                "10%",
-                "27%",
-                "73%",
-                "",
-                "",
-                ""
-                ],
-                "Premium Whisky": [
-                "",
-                "10%",
-                "45%",
-                "60%",
-                "31%",
-                "14%",
-                "",
-                "72",
-                "",
-                "32%",
-                "34%",
-                "7%",
-                "26%",
-                "",
-                "41%",
-                "56%",
-                "",
-                "68%",
-                "25%",
-                "6%",
-                "",
-                "10%",
-                "9%",
-                "13%",
-                "32%",
-                "68%",
-                "",
-                "42%",
-                "58%"
-                ]
-            }
-            
-            df_profile = pd.DataFrame(profile_data)
-            st.dataframe(df_profile, use_container_width=True, hide_index=True, height=450)
+        st.info("P3M Segment Profile table will appear here after uploading CSV")
     
     # Save button for title, comment, and profile data
     if st.button("Save Segment Insights to Dashboard", key=f"save_seg_insights_{segment['id']}"):
@@ -1275,6 +1184,142 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 comment=segment_comment
             )
             st.success("Segment Insights saved to dashboard!")
+    
+    # P3M Segment Profile CSV Upload - SEPARATE SECTION
+    st.markdown("---")
+    st.markdown("### P3M Segment Profile Data")
+    st.caption("Upload a CSV file with 3 columns: Metric, TBA, Premium Whisky")
+    
+    # Load existing P3M profile data
+    saved_p3m_profile = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "P3M Segment Profile"), None)
+    
+    if saved_p3m_profile and saved_p3m_profile["filter_json"]:
+        st.info("✅ P3M Segment Profile data already uploaded. Upload a new CSV to replace it.")
+        with st.expander("View Current Data", expanded=False):
+            try:
+                saved_profile_data = json.loads(saved_p3m_profile["filter_json"])
+                df_saved = pd.DataFrame(saved_profile_data)
+                st.dataframe(df_saved, use_container_width=True, hide_index=True)
+            except:
+                st.error("Error loading saved data")
+    
+    # CSV file uploader
+    uploaded_csv = st.file_uploader(
+        "Upload CSV File",
+        type=["csv"],
+        key=f"p3m_profile_csv_{segment['id']}",
+        help="CSV should have 3 columns: Metric, TBA, Premium Whisky"
+    )
+    
+    if uploaded_csv:
+        try:
+            # Read CSV
+            df_csv = pd.read_csv(uploaded_csv)
+            
+            # Validate columns
+            if len(df_csv.columns) < 3:
+                st.error("CSV must have at least 3 columns: Metric, TBA, Premium Whisky")
+            else:
+                # Use first 3 columns
+                df_csv = df_csv.iloc[:, :3]
+                df_csv.columns = ["Metric", "TBA", "Premium Whisky"]
+                
+                st.success(f"✅ CSV loaded successfully! {len(df_csv)} rows found.")
+                
+                # Calculate index for preview
+                def calculate_index(row):
+                    """Calculate index from TBA and Premium Whisky values"""
+                    try:
+                        tba_val = str(row["TBA"]).replace("%", "").strip()
+                        pw_val = str(row["Premium Whisky"]).replace("%", "").strip()
+                        
+                        if not tba_val or not pw_val or tba_val == "" or pw_val == "":
+                            return None
+                        
+                        tba_num = float(tba_val)
+                        pw_num = float(pw_val)
+                        
+                        if tba_num == 0:
+                            return None
+                        
+                        return (pw_num / tba_num) * 100
+                    except:
+                        return None
+                
+                # Add index column for preview
+                df_csv["_index"] = df_csv.apply(calculate_index, axis=1)
+                
+                # Preview with conditional formatting
+                st.markdown("**Preview with Conditional Formatting:**")
+                
+                def color_premium_whisky_preview(row):
+                    """Apply background color to Premium Whisky column based on index"""
+                    idx_val = row["_index"]
+                    
+                    if idx_val is None:
+                        return [""] * len(row)
+                    
+                    try:
+                        if idx_val > 110:
+                            color = "background-color: #90EE90; font-weight: bold;"
+                        elif idx_val >= 105:
+                            color = "background-color: #D4EDDA; font-weight: bold;"
+                        elif idx_val < 75:
+                            color = "background-color: #FFB380; font-weight: bold;"
+                        else:
+                            color = ""
+                        
+                        # Apply color only to Premium Whisky column (index 2)
+                        return ["", "", color, ""]
+                    except:
+                        return [""] * len(row)
+                
+                # Show preview without _index column
+                df_preview = df_csv[["Metric", "TBA", "Premium Whisky"]].copy()
+                styled_preview = df_csv.style.apply(color_premium_whisky_preview, axis=1)
+                
+                # Display only first 3 columns in preview
+                st.dataframe(
+                    styled_preview,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=400,
+                    column_config={
+                        "_index": None  # Hide index column
+                    }
+                )
+                
+                st.markdown("""
+                    **Color Legend:**
+                    - 🟢 Dark Green: Index > 110 (Strong over-indexing)
+                    - 🟢 Light Green: Index 105-110 (Slight over-indexing)
+                    - 🟠 Orange: Index < 75 (Under-indexing)
+                    - ⚪ White: Index 75-105 (Neutral)
+                """)
+                
+                # Save button for P3M profile
+                if st.button("Save P3M Segment Profile", key=f"save_p3m_profile_{segment['id']}"):
+                    # Delete existing
+                    delete_tables_for_section(segment["id"], "Segment Truths", "P3M Segment Profile")
+                    
+                    # Save only the 3 columns (without _index)
+                    profile_dict = df_preview.to_dict('list')
+                    
+                    save_table(
+                        name="P3M Segment Profile",
+                        dataset_id=dataset_id,
+                        columns=["Config"],
+                        created_by=current_user["username"],
+                        segment_id=segment["id"],
+                        section="Segment Truths",
+                        filter_json=json.dumps(profile_dict),
+                        comment=""
+                    )
+                    st.success("P3M Segment Profile saved to dashboard!")
+        
+        except Exception as e:
+            st.error(f"Error reading CSV: {str(e)}")
+            st.info("Please ensure your CSV has 3 columns: Metric, TBA, Premium Whisky")
     
     # Image uploads section - SEPARATE
     st.markdown("---")
@@ -1873,7 +1918,12 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
     
     # Select only required columns (Mfg Com + growth columns + CAGR)
     final_columns = [col for col in columns_to_keep if col in pivot.columns]
-    pivot_display = pivot[final_columns]
+    pivot_display = pivot[final_columns].copy()
+    
+    # Format growth and CAGR columns to show % symbol
+    for col in pivot_display.columns:
+        if 'Growth %' in col or 'CAGR %' in col:
+            pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
     
     return pivot_display
 
@@ -1933,7 +1983,8 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
         "BTM": f"{north_zone_btm:+.1f}%"
     })
     
-    # Then individual states
+    # Then individual states - collect with numeric salience for sorting
+    state_rows_with_sal = []
     for state in selected_states:
         a25_ns = state_a25.get(state, 0)
         a24_ns = state_a24.get(state, 0)
@@ -1947,12 +1998,23 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
         # BTM (State vs AI)
         btm = state_growth - ai_growth
         
-        summary_rows.append({
+        state_rows_with_sal.append({
             "State": state,
             "A25 Sal % Contribution to AI": f"{sal_contribution:.0f}%",
             "A25 Gr": f"{state_growth:+.1f}%",
-            "BTM": f"{btm:+.1f}%"
+            "BTM": f"{btm:+.1f}%",
+            "_sal_numeric": sal_contribution  # Store numeric value for sorting
         })
+    
+    # Sort states by salience (highest first)
+    state_rows_with_sal.sort(key=lambda x: x["_sal_numeric"], reverse=True)
+    
+    # Remove the numeric salience field before creating DataFrame
+    for row in state_rows_with_sal:
+        row.pop("_sal_numeric", None)
+    
+    # Combine zone row + sorted state rows
+    summary_rows.extend(state_rows_with_sal)
     
     state_summary = pd.DataFrame(summary_rows)
     
@@ -2087,13 +2149,11 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     existing_media = get_media_for_segment(segment["id"])
     seg_trends_media = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
     
+    # Sort by ID to maintain upload order
+    seg_trends_media = sorted(seg_trends_media, key=lambda x: x.get("id", 0))
+    
     if seg_trends_media:
         st.info(f"✅ {len(seg_trends_media)} image(s) already uploaded. Upload new images to replace them.")
-        with st.expander("View Current Images", expanded=False):
-            for media in seg_trends_media:
-                file_path = media.get("file_path")
-                if file_path and os.path.exists(file_path):
-                    st.image(file_path, caption=media.get("comment", "Page"), use_container_width=True)
     
     uploaded_images = st.file_uploader(
         "Upload Images (multiple allowed)",
@@ -2102,33 +2162,51 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         key=f"seg_trends_images_{segment['id']}"
     )
     
-    # Page names input for each uploaded image
-    page_names = []
+    # Title and comment inputs for each uploaded image
+    image_configs = []
     if uploaded_images:
-        st.markdown("**Name each page/tab:**")
+        st.markdown("---")
+        st.markdown("**Configure each image:**")
+        
+        # Show formatting tips once for all images
+        show_formatting_tips()
+        
         for idx, img in enumerate(uploaded_images):
-            page_name = st.text_input(
-                f"Page {idx+1} name",
-                value=f"Page {idx+1}",
-                key=f"seg_trends_page_name_{segment['id']}_{idx}",
-                placeholder=f"Enter name for page {idx+1}"
-            )
-            page_names.append(page_name)
-        
-        # Preview uploaded images with custom names
-        st.markdown(f"**Preview ({len(uploaded_images)} images uploaded):**")
-        
-        if len(uploaded_images) > 1:
-            preview_tabs = st.tabs(page_names)
-            for idx, (tab, img) in enumerate(zip(preview_tabs, uploaded_images)):
-                with tab:
-                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                    with col2:
-                        st.image(img, use_container_width=True)
-        else:
-            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-            with col2:
-                st.image(uploaded_images[0], use_container_width=True)
+            st.markdown(f"**Image {idx+1}:**")
+            
+            # Get existing data if available
+            existing_title = ""
+            existing_comment = ""
+            if idx < len(seg_trends_media):
+                existing_title = seg_trends_media[idx].get("title", "")
+                existing_comment = seg_trends_media[idx].get("comment", "")
+            
+            # Layout: Image on left, title + comment on right
+            col_img, col_inputs = st.columns([1, 1])
+            
+            with col_img:
+                st.image(img, use_container_width=True)
+            
+            with col_inputs:
+                title = st.text_input(
+                    "Title",
+                    value=existing_title or f"Page {idx+1}",
+                    key=f"seg_trends_title_{segment['id']}_{idx}",
+                    placeholder=f"Enter title for image {idx+1}"
+                )
+                
+                comment = st.text_area(
+                    "Comment (optional)",
+                    value=existing_comment,
+                    key=f"seg_trends_comment_{segment['id']}_{idx}",
+                    placeholder="Add insights, observations, or context...",
+                    height=150
+                )
+            
+            image_configs.append({"title": title, "comment": comment})
+            
+            if idx < len(uploaded_images) - 1:
+                st.markdown("---")
     
     # Save button
     if st.button("Save Segment Trends Images to Dashboard", key=f"save_seg_trends_{segment['id']}"):
@@ -2140,16 +2218,17 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             # Delete existing images for this section
             delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
             
-            # Save all uploaded images with custom page names
+            # Save all uploaded images with titles and comments
             for idx, uploaded_img in enumerate(uploaded_images):
-                page_name = page_names[idx] if idx < len(page_names) else f"Page {idx+1}"
+                config = image_configs[idx] if idx < len(image_configs) else {"title": f"Page {idx+1}", "comment": ""}
                 save_media_upload(
                     uploaded_file=uploaded_img,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=page_name,  # Store page name in comment field
-                    label="Segment Trends Carousel"
+                    comment=config["comment"],
+                    label="Segment Trends Carousel",
+                    title=config["title"]
                 )
             
             st.success(f"{len(uploaded_images)} image(s) saved to dashboard!")
@@ -2359,10 +2438,235 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
 
 
 def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
-    """Configure Brand Trends - This section has been moved to Battlegrounds"""
+    """Configure Brand Trends - Custom Trends View Builder with multiple views support"""
     st.markdown("#### Brand Trends Configuration")
-    st.info("The JTBD (Jobs To Be Done) section has been moved to the Battlegrounds tab.")
-    return
+    
+    st.markdown("### Custom Trends View Builder")
+    st.caption("Create multiple custom views (like slides) with title, description, and numbered sections")
+    
+    # Number of views selector
+    num_views = st.number_input(
+        "Number of Views/Slides (1-6)",
+        min_value=1,
+        max_value=6,
+        value=1,
+        key=f"brand_trends_num_views_{segment['id']}",
+        help="Create multiple separate views that will display one after another"
+    )
+    
+    # Load existing saved configurations
+    existing_tables = get_tables_for_segment(segment["id"])
+    
+    # Create each view
+    for view_idx in range(num_views):
+        view_num = view_idx + 1
+        st.markdown("---")
+        st.markdown(f"## View {view_num}")
+        
+        # Load saved config for this view
+        saved_view = next((t for t in existing_tables if t["section"] == "Brand Trends" and t["name"] == f"Custom Trends View {view_num}"), None)
+        view_config = json.loads(saved_view["filter_json"]) if saved_view and saved_view["filter_json"] else {}
+        saved_title = view_config.get("title", "")
+        saved_description = view_config.get("description", "")
+        saved_sections = view_config.get("sections", [])
+        
+        # Title and main description
+        trends_title = st.text_input(
+            f"View {view_num} - Title",
+            value=saved_title,
+            placeholder=f"e.g., Brand Performance Trends - Part {view_num}",
+            key=f"brand_trends_title_v{view_num}_{segment['id']}"
+        )
+        
+        trends_description = st.text_area(
+            f"View {view_num} - Main Description",
+            value=saved_description,
+            placeholder="e.g., Key brand trends and insights...",
+            height=100,
+            key=f"brand_trends_desc_v{view_num}_{segment['id']}"
+        )
+        
+        # Number of sections for this view
+        num_sections = st.number_input(
+            f"View {view_num} - Number of Sections (1-8)",
+            min_value=1,
+            max_value=8,
+            value=4,
+            key=f"brand_trends_num_sections_v{view_num}_{segment['id']}"
+        )
+        
+        # Section inputs
+        sections_data = []
+        for i in range(num_sections):
+            st.markdown(f"**Section {i+1}:**")
+            
+            # Get saved section data if available
+            saved_section = saved_sections[i] if i < len(saved_sections) else {}
+            saved_left = saved_section.get("left", "")
+            saved_right = saved_section.get("right", "")
+            
+            # Display label (NOT editable) and content fields
+            col_label, col_left, col_right = st.columns([1, 2, 2])
+            
+            with col_label:
+                # Display section number as non-editable text
+                st.markdown(f"""
+                    <div style='
+                        padding: 0.5rem;
+                        margin-top: 0.5rem;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        color: #666666;
+                    '>
+                        Label<br>
+                        <span style='font-size: 1.2rem; color: #333333;'>{i + 1}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            with col_left:
+                left_content = st.text_area(
+                    f"Left content",
+                    value=saved_left,
+                    placeholder="Enter content for left side...",
+                    height=100,
+                    key=f"brand_trends_v{view_num}_sec{i}_left_{segment['id']}"
+                )
+            
+            with col_right:
+                right_content = st.text_area(
+                    f"Right content",
+                    value=saved_right,
+                    placeholder="Enter content for right side...",
+                    height=100,
+                    key=f"brand_trends_v{view_num}_sec{i}_right_{segment['id']}"
+                )
+            
+            sections_data.append({
+                "number": str(i + 1),
+                "left": left_content,
+                "right": right_content
+            })
+        
+        # Show formatting tips once per view
+        with st.expander("📝 Formatting Tips"):
+            st.markdown("""
+                - **Bold text**: `**text**`
+                - __Underline text__: `__text__`
+                - Headings: `## Heading`
+                - Bullets: `- item` or `• item`
+            """)
+        
+        # Preview for this view
+        if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
+            st.markdown("---")
+            st.markdown(f"**Preview View {view_num}:**")
+            
+            if trends_title:
+                st.markdown(f"### {trends_title}")
+            
+            if trends_description:
+                formatted_desc = format_comment_preview(trends_description)
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                        border: 1px solid #CCCCCC;
+                        padding: 1rem 1.5rem;
+                        margin: 1rem 0;
+                        border-radius: 8px;
+                        text-align: center;
+                    '>
+                        <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                            {formatted_desc}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Display sections
+            for section in sections_data:
+                if section["left"] or section["right"]:
+                    cols = st.columns([0.3, 3, 3])
+                    
+                    with cols[0]:
+                        st.markdown(f"""
+                            <div style='
+                                width: 60px;
+                                height: 60px;
+                                border-radius: 50%;
+                                background-color: #FFFFFF;
+                                border: 3px solid #666666;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 1.5rem;
+                                font-weight: bold;
+                                color: #666666;
+                                margin-top: 1rem;
+                            '>
+                                {section["number"]}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with cols[1]:
+                        if section["left"]:
+                            formatted_left = format_comment_preview(section["left"])
+                            st.markdown(f"""
+                                <div style='
+                                    background: #E3F2FD;
+                                    border: 1px solid #90CAF9;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 100px;
+                                '>
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {formatted_left}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with cols[2]:
+                        if section["right"]:
+                            formatted_right = format_comment_preview(section["right"])
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F3E5F5;
+                                    border: 1px solid #CE93D8;
+                                    padding: 1rem;
+                                    margin: 0.5rem 0;
+                                    border-radius: 8px;
+                                    min-height: 100px;
+                                '>
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {formatted_right}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+        
+        # Save button for this view
+        if st.button(f"Save View {view_num} to Dashboard", key=f"save_brand_trends_view_v{view_num}_{segment['id']}"):
+            if not trends_title:
+                st.error(f"Please provide a title for View {view_num}.")
+            else:
+                # Delete existing view
+                delete_tables_for_section(segment["id"], "Brand Trends", f"Custom Trends View {view_num}")
+                
+                config_data = json.dumps({
+                    "title": trends_title,
+                    "description": trends_description,
+                    "sections": sections_data
+                })
+                
+                save_table(
+                    name=f"Custom Trends View {view_num}",
+                    dataset_id=dataset_id,
+                    columns=["Config"],
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="Brand Trends",
+                    filter_json=config_data,
+                    comment=""
+                )
+                st.success(f"View {view_num} saved to Brand Trends dashboard!")
 
 
 def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -2639,10 +2943,184 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
 def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Brand Truths: Title, description, and brand sections with images"""
     st.markdown("#### Brand Truths Configuration")
-    st.caption("Create a brand comparison view with title, description, and brand sections")
     
     # Load existing saved configuration
     existing_tables = get_tables_for_segment(segment["id"])
+    
+    # SECTION 1: Brand Profile Comparison Table (CSV Upload) - NEW SECTION AT TOP
+    st.markdown("### Brand Profile Comparison Table")
+    st.caption("Upload a CSV with multiple brand columns for comparison")
+    
+    # Load existing brand profile table
+    saved_brand_profile = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Profile Comparison"), None)
+    
+    # Title for the table
+    if saved_brand_profile and saved_brand_profile["filter_json"]:
+        saved_profile_config = json.loads(saved_brand_profile["filter_json"])
+        saved_profile_title = saved_profile_config.get("title", "")
+    else:
+        saved_profile_title = ""
+    
+    profile_table_title = st.text_input(
+        "Table Title",
+        value=saved_profile_title,
+        placeholder="e.g., Brand Performance Comparison",
+        key=f"brand_profile_title_{segment['id']}"
+    )
+    
+    if saved_brand_profile and saved_brand_profile["filter_json"]:
+        st.info("✅ Brand Profile Comparison table already uploaded. Upload a new CSV to replace it.")
+        with st.expander("View Current Data", expanded=False):
+            try:
+                saved_data = json.loads(saved_brand_profile["filter_json"])
+                df_saved = pd.DataFrame(saved_data.get("data", {}))
+                st.dataframe(df_saved, use_container_width=True, hide_index=True)
+            except:
+                st.error("Error loading saved data")
+    
+    # CSV file uploader
+    uploaded_brand_csv = st.file_uploader(
+        "Upload CSV File",
+        type=["csv"],
+        key=f"brand_profile_csv_{segment['id']}",
+        help="CSV should have: First column = Metric names, Other columns = Brand names (Premium Whisky, Blenders Pride, etc.)"
+    )
+    
+    if uploaded_brand_csv:
+        try:
+            # Read CSV
+            df_brand_csv = pd.read_csv(uploaded_brand_csv)
+            
+            if len(df_brand_csv.columns) < 2:
+                st.error("CSV must have at least 2 columns: Metric column and at least one brand column")
+            else:
+                st.success(f"✅ CSV loaded successfully! {len(df_brand_csv)} rows, {len(df_brand_csv.columns)} columns found.")
+                
+                # Let user select which column to apply formatting to
+                brand_columns = df_brand_csv.columns[1:].tolist()  # All columns except first
+                
+                format_column = st.selectbox(
+                    "Select column to apply conditional formatting (will compare to first brand column)",
+                    options=brand_columns,
+                    index=1 if len(brand_columns) > 1 else 0,
+                    key=f"brand_format_col_{segment['id']}"
+                )
+                
+                # Calculate index for the selected column
+                def calculate_brand_index(row, base_col, compare_col):
+                    """Calculate index comparing two brand columns"""
+                    try:
+                        base_val = str(row[base_col]).replace("%", "").strip()
+                        compare_val = str(row[compare_col]).replace("%", "").strip()
+                        
+                        if not base_val or not compare_val or base_val == "" or compare_val == "":
+                            return None
+                        
+                        base_num = float(base_val)
+                        compare_num = float(compare_val)
+                        
+                        if base_num == 0:
+                            return None
+                        
+                        return (compare_num / base_num) * 100
+                    except:
+                        return None
+                
+                # Add index column for preview
+                base_column = df_brand_csv.columns[1]  # First brand column (e.g., Premium Whisky)
+                df_brand_csv["_index"] = df_brand_csv.apply(
+                    lambda row: calculate_brand_index(row, base_column, format_column), 
+                    axis=1
+                )
+                
+                # Preview with conditional formatting
+                st.markdown("**Preview with Conditional Formatting:**")
+                st.caption(f"Formatting applied to '{format_column}' column (comparing to '{base_column}')")
+                
+                def color_brand_column(row):
+                    """Apply background color to selected brand column based on index"""
+                    idx_val = row["_index"]
+                    
+                    if idx_val is None:
+                        return [""] * len(row)
+                    
+                    try:
+                        if idx_val > 110:
+                            color = "background-color: #90EE90; font-weight: bold;"
+                        elif idx_val >= 105:
+                            color = "background-color: #D4EDDA; font-weight: bold;"
+                        elif idx_val < 75:
+                            color = "background-color: #FFB380; font-weight: bold;"
+                        else:
+                            color = ""
+                        
+                        # Apply color to the selected format column
+                        format_col_idx = df_brand_csv.columns.get_loc(format_column)
+                        styles = [""] * len(row)
+                        styles[format_col_idx] = color
+                        return styles
+                    except:
+                        return [""] * len(row)
+                
+                styled_brand_preview = df_brand_csv.style.apply(color_brand_column, axis=1)
+                
+                st.dataframe(
+                    styled_brand_preview,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=400,
+                    column_config={
+                        "_index": None  # Hide index column
+                    }
+                )
+                
+                st.markdown("""
+                    **Color Legend:**
+                    - 🟢 Dark Green: Index > 110 (Strong over-indexing)
+                    - 🟢 Light Green: Index 105-110 (Slight over-indexing)
+                    - 🟠 Orange: Index < 75 (Under-indexing)
+                    - ⚪ White: Index 75-105 (Neutral)
+                """)
+                
+                # Save button for brand profile table
+                if st.button("Save Brand Profile Comparison Table", key=f"save_brand_profile_{segment['id']}"):
+                    if not profile_table_title:
+                        st.error("Please provide a title for the table.")
+                    else:
+                        # Delete existing
+                        delete_tables_for_section(segment["id"], "Brand Truths", "Brand Profile Comparison")
+                        
+                        # Save data without _index column
+                        df_to_save = df_brand_csv.drop(columns=["_index"])
+                        profile_dict = {
+                            "title": profile_table_title,
+                            "format_column": format_column,
+                            "base_column": base_column,
+                            "data": df_to_save.to_dict('list')
+                        }
+                        
+                        save_table(
+                            name="Brand Profile Comparison",
+                            dataset_id=dataset_id,
+                            columns=["Config"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="Brand Truths",
+                            filter_json=json.dumps(profile_dict),
+                            comment=""
+                        )
+                        st.success("Brand Profile Comparison table saved to dashboard!")
+        
+        except Exception as e:
+            st.error(f"Error reading CSV: {str(e)}")
+            st.info("Please ensure your CSV has proper format with metric names in first column and brand columns after")
+    
+    st.markdown("---")
+    
+    # SECTION 2: Brand Truths Configuration (Original Section)
+    st.markdown("### Brand Truths Sections")
+    st.caption("Create a brand comparison view with title, description, and brand sections")
+    
     saved_brand_truths = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
     
     # Parse saved config
@@ -2667,6 +3145,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=100,
         key=f"brand_desc_{segment['id']}"
     )
+    
+    st.markdown("---")
     
     # Number of brand sections
     num_brands = st.number_input(
@@ -2807,10 +3287,14 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Delete existing
             delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
             
+            # Get existing S&V data to preserve it
+            saved_sv_data = brand_truths_config.get("strengths_vulnerabilities", {})
+            
             # Save configuration
             config_data = json.dumps({
                 "title": brand_title,
                 "description": brand_description,
+                "strengths_vulnerabilities": saved_sv_data,  # Preserve existing S&V data
                 "brands": [{
                     "number": b["number"],
                     "name": b["name"],
@@ -2829,7 +3313,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 comment=""
             )
             st.success("Brand Truths saved to dashboard!")
-
     
     st.markdown("---")
     st.markdown("### Brand Truths - Section 2")
@@ -3014,6 +3497,385 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 comment=""
             )
             st.success("Brand Truths Section 2 saved to dashboard!")
+    
+    # S&V section - appears at the very end after both Brand Truths sections
+    # Only show if Brand Truths Section 1 has been saved
+    if saved_brand_truths:
+        st.markdown("---")
+        st.markdown("### Strengths & Vulnerabilities Section")
+        st.caption("Add a main title and two side-by-side boxes for strengths and vulnerabilities")
+        
+        # Get saved S&V data
+        saved_sv_data = brand_truths_config.get("strengths_vulnerabilities", {})
+        
+        # Main title for S&V section
+        sv_main_title = st.text_input(
+            "Main Title for Strengths & Vulnerabilities",
+            value=saved_sv_data.get("main_title", "PRI Strengths & Vulnerabilities:"),
+            placeholder="e.g., PRI Strengths & Vulnerabilities:",
+            key=f"brand_sv_main_title_{segment['id']}"
+        )
+        
+        # Two columns for Strengths and Vulnerabilities
+        col_strength, col_vuln = st.columns(2)
+        
+        with col_strength:
+            st.markdown("**Brand Strengths:**")
+            strength_title = st.text_input(
+                "Strengths Box Title",
+                value=saved_sv_data.get("strength_title", "Brand Strengths"),
+                placeholder="e.g., Brand Strengths",
+                key=f"brand_strength_title_{segment['id']}"
+            )
+            strength_content = st.text_area(
+                "Strengths Content",
+                value=saved_sv_data.get("strength_content", ""),
+                placeholder="Add bullet points for strengths...\n- Point 1\n- Point 2",
+                height=200,
+                key=f"brand_strength_content_{segment['id']}"
+            )
+        
+        with col_vuln:
+            st.markdown("**Brand Vulnerabilities:**")
+            vuln_title = st.text_input(
+                "Vulnerabilities Box Title",
+                value=saved_sv_data.get("vuln_title", "Brand Vulnerabilities"),
+                placeholder="e.g., Brand Vulnerabilities",
+                key=f"brand_vuln_title_{segment['id']}"
+            )
+            vuln_content = st.text_area(
+                "Vulnerabilities Content",
+                value=saved_sv_data.get("vuln_content", ""),
+                placeholder="Add bullet points for vulnerabilities...\n- Point 1\n- Point 2",
+                height=200,
+                key=f"brand_vuln_content_{segment['id']}"
+            )
+        
+        # Show formatting tips once for S&V fields
+        show_formatting_tips()
+        
+        # Preview S&V section
+        if sv_main_title or strength_content or vuln_content:
+            st.markdown("---")
+            st.markdown("**Preview Strengths & Vulnerabilities:**")
+            
+            if sv_main_title:
+                st.markdown(f"### {sv_main_title}")
+            
+            col_prev_str, col_prev_vul = st.columns(2)
+            
+            with col_prev_str:
+                if strength_title or strength_content:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #E8F5E9 0%, #F1F8F4 100%);
+                            border: 2px dashed #4CAF50;
+                            border-radius: 15px;
+                            padding: 1.5rem;
+                            min-height: 200px;
+                        '>
+                            <div style='
+                                text-align: center;
+                                font-size: 1.2rem;
+                                font-weight: 600;
+                                color: #2E7D32;
+                                margin-bottom: 1rem;
+                            '>{strength_title}</div>
+                            <div style='
+                                font-size: 0.95rem;
+                                line-height: 1.8;
+                                color: #1B5E20;
+                            '>{strength_content.replace(chr(10), '<br>')}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            with col_prev_vul:
+                if vuln_title or vuln_content:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #FCE4EC 0%, #F8E8EE 100%);
+                            border: 2px dashed #E91E63;
+                            border-radius: 15px;
+                            padding: 1.5rem;
+                            min-height: 200px;
+                        '>
+                            <div style='
+                                text-align: center;
+                                font-size: 1.2rem;
+                                font-weight: 600;
+                                color: #C2185B;
+                                margin-bottom: 1rem;
+                            '>{vuln_title}</div>
+                            <div style='
+                                font-size: 0.95rem;
+                                line-height: 1.8;
+                                color: #880E4F;
+                            '>{vuln_content.replace(chr(10), '<br>')}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+        
+        # Separate save button for S&V
+        if st.button("Save Strengths & Vulnerabilities", key=f"save_brand_sv_{segment['id']}"):
+            # Get existing brand truths data to preserve it
+            existing_tables = get_tables_for_segment(segment["id"])
+            saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+            
+            if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
+                existing_config = json.loads(saved_brand_truths_current["filter_json"])
+            else:
+                existing_config = {
+                    "title": "Brand Truths Summary - Competitor View",
+                    "description": "",
+                    "brands": []
+                }
+            
+            # Delete existing
+            delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
+            
+            # Update S&V data while preserving other fields
+            existing_config["strengths_vulnerabilities"] = {
+                "main_title": sv_main_title,
+                "strength_title": strength_title,
+                "strength_content": strength_content,
+                "vuln_title": vuln_title,
+                "vuln_content": vuln_content
+            }
+            
+            # Save updated configuration
+            save_table(
+                name="Brand Truths View",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Brand Truths",
+                filter_json=json.dumps(existing_config),
+                comment=""
+            )
+            st.success("Strengths & Vulnerabilities saved to dashboard!")
+    
+    # SWOT Analysis section - appears after S&V
+    if saved_brand_truths:
+        st.markdown("---")
+        st.markdown("### SWOT Analysis")
+        st.caption("Add a comprehensive SWOT analysis with 4 quadrants")
+        
+        # Get saved SWOT data
+        saved_swot_data = brand_truths_config.get("swot_analysis", {})
+        
+        # Main title for SWOT
+        swot_main_title = st.text_input(
+            "Main Title for SWOT Analysis",
+            value=saved_swot_data.get("main_title", "PRI Portfolio SWOT"),
+            placeholder="e.g., PRI Portfolio SWOT",
+            key=f"brand_swot_main_title_{segment['id']}"
+        )
+        
+        # Create 2x2 grid for SWOT
+        col_s, col_w = st.columns(2)
+        
+        with col_s:
+            st.markdown("**Strengths (S):**")
+            swot_s_content = st.text_area(
+                "Strengths Content",
+                value=saved_swot_data.get("strengths", ""),
+                placeholder="Add bullet points for strengths...\n- Point 1\n- Point 2",
+                height=200,
+                key=f"brand_swot_s_{segment['id']}"
+            )
+        
+        with col_w:
+            st.markdown("**Weaknesses (W):**")
+            swot_w_content = st.text_area(
+                "Weaknesses Content",
+                value=saved_swot_data.get("weaknesses", ""),
+                placeholder="Add bullet points for weaknesses...\n- Point 1\n- Point 2",
+                height=200,
+                key=f"brand_swot_w_{segment['id']}"
+            )
+        
+        col_o, col_t = st.columns(2)
+        
+        with col_o:
+            st.markdown("**Opportunities (O):**")
+            swot_o_content = st.text_area(
+                "Opportunities Content",
+                value=saved_swot_data.get("opportunities", ""),
+                placeholder="Add bullet points for opportunities...\n- Point 1\n- Point 2",
+                height=200,
+                key=f"brand_swot_o_{segment['id']}"
+            )
+        
+        with col_t:
+            st.markdown("**Threats (T):**")
+            swot_t_content = st.text_area(
+                "Threats Content",
+                value=saved_swot_data.get("threats", ""),
+                placeholder="Add bullet points for threats...\n- Point 1\n- Point 2",
+                height=200,
+                key=f"brand_swot_t_{segment['id']}"
+            )
+        
+        # Show formatting tips
+        show_formatting_tips()
+        
+        # Preview SWOT
+        if swot_main_title or swot_s_content or swot_w_content or swot_o_content or swot_t_content:
+            st.markdown("---")
+            st.markdown("**Preview SWOT Analysis:**")
+            
+            if swot_main_title:
+                st.markdown(f"### {swot_main_title}")
+            
+            # Top row: S and W
+            col_prev_s, col_prev_w = st.columns(2)
+            
+            with col_prev_s:
+                if swot_s_content:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+                            border: 2px solid #2196F3;
+                            border-radius: 12px;
+                            padding: 1.5rem;
+                            min-height: 250px;
+                        '>
+                            <div style='
+                                text-align: center;
+                                font-size: 1.3rem;
+                                font-weight: 700;
+                                color: #1565C0;
+                                margin-bottom: 1rem;
+                            '>STRENGTHS</div>
+                            <div style='
+                                font-size: 0.9rem;
+                                line-height: 1.7;
+                                color: #0D47A1;
+                            '>{swot_s_content.replace(chr(10), '<br>')}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            with col_prev_w:
+                if swot_w_content:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+                            border: 2px solid #FF9800;
+                            border-radius: 12px;
+                            padding: 1.5rem;
+                            min-height: 250px;
+                        '>
+                            <div style='
+                                text-align: center;
+                                font-size: 1.3rem;
+                                font-weight: 700;
+                                color: #E65100;
+                                margin-bottom: 1rem;
+                            '>WEAKNESS</div>
+                            <div style='
+                                font-size: 0.9rem;
+                                line-height: 1.7;
+                                color: #BF360C;
+                            '>{swot_w_content.replace(chr(10), '<br>')}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+            
+            # Bottom row: O and T
+            col_prev_o, col_prev_t = st.columns(2)
+            
+            with col_prev_o:
+                if swot_o_content:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+                            border: 2px solid #4CAF50;
+                            border-radius: 12px;
+                            padding: 1.5rem;
+                            min-height: 250px;
+                        '>
+                            <div style='
+                                text-align: center;
+                                font-size: 1.3rem;
+                                font-weight: 700;
+                                color: #2E7D32;
+                                margin-bottom: 1rem;
+                            '>OPPORTUNITIES</div>
+                            <div style='
+                                font-size: 0.9rem;
+                                line-height: 1.7;
+                                color: #1B5E20;
+                            '>{swot_o_content.replace(chr(10), '<br>')}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            with col_prev_t:
+                if swot_t_content:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+                            border: 2px solid #F44336;
+                            border-radius: 12px;
+                            padding: 1.5rem;
+                            min-height: 250px;
+                        '>
+                            <div style='
+                                text-align: center;
+                                font-size: 1.3rem;
+                                font-weight: 700;
+                                color: #C62828;
+                                margin-bottom: 1rem;
+                            '>THREATS</div>
+                            <div style='
+                                font-size: 0.9rem;
+                                line-height: 1.7;
+                                color: #B71C1C;
+                            '>{swot_t_content.replace(chr(10), '<br>')}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+        
+        # Separate save button for SWOT
+        if st.button("Save SWOT Analysis", key=f"save_brand_swot_{segment['id']}"):
+            # Get existing brand truths data to preserve it
+            existing_tables = get_tables_for_segment(segment["id"])
+            saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+            
+            if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
+                existing_config = json.loads(saved_brand_truths_current["filter_json"])
+            else:
+                existing_config = {
+                    "title": "Brand Truths Summary - Competitor View",
+                    "description": "",
+                    "brands": []
+                }
+            
+            # Delete existing
+            delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
+            
+            # Update SWOT data while preserving other fields
+            existing_config["swot_analysis"] = {
+                "main_title": swot_main_title,
+                "strengths": swot_s_content,
+                "weaknesses": swot_w_content,
+                "opportunities": swot_o_content,
+                "threats": swot_t_content
+            }
+            
+            # Save updated configuration
+            save_table(
+                name="Brand Truths View",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Brand Truths",
+                filter_json=json.dumps(existing_config),
+                comment=""
+            )
+            st.success("SWOT Analysis saved to dashboard!")
+
+
 
 
 def get_india_geojson_url():
@@ -3356,9 +4218,9 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     # Parse saved config
     bg_config = json.loads(saved_battlegrounds["filter_json"]) if saved_battlegrounds and saved_battlegrounds["filter_json"] else {}
     saved_tabs = bg_config.get("tabs", [
-        {"name": "Advantaged states", "states": [], "families": [], "brands": []},
-        {"name": "Watch out states", "states": [], "families": [], "brands": []},
-        {"name": "Challenged states", "states": [], "families": [], "brands": []}
+        {"name": "DOMINATE", "states": [], "families": [], "brands": []},
+        {"name": "DRIVE", "states": [], "families": [], "brands": []},
+        {"name": "DISRUPT", "states": [], "families": [], "brands": []}
     ])
     
     # Get available states and brands
@@ -3378,15 +4240,29 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         st.markdown(f"### Tab {i+1} Configuration")
         
         # Get saved tab data
-        saved_tab = saved_tabs[i] if i < len(saved_tabs) else {"name": ["ADVANTAGED STATES", "Watch out states", "Challenged states"][i], "states": [], "families": [], "brands": []}
+        saved_tab = saved_tabs[i] if i < len(saved_tabs) else {"name": ["DOMINATE", "DRIVE", "DISRUPT"][i], "states": [], "families": [], "brands": []}
         
-        # Tab name
-        tab_name = st.text_input(
-            f"Tab {i+1} Name (editable)",
-            value=saved_tab.get("name", ["ADVANTAGED STATES", "Watch out states", "Challenged states"][i]),
-            key=f"bg_tab{i}_name_{segment['id']}",
-            help="This will be the tab title on the dashboard"
-        )
+        # Default colors for each tab
+        default_colors = ["#4CAF50", "#FFC107", "#F44336"]  # Green, Yellow, Red
+        
+        # Tab name and color in two columns
+        col_name, col_color = st.columns([3, 1])
+        
+        with col_name:
+            tab_name = st.text_input(
+                f"Tab {i+1} Name (editable)",
+                value=saved_tab.get("name", ["DOMINATE", "DRIVE", "DISRUPT"][i]),
+                key=f"bg_tab{i}_name_{segment['id']}",
+                help="This will be the tab title on the dashboard"
+            )
+        
+        with col_color:
+            tab_color = st.color_picker(
+                "Tab Color",
+                value=saved_tab.get("color", default_colors[i]),
+                key=f"bg_tab{i}_color_{segment['id']}",
+                help="Color for map and state assignments"
+            )
         
         # State selection - exclude states already selected in previous tabs
         col1, col2 = st.columns(2)
@@ -3450,60 +4326,63 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         show_formatting_tips()
         
-        # Additional columns configuration
-        st.markdown("**Additional Analysis Columns:**")
-        st.caption("Configure 3 additional columns (default: SOG, 5Cs, Imagery)")
+        # State-specific additional columns configuration
+        st.markdown("**Additional Analysis Columns (Per State):**")
+        st.caption("Configure SOG, 5Cs, and Imagery content for each selected state")
         
-        col_config1, col_config2, col_config3 = st.columns(3)
+        # Get saved state-specific columns
+        saved_state_columns = saved_tab.get("state_columns", {})
         
-        # Get saved additional columns config
-        saved_add_cols = saved_tab.get("additional_columns", [
-            {"name": "SOG", "comment": ""},
-            {"name": "5Cs", "comment": ""},
-            {"name": "Imagery", "comment": ""}
-        ])
+        state_columns_data = {}
         
-        with col_config1:
-            col1_name = st.text_input(
-                "Column 1 Name",
-                value=saved_add_cols[0].get("name", "SOG") if len(saved_add_cols) > 0 else "SOG",
-                key=f"bg_tab{i}_col1_name_{segment['id']}"
-            )
-            col1_comment = st.text_area(
-                "Column 1 Content",
-                value=saved_add_cols[0].get("comment", "") if len(saved_add_cols) > 0 else "",
-                key=f"bg_tab{i}_col1_comment_{segment['id']}",
-                placeholder="Add insights for SOG...",
-                height=150
-            )
-        
-        with col_config2:
-            col2_name = st.text_input(
-                "Column 2 Name",
-                value=saved_add_cols[1].get("name", "5Cs") if len(saved_add_cols) > 1 else "5Cs",
-                key=f"bg_tab{i}_col2_name_{segment['id']}"
-            )
-            col2_comment = st.text_area(
-                "Column 2 Content",
-                value=saved_add_cols[1].get("comment", "") if len(saved_add_cols) > 1 else "",
-                key=f"bg_tab{i}_col2_comment_{segment['id']}",
-                placeholder="Add insights for 5Cs...",
-                height=150
-            )
-        
-        with col_config3:
-            col3_name = st.text_input(
-                "Column 3 Name",
-                value=saved_add_cols[2].get("name", "Imagery") if len(saved_add_cols) > 2 else "Imagery",
-                key=f"bg_tab{i}_col3_name_{segment['id']}"
-            )
-            col3_comment = st.text_area(
-                "Column 3 Content",
-                value=saved_add_cols[2].get("comment", "") if len(saved_add_cols) > 2 else "",
-                key=f"bg_tab{i}_col3_comment_{segment['id']}",
-                placeholder="Add insights for Imagery...",
-                height=150
-            )
+        if selected_states:
+            for state in selected_states:
+                st.markdown(f"---")
+                st.markdown(f"**{state}:**")
+                
+                # Get saved data for this state
+                saved_state_data = saved_state_columns.get(state, {
+                    "SOG": "",
+                    "5Cs": "",
+                    "Imagery": ""
+                })
+                
+                col_sog, col_5cs, col_imagery = st.columns(3)
+                
+                with col_sog:
+                    sog_content = st.text_area(
+                        "SOG",
+                        value=saved_state_data.get("SOG", ""),
+                        key=f"bg_tab{i}_state_{state}_sog_{segment['id']}",
+                        placeholder=f"SOG insights for {state}...",
+                        height=120
+                    )
+                
+                with col_5cs:
+                    fivecs_content = st.text_area(
+                        "5Cs",
+                        value=saved_state_data.get("5Cs", ""),
+                        key=f"bg_tab{i}_state_{state}_5cs_{segment['id']}",
+                        placeholder=f"5Cs insights for {state}...",
+                        height=120
+                    )
+                
+                with col_imagery:
+                    imagery_content = st.text_area(
+                        "Imagery",
+                        value=saved_state_data.get("Imagery", ""),
+                        key=f"bg_tab{i}_state_{state}_imagery_{segment['id']}",
+                        placeholder=f"Imagery insights for {state}...",
+                        height=120
+                    )
+                
+                state_columns_data[state] = {
+                    "SOG": sog_content,
+                    "5Cs": fivecs_content,
+                    "Imagery": imagery_content
+                }
+        else:
+            st.info("Select states to configure their SOG, 5Cs, and Imagery content")
         
         # Show preview if states and brands are selected
         if selected_states and selected_brands:
@@ -3518,21 +4397,29 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         st.markdown("**Upload Images:**")
         st.caption("Upload 2 images for this tab (one at top, one at bottom)")
         
+        # Show formatting tips once for both images
+        show_formatting_tips()
+        
         # Show existing images if any
         from app_core.media import get_media_for_segment
         existing_media = get_media_for_segment(segment["id"])
         tab_media = [m for m in existing_media if m.get("section") == "Battlegrounds" and m.get("name") == f"Tab {i+1} Images"]
         
+        # Get existing images
+        existing_img1 = next((m for m in tab_media if "Image 1" in m.get("comment", "")), None)
+        existing_img2 = next((m for m in tab_media if "Image 2" in m.get("comment", "")), None)
+        
         if tab_media:
             st.info(f"✅ {len(tab_media)} image(s) already uploaded for this tab. Upload new images to replace them.")
         
-        col_img1, col_img2 = st.columns(2)
+        # IMAGE 1 (TOP)
+        st.markdown("---")
+        st.markdown("**Image 1 (Top):**")
+        
+        col_img1, col_inputs1 = st.columns([1, 1])
         
         with col_img1:
-            st.markdown("**Image 1 (Top):**")
-            
-            # Show existing image 1 if available
-            existing_img1 = next((m for m in tab_media if "Image 1" in m.get("comment", "")), None)
+            # Show existing or new upload
             if existing_img1 and not st.session_state.get(f"replace_img1_tab{i}_{segment['id']}", False):
                 file_path = existing_img1.get("file_path")
                 if file_path and os.path.exists(file_path):
@@ -3553,11 +4440,30 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 else:
                     st.info(f"📄 {uploaded_image_1.name}")
         
-        with col_img2:
-            st.markdown("**Image 2 (Bottom):**")
+        with col_inputs1:
+            img1_title = st.text_input(
+                "Title for Image 1",
+                value=existing_img1.get("title", "") if existing_img1 else "",
+                key=f"bg_tab{i}_img1_title_{segment['id']}",
+                placeholder="Enter title for top image"
+            )
             
-            # Show existing image 2 if available
-            existing_img2 = next((m for m in tab_media if "Image 2" in m.get("comment", "")), None)
+            img1_comment = st.text_area(
+                "Comment for Image 1 (optional)",
+                value=existing_img1.get("comment", "").replace(f"Tab {i+1} - Image 1", "").strip() if existing_img1 else "",
+                key=f"bg_tab{i}_img1_comment_{segment['id']}",
+                placeholder="Add insights, observations, or context...",
+                height=150
+            )
+        
+        # IMAGE 2 (BOTTOM)
+        st.markdown("---")
+        st.markdown("**Image 2 (Bottom):**")
+        
+        col_img2, col_inputs2 = st.columns([1, 1])
+        
+        with col_img2:
+            # Show existing or new upload
             if existing_img2 and not st.session_state.get(f"replace_img2_tab{i}_{segment['id']}", False):
                 file_path = existing_img2.get("file_path")
                 if file_path and os.path.exists(file_path):
@@ -3578,6 +4484,22 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 else:
                     st.info(f"📄 {uploaded_image_2.name}")
         
+        with col_inputs2:
+            img2_title = st.text_input(
+                "Title for Image 2",
+                value=existing_img2.get("title", "") if existing_img2 else "",
+                key=f"bg_tab{i}_img2_title_{segment['id']}",
+                placeholder="Enter title for bottom image"
+            )
+            
+            img2_comment = st.text_area(
+                "Comment for Image 2 (optional)",
+                value=existing_img2.get("comment", "").replace(f"Tab {i+1} - Image 2", "").strip() if existing_img2 else "",
+                key=f"bg_tab{i}_img2_comment_{segment['id']}",
+                placeholder="Add insights, observations, or context...",
+                height=150
+            )
+        
         # Save button for this tab
         if st.button(f"Save {tab_name} to Dashboard", key=f"save_bg_tab{i}_{segment['id']}"):
             if not selected_states and not selected_families:
@@ -3585,23 +4507,20 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             else:
                 # Load existing config to update just this tab
                 existing_config = bg_config.get("tabs", [
-                    {"name": "ADVANTAGED STATES", "states": [], "families": [], "brands": []},
-                    {"name": "Watch out states", "states": [], "families": [], "brands": []},
-                    {"name": "Challenged states", "states": [], "families": [], "brands": []}
+                    {"name": "DOMINATE", "states": [], "families": [], "brands": []},
+                    {"name": "DRIVE", "states": [], "families": [], "brands": []},
+                    {"name": "DISRUPT", "states": [], "families": [], "brands": []}
                 ])
                 
                 # Update this tab's config
                 existing_config[i] = {
                     "name": tab_name,
+                    "color": tab_color,
                     "states": selected_states,
                     "families": selected_families,
                     "brands": selected_brands,
                     "calc_comment": calc_comment,
-                    "additional_columns": [
-                        {"name": col1_name, "comment": col1_comment},
-                        {"name": col2_name, "comment": col2_comment},
-                        {"name": col3_name, "comment": col3_comment}
-                    ]
+                    "state_columns": state_columns_data  # Store state-specific columns
                 }
                 
                 # Delete and save updated config
@@ -3623,27 +4542,79 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 # Delete existing images for this tab
                 delete_media_for_section(segment["id"], "Battlegrounds", f"Tab {i+1} Images")
                 
-                # Save image 1
+                # Save image 1 with title and comment (if uploaded)
                 if uploaded_image_1:
                     save_media_upload(
                         uploaded_file=uploaded_image_1,
                         segment_id=segment["id"],
                         section="Battlegrounds",
                         created_by=current_user["username"],
-                        comment=f"Tab {i+1} - Image 1",
-                        label=f"Tab {i+1} Images"
+                        comment=f"Tab {i+1} - Image 1 {img1_comment}",
+                        label=f"Tab {i+1} Images",
+                        title=img1_title
                     )
+                elif existing_img1:
+                    # Re-save existing image with updated title/comment
+                    import shutil
+                    from pathlib import Path
+                    existing_path = existing_img1.get("file_path")
+                    if existing_path and os.path.exists(existing_path):
+                        # Create a temporary file object to re-upload
+                        class TempFile:
+                            def __init__(self, path):
+                                self.name = os.path.basename(path)
+                                self.path = path
+                            def getbuffer(self):
+                                with open(self.path, 'rb') as f:
+                                    return f.read()
+                        
+                        temp_file = TempFile(existing_path)
+                        save_media_upload(
+                            uploaded_file=temp_file,
+                            segment_id=segment["id"],
+                            section="Battlegrounds",
+                            created_by=current_user["username"],
+                            comment=f"Tab {i+1} - Image 1 {img1_comment}",
+                            label=f"Tab {i+1} Images",
+                            title=img1_title
+                        )
                 
-                # Save image 2
+                # Save image 2 with title and comment (if uploaded)
                 if uploaded_image_2:
                     save_media_upload(
                         uploaded_file=uploaded_image_2,
                         segment_id=segment["id"],
                         section="Battlegrounds",
                         created_by=current_user["username"],
-                        comment=f"Tab {i+1} - Image 2",
-                        label=f"Tab {i+1} Images"
+                        comment=f"Tab {i+1} - Image 2 {img2_comment}",
+                        label=f"Tab {i+1} Images",
+                        title=img2_title
                     )
+                elif existing_img2:
+                    # Re-save existing image with updated title/comment
+                    import shutil
+                    from pathlib import Path
+                    existing_path = existing_img2.get("file_path")
+                    if existing_path and os.path.exists(existing_path):
+                        # Create a temporary file object to re-upload
+                        class TempFile:
+                            def __init__(self, path):
+                                self.name = os.path.basename(path)
+                                self.path = path
+                            def getbuffer(self):
+                                with open(self.path, 'rb') as f:
+                                    return f.read()
+                        
+                        temp_file = TempFile(existing_path)
+                        save_media_upload(
+                            uploaded_file=temp_file,
+                            segment_id=segment["id"],
+                            section="Battlegrounds",
+                            created_by=current_user["username"],
+                            comment=f"Tab {i+1} - Image 2 {img2_comment}",
+                            label=f"Tab {i+1} Images",
+                            title=img2_title
+                        )
                 
                 # Count saved images
                 total_images = (1 if uploaded_image_1 else 0) + (1 if uploaded_image_2 else 0)
