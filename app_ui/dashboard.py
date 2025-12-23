@@ -2546,62 +2546,15 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
     with col_insights:
         st.markdown("### Strategic Insights")
         
-        # Add scrollable container for insights
-        st.markdown("""
-            <style>
-            .insights-scroll-container {
-                max-height: 800px;
-                overflow-y: auto;
-                padding-right: 0.5rem;
-            }
-            .insights-scroll-container::-webkit-scrollbar {
-                width: 8px;
-            }
-            .insights-scroll-container::-webkit-scrollbar-track {
-                background: #F0F0F0;
-                border-radius: 4px;
-            }
-            .insights-scroll-container::-webkit-scrollbar-thumb {
-                background: #BDBDBD;
-                border-radius: 4px;
-            }
-            .insights-scroll-container::-webkit-scrollbar-thumb:hover {
-                background: #9E9E9E;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-        
         # Get state-specific columns configuration
         state_columns = tab_config.get("state_columns", {})
         
         if state_columns:
-            # Start scrollable container
-            st.markdown('<div class="insights-scroll-container">', unsafe_allow_html=True)
-            
             # Display insights for each state
             for idx, state in enumerate(selected_states):
                 state_data = state_columns.get(state, {})
                 
                 if any(state_data.values()):  # If any content exists for this state
-                    # State header - clean and professional
-                    st.markdown(f"""
-                        <div style='
-                            background-color: #F8F9FA;
-                            padding: 0.9rem 1.5rem;
-                            border-radius: 6px;
-                            margin: 1.5rem 0 1rem 0;
-                            border-left: 5px solid #3498DB;
-                            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-                        '>
-                            <h4 style='
-                                margin: 0;
-                                color: #2C3E50;
-                                font-size: 1.1rem;
-                                font-weight: 600;
-                                letter-spacing: 0.3px;
-                            '>{state}</h4>
-                        </div>
-                    """, unsafe_allow_html=True)
                     
                     # Create 3 columns for SOG, 5Cs, Imagery
                     col_sog, col_5cs, col_imagery = st.columns(3)
@@ -2616,7 +2569,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                     border-radius: 4px;
                                     border: 1px solid #E8E8E8;
                                     border-top: 3px solid #27AE60;
-                                    height: 200px;
+                                    min-height: 150px;
                                     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
                                     display: flex;
                                     flex-direction: column;
@@ -2633,9 +2586,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                         font-size: 0.85rem;
                                         color: #4A4A4A;
                                         line-height: 1.7;
-                                        overflow-y: auto;
                                         flex: 1;
-                                        padding-right: 0.5rem;
                                     '>
                                         {format_comment(sog_content)}
                                     </div>
@@ -2649,7 +2600,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                     border-radius: 4px;
                                     border: 1px solid #E8E8E8;
                                     border-top: 3px solid #D0D0D0;
-                                    height: 200px;
+                                    min-height: 150px;
                                 '>
                                     <h5 style='
                                         margin: 0 0 0.8rem 0;
@@ -2673,7 +2624,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                     border-radius: 4px;
                                     border: 1px solid #E8E8E8;
                                     border-top: 3px solid #3498DB;
-                                    height: 200px;
+                                    min-height: 150px;
                                     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
                                     display: flex;
                                     flex-direction: column;
@@ -2690,9 +2641,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                         font-size: 0.85rem;
                                         color: #4A4A4A;
                                         line-height: 1.7;
-                                        overflow-y: auto;
                                         flex: 1;
-                                        padding-right: 0.5rem;
                                     '>
                                         {format_comment(fivecs_content)}
                                     </div>
@@ -2706,7 +2655,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                     border-radius: 4px;
                                     border: 1px solid #E8E8E8;
                                     border-top: 3px solid #D0D0D0;
-                                    height: 200px;
+                                    min-height: 150px;
                                 '>
                                     <h5 style='
                                         margin: 0 0 0.8rem 0;
@@ -2730,7 +2679,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                     border-radius: 4px;
                                     border: 1px solid #E8E8E8;
                                     border-top: 3px solid #E67E22;
-                                    height: 200px;
+                                    min-height: 150px;
                                     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
                                     display: flex;
                                     flex-direction: column;
@@ -2747,9 +2696,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                         font-size: 0.85rem;
                                         color: #4A4A4A;
                                         line-height: 1.7;
-                                        overflow-y: auto;
                                         flex: 1;
-                                        padding-right: 0.5rem;
                                     '>
                                         {format_comment(imagery_content)}
                                     </div>
@@ -2763,7 +2710,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                                     border-radius: 4px;
                                     border: 1px solid #E8E8E8;
                                     border-top: 3px solid #D0D0D0;
-                                    height: 200px;
+                                    min-height: 150px;
                                 '>
                                     <h5 style='
                                         margin: 0 0 0.8rem 0;
@@ -2779,10 +2726,8 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                     
                     # Add spacing between states
                     if idx < len(selected_states) - 1:
-                        st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='height: 2rem; margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
             
-            # Close scrollable container
-            st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("No strategic insights configured for this tab.")
 
