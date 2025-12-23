@@ -1037,17 +1037,47 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     if seg_truth_images:
         st.markdown("---")
         
-        # Display images one below the other with controlled width
+        # Display images with title and comment
         for idx, media in enumerate(seg_truth_images):
             file_path = media.get("file_path")
+            title = media.get("title", "")
+            comment = media.get("comment", "")
+            
             if file_path and os.path.exists(file_path):
-                # Center images with controlled width (smaller)
-                col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                with col2:
+                # Image on left, comment on right
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    if title:
+                        st.markdown(f"### {title}")
                     st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    if comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
+                                border: 1px solid #B0D4F1;
+                                border-left: 5px solid #2196F3;
+                                padding: 1.5rem 1.8rem;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.8;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
                 # Add spacing between images
                 if idx < len(seg_truth_images) - 1:
-                    st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
     
     # Delete button for editors
     if is_editor:
@@ -1306,7 +1336,7 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                         st.image(file_path, use_container_width=True)
                 else:
                     st.warning(f"Image {idx+1} not found.")
-    else:
+    elif len(seg_trends_images) == 1:
         # Single image
         file_path = seg_trends_images[0].get("file_path")
         if file_path and os.path.exists(file_path):

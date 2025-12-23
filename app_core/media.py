@@ -16,6 +16,7 @@ def save_media_upload(
     section: str,
     created_by: str,
     comment: str = "",
+    title: str = "",
     label: str | None = None,
 ) -> str:
     """Persist an uploaded media file to disk and record in DB."""
@@ -28,8 +29,8 @@ def save_media_upload(
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO media (name, file_path, created_by, segment_id, section, comment, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO media (name, file_path, created_by, segment_id, section, comment, title, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 display_name,
@@ -38,6 +39,7 @@ def save_media_upload(
                 segment_id,
                 section,
                 comment,
+                title,
                 datetime.datetime.utcnow().isoformat(),
             ),
         )
@@ -49,7 +51,7 @@ def get_media_for_segment(segment_id: int) -> List[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, file_path, created_by, segment_id, section, comment, created_at
+            SELECT id, name, file_path, created_by, segment_id, section, comment, title, created_at
             FROM media
             WHERE segment_id = ?
             ORDER BY created_at DESC

@@ -1280,7 +1280,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     st.markdown("---")
     st.markdown("### Supporting Visuals")
     st.markdown("**Upload Images (Optional):**")
-    st.caption("Upload up to 3 images that will be displayed one below the other")
+    st.caption("Upload up to 3 images with titles and comments")
     
     # Show existing images if any
     from app_core.media import get_media_for_segment
@@ -1292,36 +1292,97 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         with st.expander("View Current Images", expanded=False):
             for media in seg_truth_media:
                 file_path = media.get("file_path")
+                title = media.get("title", "")
+                comment = media.get("comment", "")
                 if file_path and os.path.exists(file_path):
-                    st.image(file_path, caption=media.get("comment", "Image"), use_container_width=True)
+                    if title:
+                        st.markdown(f"**{title}**")
+                    st.image(file_path, use_container_width=True)
+                    if comment:
+                        st.caption(comment)
+                    st.markdown("---")
     
-    uploaded_image_1 = st.file_uploader(
-        "Image 1",
-        type=["png", "jpg", "jpeg"],
-        key=f"seg_truth_img1_{segment['id']}"
-    )
-    
-    uploaded_image_2 = st.file_uploader(
-        "Image 2",
-        type=["png", "jpg", "jpeg"],
-        key=f"seg_truth_img2_{segment['id']}"
-    )
-    
-    uploaded_image_3 = st.file_uploader(
-        "Image 3",
-        type=["png", "jpg", "jpeg"],
-        key=f"seg_truth_img3_{segment['id']}"
-    )
-    
-    # Preview uploaded images
-    if uploaded_image_1 or uploaded_image_2 or uploaded_image_3:
-        st.markdown("**Image Preview:**")
+    # Image 1
+    st.markdown("**Image 1:**")
+    col_img1, col_meta1 = st.columns([1, 1])
+    with col_img1:
+        uploaded_image_1 = st.file_uploader(
+            "Upload Image 1",
+            type=["png", "jpg", "jpeg"],
+            key=f"seg_truth_img1_{segment['id']}",
+            label_visibility="collapsed"
+        )
         if uploaded_image_1:
-            st.image(uploaded_image_1, caption="Image 1", use_container_width=True)
+            st.image(uploaded_image_1, use_container_width=True)
+    
+    with col_meta1:
+        title_1 = st.text_input(
+            "Title for Image 1",
+            key=f"seg_truth_title1_{segment['id']}",
+            placeholder="e.g., Consumer Profile"
+        )
+        comment_1 = st.text_area(
+            "Comment for Image 1",
+            key=f"seg_truth_comment1_{segment['id']}",
+            placeholder="Add description or insights...",
+            height=100
+        )
+    
+    st.markdown("---")
+    
+    # Image 2
+    st.markdown("**Image 2:**")
+    col_img2, col_meta2 = st.columns([1, 1])
+    with col_img2:
+        uploaded_image_2 = st.file_uploader(
+            "Upload Image 2",
+            type=["png", "jpg", "jpeg"],
+            key=f"seg_truth_img2_{segment['id']}",
+            label_visibility="collapsed"
+        )
         if uploaded_image_2:
-            st.image(uploaded_image_2, caption="Image 2", use_container_width=True)
+            st.image(uploaded_image_2, use_container_width=True)
+    
+    with col_meta2:
+        title_2 = st.text_input(
+            "Title for Image 2",
+            key=f"seg_truth_title2_{segment['id']}",
+            placeholder="e.g., Market Insights"
+        )
+        comment_2 = st.text_area(
+            "Comment for Image 2",
+            key=f"seg_truth_comment2_{segment['id']}",
+            placeholder="Add description or insights...",
+            height=100
+        )
+    
+    st.markdown("---")
+    
+    # Image 3
+    st.markdown("**Image 3:**")
+    col_img3, col_meta3 = st.columns([1, 1])
+    with col_img3:
+        uploaded_image_3 = st.file_uploader(
+            "Upload Image 3",
+            type=["png", "jpg", "jpeg"],
+            key=f"seg_truth_img3_{segment['id']}",
+            label_visibility="collapsed"
+        )
         if uploaded_image_3:
-            st.image(uploaded_image_3, caption="Image 3", use_container_width=True)
+            st.image(uploaded_image_3, use_container_width=True)
+    
+    with col_meta3:
+        title_3 = st.text_input(
+            "Title for Image 3",
+            key=f"seg_truth_title3_{segment['id']}",
+            placeholder="e.g., Trends Analysis"
+        )
+        comment_3 = st.text_area(
+            "Comment for Image 3",
+            key=f"seg_truth_comment3_{segment['id']}",
+            placeholder="Add description or insights...",
+            height=100
+        )
     
     # Separate save button for images only
     if st.button("Save Images to Dashboard", key=f"save_seg_images_{segment['id']}"):
@@ -1339,7 +1400,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     segment_id=segment["id"],
                     section="Segment Truths",
                     created_by=current_user["username"],
-                    comment="Image 1",
+                    comment=comment_1,
+                    title=title_1,
                     label="Segment Truth Images"
                 )
             
@@ -1349,7 +1411,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     segment_id=segment["id"],
                     section="Segment Truths",
                     created_by=current_user["username"],
-                    comment="Image 2",
+                    comment=comment_2,
+                    title=title_2,
                     label="Segment Truth Images"
                 )
             
@@ -1359,7 +1422,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     segment_id=segment["id"],
                     section="Segment Truths",
                     created_by=current_user["username"],
-                    comment="Image 3",
+                    comment=comment_3,
+                    title=title_3,
                     label="Segment Truth Images"
                 )
             

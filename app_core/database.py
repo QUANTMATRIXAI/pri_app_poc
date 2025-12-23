@@ -251,3 +251,12 @@ def ensure_battleground_notes_table() -> None:
             """
         )
         conn.commit()
+
+
+def ensure_media_title_column() -> None:
+    """Ensure media table has a title column."""
+    with get_connection() as conn:
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(media)").fetchall()]
+        if "title" not in cols:
+            conn.execute("ALTER TABLE media ADD COLUMN title TEXT DEFAULT ''")
+            conn.commit()
