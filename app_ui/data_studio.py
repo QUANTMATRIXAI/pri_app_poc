@@ -27,6 +27,66 @@ from app_core.uploads import (
 from .charts import plot_chart
 
 
+def format_comment_preview(text: str) -> str:
+    """Format comment text with bold, underline, headings, and bullets for preview"""
+    import re
+    safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    lines = safe.splitlines()
+    rendered = []
+    for line in lines:
+        if line.startswith("##"):
+            # Heading - apply formatting to the heading text
+            heading_text = line.lstrip('#').strip()
+            heading_text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", heading_text)
+            heading_text = re.sub(r"__(.+?)__", r"<u>\1</u>", heading_text)
+            rendered.append(f"<div style='font-size:1.08rem;font-weight:700'>{heading_text}</div>")
+        elif line.startswith("•") or line.strip().startswith("-"):
+            # Bullet - apply formatting to the bullet content
+            text_content = line.lstrip('•').lstrip('-').strip()
+            text_content = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text_content)
+            text_content = re.sub(r"__(.+?)__", r"<u>\1</u>", text_content)
+            rendered.append(f"<div style='margin-left:0.6rem;'>• {text_content}</div>")
+        else:
+            # Regular text - apply formatting
+            line = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line)
+            line = re.sub(r"__(.+?)__", r"<u>\1</u>", line)
+            rendered.append(line)
+    return "<br>".join(rendered)
+
+
+def show_formatting_tips(key_suffix: str = "") -> None:
+    """Display formatting tips expander with preview"""
+    with st.expander("💡 Formatting Tips", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **How to format:**
+            
+            - `**text**` for bold
+            - `__text__` for underline
+            - `## text` for heading
+            - `- text` for bullet
+            
+            **Example Input:**
+            ```
+            ## Key Insights
+            - **PRI** growth at __15%__
+            - Focus on premium brands
+            ```
+            """)
+        
+        with col2:
+            st.markdown("**Result:**")
+            st.markdown("""
+            <div style='background-color: #fff8df; border-left: 3px solid #f5b400; padding: 0.5rem 0.8rem; border-radius: 8px;'>
+                <div style='font-size:1.08rem;font-weight:700'>Key Insights</div>
+                <div style='margin-left:0.6rem;'>• <b>PRI</b> growth at <u>15%</u></div>
+                <div style='margin-left:0.6rem;'>• Focus on premium brands</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
 def normalize_dataset_year(df: pd.DataFrame) -> pd.DataFrame:
     """Ensure a numeric 'year' column exists for datasets that have 'Cal Year' or 'PRI Year' values."""
     if "year" in df.columns:
@@ -179,8 +239,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         "Add comment for pivot table (optional)",
         value=saved_pivot_comment,
         key=f"ns_pivot_comment_{segment['id']}",
-        placeholder="Add insights or notes about the manufacturing view..."
+        placeholder="Add insights or notes about the manufacturing view...",
+        height=120
     )
+    
+    show_formatting_tips()
     
     if st.button("Save Manufacturing Pivot to Dashboard", key=f"save_ns_pivot_{segment['id']}"):
         if not selected_years_pivot:
@@ -314,8 +377,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         "Add comment for chart (optional)",
         value=saved_chart_comment,
         key=f"ns_chart_comment_{segment['id']}",
-        placeholder="Add insights about brand performance..."
+        placeholder="Add insights about brand performance...",
+        height=120
     )
+    
+    show_formatting_tips()
     
     if st.button("Save Brand Chart to Dashboard", key=f"save_ns_chart_{segment['id']}"):
         if not selected_families or not selected_brands:
@@ -452,8 +518,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     "Add comment for zonal table (optional)",
                     value=saved_zonal_comment,
                     key=f"ns_zonal_comment_{segment['id']}",
-                    placeholder="Add insights about zonal performance..."
+                    placeholder="Add insights about zonal performance...",
+                    height=120
                 )
+                
+                show_formatting_tips()
                 
                 if st.button("Save Zonal Table to Dashboard", key=f"save_ns_zonal_{segment['id']}"):
                     # Delete existing zonal table
@@ -553,6 +622,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
+                show_formatting_tips()
+                
                 st.markdown("---")
                 
                 # Then let user select states for deep-dive - use saved states if available
@@ -631,6 +702,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
+                
+                show_formatting_tips()
                 
                 if st.button("Save NORTH Zone Drill-Down to Dashboard", key=f"save_ns_north_{segment['id']}"):
                     if not selected_states:
@@ -719,6 +792,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
+                show_formatting_tips()
+                
                 st.markdown("---")
                 
                 # Use saved states if available
@@ -746,6 +821,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
+                
+                show_formatting_tips()
                 
                 if st.button("Save WEST+CSD Zone Drill-Down to Dashboard", key=f"save_ns_west_{segment['id']}"):
                     if not selected_states_west:
@@ -827,6 +904,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
+                show_formatting_tips()
+                
                 st.markdown("---")
                 
                 # Use saved states if available
@@ -854,6 +933,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
+                
+                show_formatting_tips()
                 
                 if st.button("Save EAST Zone Drill-Down to Dashboard", key=f"save_ns_east_{segment['id']}"):
                     if not selected_states_east:
@@ -935,6 +1016,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
+                show_formatting_tips()
+                
                 st.markdown("---")
                 
                 # Use saved states if available
@@ -962,6 +1045,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
+                
+                show_formatting_tips()
                 
                 if st.button("Save SOUTH Zone Drill-Down to Dashboard", key=f"save_ns_south_{segment['id']}"):
                     if not selected_states_south:
@@ -1023,6 +1108,9 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         height=200,
         key=f"seg_truth_comment_{segment['id']}"
     )
+    
+    # Show formatting tips once for both title and insights
+    show_formatting_tips()
     
     # Preview section
     st.markdown("---")
@@ -2088,6 +2176,9 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             "right": right_content
         })
     
+    # Show formatting tips once for all text fields
+    show_formatting_tips()
+    
     # Preview
     if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
         st.markdown("---")
@@ -2097,9 +2188,8 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             st.markdown(f"### {trends_title}")
         
         if trends_description:
-            # Escape HTML and preserve line breaks
-            import html
-            escaped_desc = html.escape(trends_description).replace('\n', '<br>')
+            # Format with bold, underline, etc.
+            formatted_desc = format_comment_preview(trends_description)
             st.markdown(f"""
                 <div style='
                     background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
@@ -2110,7 +2200,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     text-align: center;
                 '>
                     <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
-                        {escaped_desc}
+                        {formatted_desc}
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -2142,8 +2232,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 
                 with cols[1]:
                     if section["left"]:
-                        import html
-                        escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                        formatted_left = format_comment_preview(section["left"])
                         st.markdown(f"""
                             <div style='
                                 background: #E3F2FD;
@@ -2154,15 +2243,14 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                                 min-height: 100px;
                             '>
                                 <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
-                                    {escaped_left}
+                                    {formatted_left}
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
                 
                 with cols[2]:
                     if section["right"]:
-                        import html
-                        escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                        formatted_right = format_comment_preview(section["right"])
                         st.markdown(f"""
                             <div style='
                                 background: #F3E5F5;
@@ -2173,7 +2261,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                                 min-height: 100px;
                             '>
                                 <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
-                                    {escaped_right}
+                                    {formatted_right}
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
@@ -2320,6 +2408,9 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
             "left": left_content,
             "right": right_content
         })
+    
+    # Show formatting tips once for all JTBD sections
+    show_formatting_tips()
     
     # Preview
     if jtbd_title or jtbd_description or any(s["left"] or s["right"] for s in jtbd_sections_data):
@@ -2556,6 +2647,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             "name": brand_name,
             "content": brand_content
         })
+    
+    # Show formatting tips once for all text fields
+    show_formatting_tips()
     
     # Preview
     if brand_title or brand_description or any(b["content"] for b in brands_data):
@@ -3198,7 +3292,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     # Parse saved config
     bg_config = json.loads(saved_battlegrounds["filter_json"]) if saved_battlegrounds and saved_battlegrounds["filter_json"] else {}
     saved_tabs = bg_config.get("tabs", [
-        {"name": "ADVANTAGED STATES", "states": [], "families": [], "brands": []},
+        {"name": "Advantaged states", "states": [], "families": [], "brands": []},
         {"name": "Watch out states", "states": [], "families": [], "brands": []},
         {"name": "Challenged states", "states": [], "families": [], "brands": []}
     ])
@@ -3289,6 +3383,8 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             placeholder="Add insights about state performance, BTM status, brand contributions...",
             height=100
         )
+        
+        show_formatting_tips()
         
         # Additional columns configuration
         st.markdown("**Additional Analysis Columns:**")

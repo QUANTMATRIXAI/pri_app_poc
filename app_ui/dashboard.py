@@ -129,17 +129,23 @@ def render_blocks(
 
 
 def format_comment(text: str) -> str:
-    """Lightweight formatting: **bold**, ## heading, line breaks."""
+    """Lightweight formatting: **bold**, __underline__, ## heading, - bullets, line breaks."""
     safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     lines = safe.splitlines()
     rendered = []
     for line in lines:
         if line.startswith("##"):
             rendered.append(f"<div style='font-size:1.08rem;font-weight:700'>{line.lstrip('#').strip()}</div>")
-        elif line.startswith("•"):
-            rendered.append(f"<div style='margin-left:0.6rem;'>• {line.lstrip('•').strip()}</div>")
+        elif line.startswith("•") or line.strip().startswith("-"):
+            # Support both • and - for bullets
+            text_content = line.lstrip('•').lstrip('-').strip()
+            rendered.append(f"<div style='margin-left:0.6rem;'>• {text_content}</div>")
         else:
-            rendered.append(re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line))
+            # Apply bold **text**
+            line = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line)
+            # Apply underline __text__
+            line = re.sub(r"__(.+?)__", r"<u>\1</u>", line)
+            rendered.append(line)
     return "<br>".join(rendered)
 
 
@@ -1030,7 +1036,6 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     
     if seg_truth_images:
         st.markdown("---")
-        st.markdown("### Supporting Visuals")
         
         # Display images one below the other with controlled width
         for idx, media in enumerate(seg_truth_images):
@@ -1066,8 +1071,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     default_title = f"Battleground in {zone_display}"
     custom_title = filter_config.get("title", default_title) if isinstance(filter_config, dict) else default_title
     
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(f"<h4 class='chart-title'>{custom_title}</h4>", unsafe_allow_html=True)
+    st.markdown(f"### {custom_title}")
     
     # Load data and apply filters
     df = load_dataset(table_row["dataset_id"])
@@ -1274,6 +1278,9 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     # Get images for this section
     media_items = get_media_for_segment(segment["id"])
     seg_trends_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
+    
+    # Sort by ID to maintain upload order (first uploaded = first displayed)
+    seg_trends_images = sorted(seg_trends_images, key=lambda x: x.get("id", 0))
     
     # Get custom trends view
     tables = get_tables_for_segment(segment["id"])
@@ -2068,10 +2075,6 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
                     states_html += f"<div style='background-color: #E8F5E9; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[0]};'>• {state}</div>"
                 states_html += "</div>"
                 st.markdown(states_html, unsafe_allow_html=True)
-                
-                brands = tabs_config[0].get("brands", []) if len(tabs_config) > 0 else []
-                if brands:
-                    st.markdown(f"<div style='font-size: 0.85rem; color: #666; margin-bottom: 1rem;'>🏷️ <b>Brands:</b> {', '.join(brands)}</div>", unsafe_allow_html=True)
             else:
                 st.caption("No states assigned")
             
@@ -2093,10 +2096,6 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
                     states_html += f"<div style='background-color: #FFF8E1; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[1]};'>• {state}</div>"
                 states_html += "</div>"
                 st.markdown(states_html, unsafe_allow_html=True)
-                
-                brands = tabs_config[1].get("brands", []) if len(tabs_config) > 1 else []
-                if brands:
-                    st.markdown(f"<div style='font-size: 0.85rem; color: #666; margin-bottom: 1rem;'>🏷️ <b>Brands:</b> {', '.join(brands)}</div>", unsafe_allow_html=True)
             else:
                 st.caption("No states assigned")
             
@@ -2118,10 +2117,6 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
                     states_html += f"<div style='background-color: #FFEBEE; padding: 0.3rem 0.5rem; border-radius: 0.3rem; font-size: 0.85rem; border-left: 3px solid {tab_colors[2]};'>• {state}</div>"
                 states_html += "</div>"
                 st.markdown(states_html, unsafe_allow_html=True)
-                
-                brands = tabs_config[2].get("brands", []) if len(tabs_config) > 2 else []
-                if brands:
-                    st.markdown(f"<div style='font-size: 0.85rem; color: #666; margin-bottom: 1rem;'>🏷️ <b>Brands:</b> {', '.join(brands)}</div>", unsafe_allow_html=True)
             else:
                 st.caption("No states assigned")
         

@@ -61,13 +61,24 @@ def inject_styles() -> None:
                 color: var(--accent);
             }
             .stTabs [role="tablist"] {
-                border-bottom: 1px solid rgba(0,0,0,0.06);
-                gap: 0.4rem;
+                border-bottom: 2px solid rgba(0,0,0,0.1);
+                gap: 0.5rem;
             }
             .stTabs [role="tab"] {
-                padding: 0.35rem 0.8rem;
-                font-size: 1rem;
-                font-weight: 600;
+                padding: 0.6rem 1.2rem !important;
+                font-size: 1.3rem !important;
+                font-weight: 700 !important;
+            }
+            .stTabs [role="tab"] p {
+                font-size: 1.3rem !important;
+                font-weight: 700 !important;
+            }
+            .stTabs [data-baseweb="tab-panel"] {
+                padding-top: 0.5rem;
+                padding-bottom: 0;
+            }
+            .stTabs {
+                margin-bottom: 0;
             }
             .stButton>button {
                 background: var(--accent) !important;
