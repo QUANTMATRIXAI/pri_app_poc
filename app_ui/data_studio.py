@@ -3346,383 +3346,380 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             st.success("Brand Truths saved to dashboard!")
     
     # S&V section - appears at the very end after Brand Truths section
-    # Only show if Brand Truths Section 1 has been saved
-    if saved_brand_truths:
-        st.markdown("---")
-        st.markdown("### Strengths & Vulnerabilities Section")
-        st.caption("Add a main title and two side-by-side boxes for strengths and vulnerabilities")
-        
-        # Get saved S&V data
-        saved_sv_data = brand_truths_config.get("strengths_vulnerabilities", {})
-        
-        # Main title for S&V section
-        sv_main_title = st.text_input(
-            "Main Title for Strengths & Vulnerabilities",
-            value=saved_sv_data.get("main_title", "PRI Strengths & Vulnerabilities:"),
-            placeholder="e.g., PRI Strengths & Vulnerabilities:",
-            key=f"brand_sv_main_title_{segment['id']}"
+    st.markdown("---")
+    st.markdown("### Strengths & Vulnerabilities Section")
+    st.caption("Add a main title and two side-by-side boxes for strengths and vulnerabilities")
+    
+    # Get saved S&V data
+    saved_sv_data = brand_truths_config.get("strengths_vulnerabilities", {})
+    
+    # Main title for S&V section
+    sv_main_title = st.text_input(
+        "Main Title for Strengths & Vulnerabilities",
+        value=saved_sv_data.get("main_title", "PRI Strengths & Vulnerabilities:"),
+        placeholder="e.g., PRI Strengths & Vulnerabilities:",
+        key=f"brand_sv_main_title_{segment['id']}"
+    )
+    
+    # Two columns for Strengths and Vulnerabilities
+    col_strength, col_vuln = st.columns(2)
+    
+    with col_strength:
+        st.markdown("**Brand Strengths:**")
+        strength_title = st.text_input(
+            "Strengths Box Title",
+            value=saved_sv_data.get("strength_title", "Brand Strengths"),
+            placeholder="e.g., Brand Strengths",
+            key=f"brand_strength_title_{segment['id']}"
         )
+        strength_content = st.text_area(
+            "Strengths Content",
+            value=saved_sv_data.get("strength_content", ""),
+            placeholder="Add bullet points for strengths...\n- Point 1\n- Point 2",
+            height=200,
+            key=f"brand_strength_content_{segment['id']}"
+        )
+    
+    with col_vuln:
+        st.markdown("**Brand Vulnerabilities:**")
+        vuln_title = st.text_input(
+            "Vulnerabilities Box Title",
+            value=saved_sv_data.get("vuln_title", "Brand Vulnerabilities"),
+            placeholder="e.g., Brand Vulnerabilities",
+            key=f"brand_vuln_title_{segment['id']}"
+        )
+        vuln_content = st.text_area(
+            "Vulnerabilities Content",
+            value=saved_sv_data.get("vuln_content", ""),
+            placeholder="Add bullet points for vulnerabilities...\n- Point 1\n- Point 2",
+            height=200,
+            key=f"brand_vuln_content_{segment['id']}"
+        )
+    
+    # Show formatting tips once for S&V fields
+    show_formatting_tips()
+    
+    # Preview S&V section
+    if sv_main_title or strength_content or vuln_content:
+        st.markdown("---")
+        st.markdown("**Preview Strengths & Vulnerabilities:**")
         
-        # Two columns for Strengths and Vulnerabilities
-        col_strength, col_vuln = st.columns(2)
+        if sv_main_title:
+            st.markdown(f"### {sv_main_title}")
         
-        with col_strength:
-            st.markdown("**Brand Strengths:**")
-            strength_title = st.text_input(
-                "Strengths Box Title",
-                value=saved_sv_data.get("strength_title", "Brand Strengths"),
-                placeholder="e.g., Brand Strengths",
-                key=f"brand_strength_title_{segment['id']}"
-            )
-            strength_content = st.text_area(
-                "Strengths Content",
-                value=saved_sv_data.get("strength_content", ""),
-                placeholder="Add bullet points for strengths...\n- Point 1\n- Point 2",
-                height=200,
-                key=f"brand_strength_content_{segment['id']}"
-            )
+        col_prev_str, col_prev_vul = st.columns(2)
         
-        with col_vuln:
-            st.markdown("**Brand Vulnerabilities:**")
-            vuln_title = st.text_input(
-                "Vulnerabilities Box Title",
-                value=saved_sv_data.get("vuln_title", "Brand Vulnerabilities"),
-                placeholder="e.g., Brand Vulnerabilities",
-                key=f"brand_vuln_title_{segment['id']}"
-            )
-            vuln_content = st.text_area(
-                "Vulnerabilities Content",
-                value=saved_sv_data.get("vuln_content", ""),
-                placeholder="Add bullet points for vulnerabilities...\n- Point 1\n- Point 2",
-                height=200,
-                key=f"brand_vuln_content_{segment['id']}"
-            )
-        
-        # Show formatting tips once for S&V fields
-        show_formatting_tips()
-        
-        # Preview S&V section
-        if sv_main_title or strength_content or vuln_content:
-            st.markdown("---")
-            st.markdown("**Preview Strengths & Vulnerabilities:**")
-            
-            if sv_main_title:
-                st.markdown(f"### {sv_main_title}")
-            
-            col_prev_str, col_prev_vul = st.columns(2)
-            
-            with col_prev_str:
-                if strength_title or strength_content:
-                    st.markdown(f"""
+        with col_prev_str:
+            if strength_title or strength_content:
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #E8F5E9 0%, #F1F8F4 100%);
+                        border: 2px dashed #4CAF50;
+                        border-radius: 15px;
+                        padding: 1.5rem;
+                        height: 300px;
+                        overflow-y: auto;
+                    '>
                         <div style='
-                            background: linear-gradient(135deg, #E8F5E9 0%, #F1F8F4 100%);
-                            border: 2px dashed #4CAF50;
-                            border-radius: 15px;
-                            padding: 1.5rem;
-                            height: 300px;
-                            overflow-y: auto;
-                        '>
-                            <div style='
-                                text-align: center;
-                                font-size: 1.2rem;
-                                font-weight: 600;
-                                color: #2E7D32;
-                                margin-bottom: 1rem;
-                            '>{strength_title}</div>
-                            <div style='
-                                font-size: 0.95rem;
-                                line-height: 1.8;
-                                color: #1B5E20;
-                            '>{strength_content.replace(chr(10), '<br>')}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            with col_prev_vul:
-                if vuln_title or vuln_content:
-                    st.markdown(f"""
+                            text-align: center;
+                            font-size: 1.2rem;
+                            font-weight: 600;
+                            color: #2E7D32;
+                            margin-bottom: 1rem;
+                        '>{strength_title}</div>
                         <div style='
-                            background: linear-gradient(135deg, #FCE4EC 0%, #F8E8EE 100%);
-                            border: 2px dashed #E91E63;
-                            border-radius: 15px;
-                            padding: 1.5rem;
-                            height: 300px;
-                            overflow-y: auto;
-                        '>
-                            <div style='
-                                text-align: center;
-                                font-size: 1.2rem;
-                                font-weight: 600;
-                                color: #C2185B;
-                                margin-bottom: 1rem;
-                            '>{vuln_title}</div>
-                            <div style='
-                                font-size: 0.95rem;
-                                line-height: 1.8;
-                                color: #880E4F;
-                            '>{vuln_content.replace(chr(10), '<br>')}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                            font-size: 0.95rem;
+                            line-height: 1.8;
+                            color: #1B5E20;
+                        '>{strength_content.replace(chr(10), '<br>')}</div>
+                    </div>
+                """, unsafe_allow_html=True)
         
-        # Separate save button for S&V
-        if st.button("Save Strengths & Vulnerabilities", key=f"save_brand_sv_{segment['id']}"):
-            # Get existing brand truths data to preserve it
-            existing_tables = get_tables_for_segment(segment["id"])
-            saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
-            
-            if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
-                existing_config = json.loads(saved_brand_truths_current["filter_json"])
-            else:
-                existing_config = {
-                    "title": "Brand Truths Summary - Competitor View",
-                    "description": "",
-                    "brands": []
-                }
-            
-            # Delete existing
-            delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
-            
-            # Update S&V data while preserving other fields
-            existing_config["strengths_vulnerabilities"] = {
-                "main_title": sv_main_title,
-                "strength_title": strength_title,
-                "strength_content": strength_content,
-                "vuln_title": vuln_title,
-                "vuln_content": vuln_content
+        with col_prev_vul:
+            if vuln_title or vuln_content:
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #FCE4EC 0%, #F8E8EE 100%);
+                        border: 2px dashed #E91E63;
+                        border-radius: 15px;
+                        padding: 1.5rem;
+                        height: 300px;
+                        overflow-y: auto;
+                    '>
+                        <div style='
+                            text-align: center;
+                            font-size: 1.2rem;
+                            font-weight: 600;
+                            color: #C2185B;
+                            margin-bottom: 1rem;
+                        '>{vuln_title}</div>
+                        <div style='
+                            font-size: 0.95rem;
+                            line-height: 1.8;
+                            color: #880E4F;
+                        '>{vuln_content.replace(chr(10), '<br>')}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+    
+    # Separate save button for S&V
+    if st.button("Save Strengths & Vulnerabilities", key=f"save_brand_sv_{segment['id']}"):
+        # Get existing brand truths data to preserve it
+        existing_tables = get_tables_for_segment(segment["id"])
+        saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+        
+        if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
+            existing_config = json.loads(saved_brand_truths_current["filter_json"])
+        else:
+            existing_config = {
+                "title": "Brand Truths Summary - Competitor View",
+                "description": "",
+                "brands": []
             }
-            
-            # Save updated configuration
-            save_table(
-                name="Brand Truths View",
-                dataset_id=dataset_id,
-                columns=["Config"],
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="Brand Truths",
-                filter_json=json.dumps(existing_config),
-                comment=""
-            )
-            st.success("Strengths & Vulnerabilities saved to dashboard!")
+        
+        # Delete existing
+        delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
+        
+        # Update S&V data while preserving other fields
+        existing_config["strengths_vulnerabilities"] = {
+            "main_title": sv_main_title,
+            "strength_title": strength_title,
+            "strength_content": strength_content,
+            "vuln_title": vuln_title,
+            "vuln_content": vuln_content
+        }
+        
+        # Save updated configuration
+        save_table(
+            name="Brand Truths View",
+            dataset_id=dataset_id,
+            columns=["Config"],
+            created_by=current_user["username"],
+            segment_id=segment["id"],
+            section="Brand Truths",
+            filter_json=json.dumps(existing_config),
+            comment=""
+        )
+        st.success("Strengths & Vulnerabilities saved to dashboard!")
     
     # SWOT Analysis section - appears after S&V
-    if saved_brand_truths:
-        st.markdown("---")
-        st.markdown("### SWOT Analysis")
-        st.caption("Add a comprehensive SWOT analysis with 4 quadrants")
-        
-        # Get saved SWOT data
-        saved_swot_data = brand_truths_config.get("swot_analysis", {})
-        
-        # Main title for SWOT
-        swot_main_title = st.text_input(
-            "Main Title for SWOT Analysis",
-            value=saved_swot_data.get("main_title", "PRI Portfolio SWOT"),
-            placeholder="e.g., PRI Portfolio SWOT",
-            key=f"brand_swot_main_title_{segment['id']}"
+    st.markdown("---")
+    st.markdown("### SWOT Analysis")
+    st.caption("Add a comprehensive SWOT analysis with 4 quadrants")
+    
+    # Get saved SWOT data
+    saved_swot_data = brand_truths_config.get("swot_analysis", {})
+    
+    # Main title for SWOT
+    swot_main_title = st.text_input(
+        "Main Title for SWOT Analysis",
+        value=saved_swot_data.get("main_title", "PRI Portfolio SWOT"),
+        placeholder="e.g., PRI Portfolio SWOT",
+        key=f"brand_swot_main_title_{segment['id']}"
+    )
+    
+    # Create 2x2 grid for SWOT
+    col_s, col_w = st.columns(2)
+    
+    with col_s:
+        st.markdown("**Strengths (S):**")
+        swot_s_content = st.text_area(
+            "Strengths Content",
+            value=saved_swot_data.get("strengths", ""),
+            placeholder="Add bullet points for strengths...\n- Point 1\n- Point 2",
+            height=200,
+            key=f"brand_swot_s_{segment['id']}"
+        )
+    
+    with col_w:
+        st.markdown("**Weaknesses (W):**")
+        swot_w_content = st.text_area(
+            "Weaknesses Content",
+            value=saved_swot_data.get("weaknesses", ""),
+            placeholder="Add bullet points for weaknesses...\n- Point 1\n- Point 2",
+            height=200,
+            key=f"brand_swot_w_{segment['id']}"
+        )
+    
+    col_o, col_t = st.columns(2)
+    
+    with col_o:
+        st.markdown("**Opportunities (O):**")
+        swot_o_content = st.text_area(
+            "Opportunities Content",
+            value=saved_swot_data.get("opportunities", ""),
+            placeholder="Add bullet points for opportunities...\n- Point 1\n- Point 2",
+            height=200,
+            key=f"brand_swot_o_{segment['id']}"
+        )
+    
+    with col_t:
+        st.markdown("**Threats (T):**")
+        swot_t_content = st.text_area(
+            "Threats Content",
+            value=saved_swot_data.get("threats", ""),
+            placeholder="Add bullet points for threats...\n- Point 1\n- Point 2",
+            height=200,
+            key=f"brand_swot_t_{segment['id']}"
         )
         
-        # Create 2x2 grid for SWOT
-        col_s, col_w = st.columns(2)
+    # Show formatting tips
+    show_formatting_tips()
+    
+    # Preview SWOT
+    if swot_main_title or swot_s_content or swot_w_content or swot_o_content or swot_t_content:
+        st.markdown("---")
+        st.markdown("**Preview SWOT Analysis:**")
         
-        with col_s:
-            st.markdown("**Strengths (S):**")
-            swot_s_content = st.text_area(
-                "Strengths Content",
-                value=saved_swot_data.get("strengths", ""),
-                placeholder="Add bullet points for strengths...\n- Point 1\n- Point 2",
-                height=200,
-                key=f"brand_swot_s_{segment['id']}"
-            )
+        if swot_main_title:
+            st.markdown(f"### {swot_main_title}")
         
-        with col_w:
-            st.markdown("**Weaknesses (W):**")
-            swot_w_content = st.text_area(
-                "Weaknesses Content",
-                value=saved_swot_data.get("weaknesses", ""),
-                placeholder="Add bullet points for weaknesses...\n- Point 1\n- Point 2",
-                height=200,
-                key=f"brand_swot_w_{segment['id']}"
-            )
+        # Top row: S and W
+        col_prev_s, col_prev_w = st.columns(2)
         
-        col_o, col_t = st.columns(2)
-        
-        with col_o:
-            st.markdown("**Opportunities (O):**")
-            swot_o_content = st.text_area(
-                "Opportunities Content",
-                value=saved_swot_data.get("opportunities", ""),
-                placeholder="Add bullet points for opportunities...\n- Point 1\n- Point 2",
-                height=200,
-                key=f"brand_swot_o_{segment['id']}"
-            )
-        
-        with col_t:
-            st.markdown("**Threats (T):**")
-            swot_t_content = st.text_area(
-                "Threats Content",
-                value=saved_swot_data.get("threats", ""),
-                placeholder="Add bullet points for threats...\n- Point 1\n- Point 2",
-                height=200,
-                key=f"brand_swot_t_{segment['id']}"
-            )
-        
-        # Show formatting tips
-        show_formatting_tips()
-        
-        # Preview SWOT
-        if swot_main_title or swot_s_content or swot_w_content or swot_o_content or swot_t_content:
-            st.markdown("---")
-            st.markdown("**Preview SWOT Analysis:**")
-            
-            if swot_main_title:
-                st.markdown(f"### {swot_main_title}")
-            
-            # Top row: S and W
-            col_prev_s, col_prev_w = st.columns(2)
-            
-            with col_prev_s:
-                if swot_s_content:
-                    st.markdown(f"""
+        with col_prev_s:
+            if swot_s_content:
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+                        border: 2px solid #2196F3;
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        min-height: 250px;
+                    '>
                         <div style='
-                            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
-                            border: 2px solid #2196F3;
-                            border-radius: 12px;
-                            padding: 1.5rem;
-                            min-height: 250px;
-                        '>
-                            <div style='
-                                text-align: center;
-                                font-size: 1.3rem;
-                                font-weight: 700;
-                                color: #1565C0;
-                                margin-bottom: 1rem;
-                            '>STRENGTHS</div>
-                            <div style='
-                                font-size: 0.9rem;
-                                line-height: 1.7;
-                                color: #0D47A1;
-                            '>{swot_s_content.replace(chr(10), '<br>')}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            with col_prev_w:
-                if swot_w_content:
-                    st.markdown(f"""
+                            text-align: center;
+                            font-size: 1.3rem;
+                            font-weight: 700;
+                            color: #1565C0;
+                            margin-bottom: 1rem;
+                        '>STRENGTHS</div>
                         <div style='
-                            background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
-                            border: 2px solid #FF9800;
-                            border-radius: 12px;
-                            padding: 1.5rem;
-                            min-height: 250px;
-                        '>
-                            <div style='
-                                text-align: center;
-                                font-size: 1.3rem;
-                                font-weight: 700;
-                                color: #E65100;
-                                margin-bottom: 1rem;
-                            '>WEAKNESS</div>
-                            <div style='
-                                font-size: 0.9rem;
-                                line-height: 1.7;
-                                color: #BF360C;
-                            '>{swot_w_content.replace(chr(10), '<br>')}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-            
-            # Bottom row: O and T
-            col_prev_o, col_prev_t = st.columns(2)
-            
-            with col_prev_o:
-                if swot_o_content:
-                    st.markdown(f"""
-                        <div style='
-                            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
-                            border: 2px solid #4CAF50;
-                            border-radius: 12px;
-                            padding: 1.5rem;
-                            min-height: 250px;
-                        '>
-                            <div style='
-                                text-align: center;
-                                font-size: 1.3rem;
-                                font-weight: 700;
-                                color: #2E7D32;
-                                margin-bottom: 1rem;
-                            '>OPPORTUNITIES</div>
-                            <div style='
-                                font-size: 0.9rem;
-                                line-height: 1.7;
-                                color: #1B5E20;
-                            '>{swot_o_content.replace(chr(10), '<br>')}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            with col_prev_t:
-                if swot_t_content:
-                    st.markdown(f"""
-                        <div style='
-                            background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
-                            border: 2px solid #F44336;
-                            border-radius: 12px;
-                            padding: 1.5rem;
-                            min-height: 250px;
-                        '>
-                            <div style='
-                                text-align: center;
-                                font-size: 1.3rem;
-                                font-weight: 700;
-                                color: #C62828;
-                                margin-bottom: 1rem;
-                            '>THREATS</div>
-                            <div style='
-                                font-size: 0.9rem;
-                                line-height: 1.7;
-                                color: #B71C1C;
-                            '>{swot_t_content.replace(chr(10), '<br>')}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                            font-size: 0.9rem;
+                            line-height: 1.7;
+                            color: #0D47A1;
+                        '>{swot_s_content.replace(chr(10), '<br>')}</div>
+                    </div>
+                """, unsafe_allow_html=True)
         
-        # Separate save button for SWOT
-        if st.button("Save SWOT Analysis", key=f"save_brand_swot_{segment['id']}"):
-            # Get existing brand truths data to preserve it
-            existing_tables = get_tables_for_segment(segment["id"])
-            saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
-            
-            if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
-                existing_config = json.loads(saved_brand_truths_current["filter_json"])
-            else:
-                existing_config = {
-                    "title": "Brand Truths Summary - Competitor View",
-                    "description": "",
-                    "brands": []
-                }
-            
-            # Delete existing
-            delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
-            
-            # Update SWOT data while preserving other fields
-            existing_config["swot_analysis"] = {
-                "main_title": swot_main_title,
-                "strengths": swot_s_content,
-                "weaknesses": swot_w_content,
-                "opportunities": swot_o_content,
-                "threats": swot_t_content
+        with col_prev_w:
+            if swot_w_content:
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+                        border: 2px solid #FF9800;
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        min-height: 250px;
+                    '>
+                        <div style='
+                            text-align: center;
+                            font-size: 1.3rem;
+                            font-weight: 700;
+                            color: #E65100;
+                            margin-bottom: 1rem;
+                        '>WEAKNESS</div>
+                        <div style='
+                            font-size: 0.9rem;
+                            line-height: 1.7;
+                            color: #BF360C;
+                        '>{swot_w_content.replace(chr(10), '<br>')}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        
+        # Bottom row: O and T
+        col_prev_o, col_prev_t = st.columns(2)
+        
+        with col_prev_o:
+            if swot_o_content:
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+                        border: 2px solid #4CAF50;
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        min-height: 250px;
+                    '>
+                        <div style='
+                            text-align: center;
+                            font-size: 1.3rem;
+                            font-weight: 700;
+                            color: #2E7D32;
+                            margin-bottom: 1rem;
+                        '>OPPORTUNITIES</div>
+                        <div style='
+                            font-size: 0.9rem;
+                            line-height: 1.7;
+                            color: #1B5E20;
+                        '>{swot_o_content.replace(chr(10), '<br>')}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        with col_prev_t:
+            if swot_t_content:
+                st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+                        border: 2px solid #F44336;
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        min-height: 250px;
+                    '>
+                        <div style='
+                            text-align: center;
+                            font-size: 1.3rem;
+                            font-weight: 700;
+                            color: #C62828;
+                            margin-bottom: 1rem;
+                        '>THREATS</div>
+                        <div style='
+                            font-size: 0.9rem;
+                            line-height: 1.7;
+                            color: #B71C1C;
+                        '>{swot_t_content.replace(chr(10), '<br>')}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+    
+    # Separate save button for SWOT
+    if st.button("Save SWOT Analysis", key=f"save_brand_swot_{segment['id']}"):
+        # Get existing brand truths data to preserve it
+        existing_tables = get_tables_for_segment(segment["id"])
+        saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+        
+        if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
+            existing_config = json.loads(saved_brand_truths_current["filter_json"])
+        else:
+            existing_config = {
+                "title": "Brand Truths Summary - Competitor View",
+                "description": "",
+                "brands": []
             }
-            
-            # Save updated configuration
-            save_table(
-                name="Brand Truths View",
-                dataset_id=dataset_id,
-                columns=["Config"],
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="Brand Truths",
-                filter_json=json.dumps(existing_config),
-                comment=""
-            )
-            st.success("SWOT Analysis saved to dashboard!")
+        
+        # Delete existing
+        delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
+        
+        # Update SWOT data while preserving other fields
+        existing_config["swot_analysis"] = {
+            "main_title": swot_main_title,
+            "strengths": swot_s_content,
+            "weaknesses": swot_w_content,
+            "opportunities": swot_o_content,
+            "threats": swot_t_content
+        }
+        
+        # Save updated configuration
+        save_table(
+            name="Brand Truths View",
+            dataset_id=dataset_id,
+            columns=["Config"],
+            created_by=current_user["username"],
+            segment_id=segment["id"],
+            section="Brand Truths",
+            filter_json=json.dumps(existing_config),
+            comment=""
+        )
+        st.success("SWOT Analysis saved to dashboard!")
 
 
 
