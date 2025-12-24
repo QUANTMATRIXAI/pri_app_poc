@@ -28,7 +28,7 @@ from .charts import plot_chart
 
 
 def format_comment_preview(text: str) -> str:
-    """Format comment text with bold, underline, headings, and bullets for preview"""
+    """Format comment text with bold, underline, italic, headings, and bullets for preview"""
     import re
     safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     lines = safe.splitlines()
@@ -39,17 +39,20 @@ def format_comment_preview(text: str) -> str:
             heading_text = line.lstrip('#').strip()
             heading_text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", heading_text)
             heading_text = re.sub(r"__(.+?)__", r"<u>\1</u>", heading_text)
+            heading_text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", heading_text)
             rendered.append(f"<div style='font-size:1.08rem;font-weight:700'>{heading_text}</div>")
         elif line.startswith("•") or line.strip().startswith("-"):
             # Bullet - apply formatting to the bullet content
             text_content = line.lstrip('•').lstrip('-').strip()
             text_content = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text_content)
             text_content = re.sub(r"__(.+?)__", r"<u>\1</u>", text_content)
+            text_content = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", text_content)
             rendered.append(f"<div style='margin-left:0.6rem;'>• {text_content}</div>")
         else:
             # Regular text - apply formatting
             line = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line)
             line = re.sub(r"__(.+?)__", r"<u>\1</u>", line)
+            line = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", line)
             rendered.append(line)
     return "<br>".join(rendered)
 
@@ -65,6 +68,7 @@ def show_formatting_tips(key_suffix: str = "") -> None:
             
             - `**text**` for bold
             - `__text__` for underline
+            - `*text*` for italic
             - `## text` for heading
             - `- text` for bullet
             
@@ -72,7 +76,8 @@ def show_formatting_tips(key_suffix: str = "") -> None:
             ```
             ## Key Insights
             - **PRI** growth at __15%__
-            - Focus on premium brands
+            - Focus on *premium* brands
+            - __Bold__ and *italic* work in bullets
             ```
             """)
         
@@ -82,7 +87,8 @@ def show_formatting_tips(key_suffix: str = "") -> None:
             <div style='background-color: #fff8df; border-left: 3px solid #f5b400; padding: 0.5rem 0.8rem; border-radius: 8px;'>
                 <div style='font-size:1.08rem;font-weight:700'>Key Insights</div>
                 <div style='margin-left:0.6rem;'>• <b>PRI</b> growth at <u>15%</u></div>
-                <div style='margin-left:0.6rem;'>• Focus on premium brands</div>
+                <div style='margin-left:0.6rem;'>• Focus on <i>premium</i> brands</div>
+                <div style='margin-left:0.6rem;'>• <u>Bold</u> and <i>italic</i> work in bullets</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1246,8 +1252,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     except:
                         return None
                 
-                # Add index column for preview
-                df_csv["_index"] = df_csv.apply(calculate_index, axis=1)
+                # Add index column for preview (rounded to integer)
+                df_csv["_index"] = df_csv.apply(calculate_index, axis=1).round(0).astype('Int64')
                 
                 # Preview with conditional formatting
                 st.markdown("**Preview with Conditional Formatting:**")
@@ -1256,7 +1262,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     """Apply background color to Premium Whisky column based on index"""
                     idx_val = row["_index"]
                     
-                    if idx_val is None:
+                    if pd.isna(idx_val):
                         return [""] * len(row)
                     
                     try:
@@ -1274,19 +1280,17 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     except:
                         return [""] * len(row)
                 
-                # Show preview without _index column
-                df_preview = df_csv[["Metric", "TBA", "Premium Whisky"]].copy()
                 styled_preview = df_csv.style.apply(color_premium_whisky_preview, axis=1)
                 
-                # Display only first 3 columns in preview
+                # Display with _index column hidden using column_order
+                display_columns = ["Metric", "TBA", "Premium Whisky", "_index"]
+                
                 st.dataframe(
                     styled_preview,
                     use_container_width=True,
                     hide_index=True,
                     height=400,
-                    column_config={
-                        "_index": None  # Hide index column
-                    }
+                    column_order=display_columns
                 )
                 
                 st.markdown("""
@@ -1303,7 +1307,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     delete_tables_for_section(segment["id"], "Segment Truths", "P3M Segment Profile")
                     
                     # Save only the 3 columns (without _index)
-                    profile_dict = df_preview.to_dict('list')
+                    df_to_save = df_csv[["Metric", "TBA", "Premium Whisky"]].copy()
+                    profile_dict = df_to_save.to_dict('list')
                     
                     save_table(
                         name="P3M Segment Profile",
@@ -2175,11 +2180,26 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             st.markdown(f"**Image {idx+1}:**")
             
             # Get existing data if available
-            existing_title = ""
+            existing_tab_title = ""
+            existing_page_title = ""
             existing_comment = ""
             if idx < len(seg_trends_media):
-                existing_title = seg_trends_media[idx].get("title", "")
-                existing_comment = seg_trends_media[idx].get("comment", "")
+                existing_tab_title = seg_trends_media[idx].get("title", "")
+                combined_comment = seg_trends_media[idx].get("comment", "")
+                
+                # Parse page_title and comment from combined_comment
+                if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                    parts = combined_comment.split("##PAGE_TITLE##")
+                    if len(parts) > 1:
+                        remaining = parts[1]
+                        if "##COMMENT##" in remaining:
+                            page_parts = remaining.split("##COMMENT##")
+                            existing_page_title = page_parts[0]
+                            existing_comment = page_parts[1] if len(page_parts) > 1 else ""
+                        else:
+                            existing_page_title = remaining
+                else:
+                    existing_comment = combined_comment
             
             # Layout: Image on left, title + comment on right
             col_img, col_inputs = st.columns([1, 1])
@@ -2188,11 +2208,18 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.image(img, use_container_width=True)
             
             with col_inputs:
-                title = st.text_input(
-                    "Title",
-                    value=existing_title or f"Page {idx+1}",
-                    key=f"seg_trends_title_{segment['id']}_{idx}",
-                    placeholder=f"Enter title for image {idx+1}"
+                tab_title = st.text_input(
+                    "Tab Title (short name for tab)",
+                    value=existing_tab_title or f"Page {idx+1}",
+                    key=f"seg_trends_tab_title_{segment['id']}_{idx}",
+                    placeholder=f"e.g., Page {idx+1}"
+                )
+                
+                page_title = st.text_input(
+                    "Page Title (full title above image)",
+                    value=existing_page_title,
+                    key=f"seg_trends_page_title_{segment['id']}_{idx}",
+                    placeholder="e.g., Outlet Activation: Spread-Out activation..."
                 )
                 
                 comment = st.text_area(
@@ -2203,7 +2230,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     height=150
                 )
             
-            image_configs.append({"title": title, "comment": comment})
+            image_configs.append({"tab_title": tab_title, "page_title": page_title, "comment": comment})
             
             if idx < len(uploaded_images) - 1:
                 st.markdown("---")
@@ -2218,17 +2245,21 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             # Delete existing images for this section
             delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
             
-            # Save all uploaded images with titles and comments
+            # Save all uploaded images with tab titles, page titles, and comments
             for idx, uploaded_img in enumerate(uploaded_images):
-                config = image_configs[idx] if idx < len(image_configs) else {"title": f"Page {idx+1}", "comment": ""}
+                config = image_configs[idx] if idx < len(image_configs) else {"tab_title": f"Page {idx+1}", "page_title": "", "comment": ""}
+                
+                # Store page_title in comment field with special marker, and actual comment after
+                combined_comment = f"##PAGE_TITLE##{config['page_title']}##COMMENT##" + config["comment"]
+                
                 save_media_upload(
                     uploaded_file=uploaded_img,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=config["comment"],
+                    comment=combined_comment,
                     label="Segment Trends Carousel",
-                    title=config["title"]
+                    title=config["tab_title"]
                 )
             
             st.success(f"{len(uploaded_images)} image(s) saved to dashboard!")
@@ -2996,82 +3027,81 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             else:
                 st.success(f"✅ CSV loaded successfully! {len(df_brand_csv)} rows, {len(df_brand_csv.columns)} columns found.")
                 
-                # Let user select which column to apply formatting to
-                brand_columns = df_brand_csv.columns[1:].tolist()  # All columns except first
+                # Base column is always the second column (first brand column)
+                base_column = df_brand_csv.columns[1]
                 
-                format_column = st.selectbox(
-                    "Select column to apply conditional formatting (will compare to first brand column)",
-                    options=brand_columns,
-                    index=1 if len(brand_columns) > 1 else 0,
-                    key=f"brand_format_col_{segment['id']}"
-                )
+                # Calculate index for ALL brand columns (except first metric column and base column)
+                brand_columns = df_brand_csv.columns[2:].tolist()  # All columns after base column
                 
-                # Calculate index for the selected column
-                def calculate_brand_index(row, base_col, compare_col):
-                    """Calculate index comparing two brand columns"""
-                    try:
-                        base_val = str(row[base_col]).replace("%", "").strip()
-                        compare_val = str(row[compare_col]).replace("%", "").strip()
-                        
-                        if not base_val or not compare_val or base_val == "" or compare_val == "":
+                # Add index columns for each brand column
+                for brand_col in brand_columns:
+                    def calculate_brand_index(row, base_col, compare_col):
+                        """Calculate index comparing two brand columns"""
+                        try:
+                            base_val = str(row[base_col]).replace("%", "").strip()
+                            compare_val = str(row[compare_col]).replace("%", "").strip()
+                            
+                            if not base_val or not compare_val or base_val == "" or compare_val == "":
+                                return None
+                            
+                            base_num = float(base_val)
+                            compare_num = float(compare_val)
+                            
+                            if base_num == 0:
+                                return None
+                            
+                            return (compare_num / base_num) * 100
+                        except:
                             return None
-                        
-                        base_num = float(base_val)
-                        compare_num = float(compare_val)
-                        
-                        if base_num == 0:
-                            return None
-                        
-                        return (compare_num / base_num) * 100
-                    except:
-                        return None
-                
-                # Add index column for preview
-                base_column = df_brand_csv.columns[1]  # First brand column (e.g., Premium Whisky)
-                df_brand_csv["_index"] = df_brand_csv.apply(
-                    lambda row: calculate_brand_index(row, base_column, format_column), 
-                    axis=1
-                )
+                    
+                    df_brand_csv[f"_index_{brand_col}"] = df_brand_csv.apply(
+                        lambda row, bc=brand_col: calculate_brand_index(row, base_column, bc), 
+                        axis=1
+                    )
                 
                 # Preview with conditional formatting
                 st.markdown("**Preview with Conditional Formatting:**")
-                st.caption(f"Formatting applied to '{format_column}' column (comparing to '{base_column}')")
+                st.caption(f"Formatting applied to all brand columns (comparing to '{base_column}')")
                 
-                def color_brand_column(row):
-                    """Apply background color to selected brand column based on index"""
-                    idx_val = row["_index"]
+                def color_all_brand_columns(row):
+                    """Apply background color to all brand columns based on their index"""
+                    styles = [""] * len(row)
                     
-                    if idx_val is None:
-                        return [""] * len(row)
-                    
-                    try:
-                        if idx_val > 110:
-                            color = "background-color: #90EE90; font-weight: bold;"
-                        elif idx_val >= 105:
-                            color = "background-color: #D4EDDA; font-weight: bold;"
-                        elif idx_val < 75:
-                            color = "background-color: #FFB380; font-weight: bold;"
-                        else:
-                            color = ""
+                    for brand_col in brand_columns:
+                        idx_val = row[f"_index_{brand_col}"]
                         
-                        # Apply color to the selected format column
-                        format_col_idx = df_brand_csv.columns.get_loc(format_column)
-                        styles = [""] * len(row)
-                        styles[format_col_idx] = color
-                        return styles
-                    except:
-                        return [""] * len(row)
+                        if idx_val is None:
+                            continue
+                        
+                        try:
+                            if idx_val > 110:
+                                color = "background-color: #90EE90; font-weight: bold;"
+                            elif idx_val >= 105:
+                                color = "background-color: #D4EDDA; font-weight: bold;"
+                            elif idx_val < 75:
+                                color = "background-color: #FFB380; font-weight: bold;"
+                            else:
+                                color = ""
+                            
+                            # Apply color to the brand column
+                            brand_col_idx = df_brand_csv.columns.get_loc(brand_col)
+                            styles[brand_col_idx] = color
+                        except:
+                            pass
+                    
+                    return styles
                 
-                styled_brand_preview = df_brand_csv.style.apply(color_brand_column, axis=1)
+                styled_brand_preview = df_brand_csv.style.apply(color_all_brand_columns, axis=1)
+                
+                # Hide all index columns
+                column_config = {f"_index_{col}": None for col in brand_columns}
                 
                 st.dataframe(
                     styled_brand_preview,
                     use_container_width=True,
                     hide_index=True,
                     height=400,
-                    column_config={
-                        "_index": None  # Hide index column
-                    }
+                    column_config=column_config
                 )
                 
                 st.markdown("""
@@ -3090,11 +3120,11 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         # Delete existing
                         delete_tables_for_section(segment["id"], "Brand Truths", "Brand Profile Comparison")
                         
-                        # Save data without _index column
-                        df_to_save = df_brand_csv.drop(columns=["_index"])
+                        # Save data without _index columns
+                        cols_to_drop = [col for col in df_brand_csv.columns if col.startswith("_index_")]
+                        df_to_save = df_brand_csv.drop(columns=cols_to_drop)
                         profile_dict = {
                             "title": profile_table_title,
-                            "format_column": format_column,
                             "base_column": base_column,
                             "data": df_to_save.to_dict('list')
                         }
@@ -3267,7 +3297,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                     padding: 1rem;
                                     margin: 0.5rem 0;
                                     border-radius: 8px;
-                                    min-height: 200px;
+                                    height: 300px;
+                                    overflow-y: auto;
                                     font-size: 0.9rem;
                                     line-height: 1.6;
                                     color: #1A1A1A;
@@ -3314,191 +3345,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             )
             st.success("Brand Truths saved to dashboard!")
     
-    st.markdown("---")
-    st.markdown("### Brand Truths - Section 2")
-    st.caption("Create another brand comparison view (optional)")
-    
-    # Load saved configuration for section 2
-    saved_brand_truths_2 = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View 2"), None)
-    
-    # Parse saved config
-    brand_truths_config_2 = json.loads(saved_brand_truths_2["filter_json"]) if saved_brand_truths_2 and saved_brand_truths_2["filter_json"] else {}
-    saved_brand_title_2 = brand_truths_config_2.get("title", "Brand Truths Summary - Brand Family View")
-    saved_brand_description_2 = brand_truths_config_2.get("description", "")
-    saved_brand_sections_2 = brand_truths_config_2.get("brands", [])
-    
-    # Title and main description for section 2 - pre-populated with saved values
-    brand_title_2 = st.text_input(
-        "View Title (Section 2) - editable",
-        value=saved_brand_title_2,
-        placeholder="e.g., Growth Opportunities & Market Dynamics",
-        key=f"brand_title_2_{segment['id']}",
-        help="This title will appear on the dashboard"
-    )
-    
-    brand_description_2 = st.text_area(
-        "Main Description (Section 2)",
-        value=saved_brand_description_2,
-        placeholder="Enter description for second brand comparison...",
-        height=100,
-        key=f"brand_desc_2_{segment['id']}"
-    )
-    
-    # Number of brand sections for section 2
-    num_brands_2 = st.number_input(
-        "Number of Brand Sections (1-8)",
-        min_value=1,
-        max_value=8,
-        value=3,
-        key=f"brand_num_sections_2_{segment['id']}"
-    )
-    
-    # Brand section inputs for section 2 - pre-populated with saved values
-    brands_data_2 = []
-    for i in range(num_brands_2):
-        st.markdown(f"**Brand Section {i+1}:**")
-        
-        # Get saved brand data if available
-        saved_brand_2 = saved_brand_sections_2[i] if i < len(saved_brand_sections_2) else {}
-        saved_brand_name_2 = saved_brand_2.get("name", "")
-        saved_brand_content_2 = saved_brand_2.get("content", "")
-        
-        col_name, col_content = st.columns([1, 3])
-        
-        with col_name:
-            brand_name = st.text_input(
-                f"Brand Name",
-                value=saved_brand_name_2,
-                placeholder="e.g., Royal Challenge",
-                key=f"brand_sec2_{i}_name_{segment['id']}"
-            )
-        
-        with col_content:
-            brand_content = st.text_area(
-                f"Brand insights/bullet points",
-                value=saved_brand_content_2,
-                placeholder="Enter brand insights...",
-                height=150,
-                key=f"brand_sec2_{i}_content_{segment['id']}"
-            )
-        
-        brands_data_2.append({
-            "number": i + 1,
-            "name": brand_name,
-            "content": brand_content
-        })
-    
-    # Preview for section 2
-    if brand_title_2 or brand_description_2 or any(b["content"] for b in brands_data_2):
-        st.markdown("---")
-        st.markdown("**Preview (Section 2):**")
-        
-        if brand_title_2:
-            st.markdown(f"### {brand_title_2}")
-        
-        if brand_description_2:
-            import html
-            escaped_desc = html.escape(brand_description_2).replace('\n', '<br>')
-            st.markdown(f"""
-                <div style='
-                    background: linear-gradient(to right, #FFF9E6 0%, #FFF3D6 100%);
-                    border: 1px solid #E8D7A0;
-                    padding: 1rem 1.5rem;
-                    margin: 1rem 0;
-                    border-radius: 8px;
-                    text-align: center;
-                    font-size: 1rem;
-                    line-height: 1.6;
-                    color: #2C2C2C;
-                '>
-                    {escaped_desc}
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # Display brand sections with intelligent layout
-        total_brands_2 = len(brands_data_2)
-        
-        # Determine layout based on number of brands
-        if total_brands_2 <= 4:
-            layout_2 = [total_brands_2]
-        elif total_brands_2 == 5:
-            layout_2 = [3, 2]
-        elif total_brands_2 == 6:
-            layout_2 = [3, 3]
-        elif total_brands_2 == 7:
-            layout_2 = [4, 3]
-        else:  # 8
-            layout_2 = [4, 4]
-        
-        # Display brands according to layout
-        brand_idx_2 = 0
-        for row_size in layout_2:
-            row_brands = brands_data_2[brand_idx_2:brand_idx_2 + row_size]
-            cols = st.columns(row_size)
-            brand_idx_2 += row_size
-            
-            for idx, (col, brand) in enumerate(zip(cols, row_brands)):
-                with col:
-                    if brand["name"] or brand["content"]:
-                        # Brand name as header
-                        if brand["name"]:
-                            st.markdown(f"### {brand['name']}")
-                        
-                        # Brand content
-                        if brand["content"]:
-                            import html
-                            escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
-                            st.markdown(f"""
-                                <div style='
-                                    background: #F5F5F5;
-                                    border: 1px solid #CCCCCC;
-                                    padding: 1rem;
-                                    margin: 0.5rem 0;
-                                    border-radius: 8px;
-                                    min-height: 200px;
-                                    font-size: 0.9rem;
-                                    line-height: 1.6;
-                                    color: #1A1A1A;
-                                '>
-                                    {escaped_content}
-                                </div>
-                            """, unsafe_allow_html=True)
-            
-            # Add spacing between rows
-            st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-    
-    # Save button for section 2
-    if st.button("Save Brand Truths Section 2 to Dashboard", key=f"save_brand_truths_2_{segment['id']}"):
-        if not brand_title_2:
-            st.error("Please provide a title for section 2.")
-        else:
-            # Delete existing section 2
-            delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View 2")
-            
-            # Save configuration
-            config_data = json.dumps({
-                "title": brand_title_2,
-                "description": brand_description_2,
-                "brands": [{
-                    "number": b["number"],
-                    "name": b["name"],
-                    "content": b["content"]
-                } for b in brands_data_2]
-            })
-            
-            save_table(
-                name="Brand Truths View 2",
-                dataset_id=dataset_id,
-                columns=["Config"],
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="Brand Truths",
-                filter_json=config_data,
-                comment=""
-            )
-            st.success("Brand Truths Section 2 saved to dashboard!")
-    
-    # S&V section - appears at the very end after both Brand Truths sections
+    # S&V section - appears at the very end after Brand Truths section
     # Only show if Brand Truths Section 1 has been saved
     if saved_brand_truths:
         st.markdown("---")
@@ -3572,7 +3419,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             border: 2px dashed #4CAF50;
                             border-radius: 15px;
                             padding: 1.5rem;
-                            min-height: 200px;
+                            height: 300px;
+                            overflow-y: auto;
                         '>
                             <div style='
                                 text-align: center;
@@ -3597,7 +3445,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             border: 2px dashed #E91E63;
                             border-radius: 15px;
                             padding: 1.5rem;
-                            min-height: 200px;
+                            height: 300px;
+                            overflow-y: auto;
                         '>
                             <div style='
                                 text-align: center;

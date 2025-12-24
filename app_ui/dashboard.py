@@ -129,22 +129,33 @@ def render_blocks(
 
 
 def format_comment(text: str) -> str:
-    """Lightweight formatting: **bold**, __underline__, ## heading, - bullets, line breaks."""
+    """Lightweight formatting: **bold**, __underline__, *italic*, ## heading, - bullets, line breaks."""
     safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     lines = safe.splitlines()
     rendered = []
     for line in lines:
         if line.startswith("##"):
-            rendered.append(f"<div style='font-size:1.08rem;font-weight:700'>{line.lstrip('#').strip()}</div>")
+            heading_text = line.lstrip('#').strip()
+            # Apply formatting to heading
+            heading_text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", heading_text)
+            heading_text = re.sub(r"__(.+?)__", r"<u>\1</u>", heading_text)
+            heading_text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", heading_text)
+            rendered.append(f"<div style='font-size:1.08rem;font-weight:700'>{heading_text}</div>")
         elif line.startswith("•") or line.strip().startswith("-"):
             # Support both • and - for bullets
             text_content = line.lstrip('•').lstrip('-').strip()
+            # Apply formatting to bullet content
+            text_content = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text_content)
+            text_content = re.sub(r"__(.+?)__", r"<u>\1</u>", text_content)
+            text_content = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", text_content)
             rendered.append(f"<div style='margin-left:0.6rem;'>• {text_content}</div>")
         else:
             # Apply bold **text**
             line = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line)
             # Apply underline __text__
             line = re.sub(r"__(.+?)__", r"<u>\1</u>", line)
+            # Apply italic *text* (must be after bold to avoid conflicts)
+            line = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", line)
             rendered.append(line)
     return "<br>".join(rendered)
 
@@ -938,7 +949,7 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     
     with col2:
         # Profile data table in expander
-        with st.expander("📊 P3M Segment Profile Data", expanded=True):
+        with st.expander("📊 P3M Segment Profile Data", expanded=False):
             # Load P3M profile data from database
             from app_core.tables import get_tables_for_segment
             existing_tables = get_tables_for_segment(segment["id"])
@@ -1029,12 +1040,14 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
             comment = media.get("comment", "")
             
             if file_path and os.path.exists(file_path):
+                # Display title first (outside columns)
+                if title:
+                    st.markdown(f"### {title}")
+                
                 # Image on left, comment on right
                 col_img, col_comment = st.columns([1, 1])
                 
                 with col_img:
-                    if title:
-                        st.markdown(f"### {title}")
                     st.image(file_path, use_container_width=True)
                 
                 with col_comment:
@@ -1320,9 +1333,30 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
         for idx, (tab, media) in enumerate(zip(image_tabs, seg_trends_images)):
             with tab:
                 file_path = media.get("file_path")
-                comment = media.get("comment", "")
+                tab_title = media.get("title", "")
+                combined_comment = media.get("comment", "")
+                
+                # Parse page_title and comment from combined_comment
+                page_title = ""
+                comment = ""
+                if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                    parts = combined_comment.split("##PAGE_TITLE##")
+                    if len(parts) > 1:
+                        remaining = parts[1]
+                        if "##COMMENT##" in remaining:
+                            page_parts = remaining.split("##COMMENT##")
+                            page_title = page_parts[0]
+                            comment = page_parts[1] if len(page_parts) > 1 else ""
+                        else:
+                            page_title = remaining
+                else:
+                    comment = combined_comment
                 
                 if file_path and os.path.exists(file_path):
+                    # Display page title first (outside columns)
+                    if page_title:
+                        st.markdown(f"### {page_title}")
+                    
                     # Display image and comment side by side if comment exists
                     if comment:
                         col_img, col_comment = st.columns([1, 1])
@@ -1360,9 +1394,30 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     elif len(seg_trends_images) == 1:
         # Single image
         file_path = seg_trends_images[0].get("file_path")
-        comment = seg_trends_images[0].get("comment", "")
+        tab_title = seg_trends_images[0].get("title", "")
+        combined_comment = seg_trends_images[0].get("comment", "")
+        
+        # Parse page_title and comment from combined_comment
+        page_title = ""
+        comment = ""
+        if combined_comment and "##PAGE_TITLE##" in combined_comment:
+            parts = combined_comment.split("##PAGE_TITLE##")
+            if len(parts) > 1:
+                remaining = parts[1]
+                if "##COMMENT##" in remaining:
+                    page_parts = remaining.split("##COMMENT##")
+                    page_title = page_parts[0]
+                    comment = page_parts[1] if len(page_parts) > 1 else ""
+                else:
+                    page_title = remaining
+        else:
+            comment = combined_comment
         
         if file_path and os.path.exists(file_path):
+            # Display page title first (outside columns)
+            if page_title:
+                st.markdown(f"### {page_title}")
+            
             # Display image and comment side by side if comment exists
             if comment:
                 col_img, col_comment = st.columns([1, 1])
@@ -1525,7 +1580,6 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
     """Render Brand Truths section"""
     # Get brand truths views
     brand_view = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
-    brand_view_2 = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View 2"), None)
     brand_profile_table = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Profile Comparison"), None)
     
     # Render Brand Profile Comparison Table first (if exists)
@@ -1534,7 +1588,6 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
             profile_config = json.loads(brand_profile_table["filter_json"]) if brand_profile_table["filter_json"] else {}
             profile_title = profile_config.get("title", "Brand Profile Comparison")
             profile_data = profile_config.get("data", {})
-            format_column = profile_config.get("format_column", "")
             base_column = profile_config.get("base_column", "")
             
             if profile_title:
@@ -1543,60 +1596,70 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
             if profile_data:
                 df_profile = pd.DataFrame(profile_data)
                 
-                # Calculate index for conditional formatting
-                def calculate_brand_index(row):
-                    """Calculate index comparing format column to base column"""
-                    try:
-                        base_val = str(row[base_column]).replace("%", "").strip()
-                        compare_val = str(row[format_column]).replace("%", "").strip()
-                        
-                        if not base_val or not compare_val or base_val == "" or compare_val == "":
+                # Get all brand columns (all columns after base column)
+                base_col_idx = df_profile.columns.get_loc(base_column) if base_column in df_profile.columns else 1
+                brand_columns = df_profile.columns[base_col_idx + 1:].tolist()
+                
+                # Calculate index for ALL brand columns
+                for brand_col in brand_columns:
+                    def calculate_brand_index(row, base_col, compare_col):
+                        """Calculate index comparing brand column to base column"""
+                        try:
+                            base_val = str(row[base_col]).replace("%", "").strip()
+                            compare_val = str(row[compare_col]).replace("%", "").strip()
+                            
+                            if not base_val or not compare_val or base_val == "" or compare_val == "":
+                                return None
+                            
+                            base_num = float(base_val)
+                            compare_num = float(compare_val)
+                            
+                            if base_num == 0:
+                                return None
+                            
+                            return (compare_num / base_num) * 100
+                        except:
                             return None
-                        
-                        base_num = float(base_val)
-                        compare_num = float(compare_val)
-                        
-                        if base_num == 0:
-                            return None
-                        
-                        return (compare_num / base_num) * 100
-                    except:
-                        return None
-                
-                # Add index column for calculation only
-                df_profile["_index"] = df_profile.apply(calculate_brand_index, axis=1)
-                
-                # Function to apply conditional formatting
-                def color_brand_column(row):
-                    """Apply background color to format column based on index value"""
-                    idx_val = row["_index"]
                     
-                    if idx_val is None:
-                        return [""] * len(row)
+                    df_profile[f"_index_{brand_col}"] = df_profile.apply(
+                        lambda row, bc=brand_col: calculate_brand_index(row, base_column, bc), 
+                        axis=1
+                    )
+                
+                # Function to apply conditional formatting to all brand columns
+                def color_all_brand_columns(row):
+                    """Apply background color to all brand columns based on index value"""
+                    styles = [""] * len(row)
                     
-                    try:
-                        if idx_val > 110:
-                            color = "background-color: #90EE90; font-weight: bold;"
-                        elif idx_val >= 105:
-                            color = "background-color: #D4EDDA; font-weight: bold;"
-                        elif idx_val < 75:
-                            color = "background-color: #FFB380; font-weight: bold;"
-                        else:
-                            color = ""
+                    for brand_col in brand_columns:
+                        idx_val = row[f"_index_{brand_col}"]
                         
-                        # Apply color to the format column
-                        format_col_idx = df_profile.columns.get_loc(format_column)
-                        styles = [""] * len(row)
-                        styles[format_col_idx] = color
-                        return styles
-                    except:
-                        return [""] * len(row)
+                        if idx_val is None:
+                            continue
+                        
+                        try:
+                            if idx_val > 110:
+                                color = "background-color: #90EE90; font-weight: bold;"
+                            elif idx_val >= 105:
+                                color = "background-color: #D4EDDA; font-weight: bold;"
+                            elif idx_val < 75:
+                                color = "background-color: #FFB380; font-weight: bold;"
+                            else:
+                                color = ""
+                            
+                            # Apply color to the brand column
+                            brand_col_idx = df_profile.columns.get_loc(brand_col)
+                            styles[brand_col_idx] = color
+                        except:
+                            pass
+                    
+                    return styles
                 
-                # Apply styling to dataframe with _index column
-                styled_df = df_profile.style.apply(color_brand_column, axis=1)
+                # Apply styling to dataframe
+                styled_df = df_profile.style.apply(color_all_brand_columns, axis=1)
                 
-                # Get list of columns to display (exclude _index)
-                display_columns = [col for col in df_profile.columns if col != "_index"]
+                # Get list of columns to display (exclude _index columns)
+                display_columns = [col for col in df_profile.columns if not col.startswith("_index_")]
                 
                 # Display only the visible columns
                 st.dataframe(
@@ -1621,19 +1684,13 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
         except Exception as e:
             st.error(f"Error rendering Brand Profile table: {str(e)}")
     
-    if not brand_view and not brand_view_2 and not brand_profile_table:
+    if not brand_view and not brand_profile_table:
         st.info("No content published for Brand Truths yet. Editors can configure it in Data Studio.")
         return
     
     # Render first section (without S&V)
     if brand_view:
         render_brand_truths_section(brand_view, is_editor, segment, "1", show_sv=False)
-    
-    # Render second section (without S&V)
-    if brand_view_2:
-        if brand_view:
-            st.markdown("---")
-        render_brand_truths_section(brand_view_2, is_editor, segment, "2", show_sv=False)
     
     # Render S&V section at the very end (only from Section 1 config)
     if brand_view:
@@ -1727,7 +1784,8 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
                                 padding: 1rem;
                                 margin: 0.5rem 0;
                                 border-radius: 8px;
-                                min-height: 200px;
+                                height: 300px;
+                                overflow-y: auto;
                             '>
                                 <div style='font-size: 0.9rem; line-height: 1.6; color: #1A1A1A;'>
                                     {escaped_content}
