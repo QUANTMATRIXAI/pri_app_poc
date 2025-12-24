@@ -1101,6 +1101,80 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     existing_tables = get_tables_for_segment(segment["id"])
     saved_seg_truth = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "Segment Truth"), None)
     
+    # SECTION 1: First Image Upload (appears before title)
+    st.markdown("### Opening Image")
+    st.caption("Upload an image that will appear at the very top of Segment Truths")
+    
+    # Get existing first image
+    from app_core.media import get_media_for_segment
+    existing_media = get_media_for_segment(segment["id"])
+    first_image = next((m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "First Image"), None)
+    
+    if first_image:
+        st.info("✅ Opening image already uploaded. Upload a new image to replace it.")
+        with st.expander("View Current Image", expanded=False):
+            if first_image.get("file_path") and os.path.exists(first_image["file_path"]):
+                st.image(first_image["file_path"], use_container_width=True)
+                st.markdown(f"**Title:** {first_image.get('title', 'N/A')}")
+                st.markdown(f"**Comment:** {first_image.get('comment', 'N/A')}")
+    
+    uploaded_first_image = st.file_uploader(
+        "Upload Opening Image",
+        type=["png", "jpg", "jpeg"],
+        key=f"seg_truth_first_image_{segment['id']}",
+        help="This image will appear at the top before the title"
+    )
+    
+    if uploaded_first_image:
+        st.markdown("**Configure Opening Image:**")
+        
+        # Get existing data if available
+        existing_first_title = first_image.get("title", "") if first_image else ""
+        existing_first_comment = first_image.get("comment", "") if first_image else ""
+        
+        col_img, col_inputs = st.columns([1, 1])
+        
+        with col_img:
+            st.image(uploaded_first_image, use_container_width=True)
+        
+        with col_inputs:
+            first_image_title = st.text_input(
+                "Image Title",
+                value=existing_first_title,
+                key=f"seg_first_image_title_{segment['id']}",
+                placeholder="e.g., Segment Overview"
+            )
+            
+            first_image_comment = st.text_area(
+                "Image Comment",
+                value=existing_first_comment,
+                key=f"seg_first_image_comment_{segment['id']}",
+                placeholder="Add insights about this image...",
+                height=150
+            )
+        
+        # Save button for first image
+        if st.button("Save Opening Image", key=f"save_first_image_{segment['id']}"):
+            from app_core.media import save_media_upload, delete_media_for_section
+            
+            # Delete existing first image
+            if first_image:
+                delete_media_for_section(segment["id"], "Segment Truths", "First Image")
+            
+            # Save new first image
+            save_media_upload(
+                uploaded_file=uploaded_first_image,
+                segment_id=segment["id"],
+                section="Segment Truths",
+                created_by=current_user["username"],
+                comment=first_image_comment,
+                label="First Image",
+                title=first_image_title
+            )
+            st.success("Opening image saved to dashboard!")
+    
+    st.markdown("---")
+    
     # Parse saved config
     seg_truth_config = json.loads(saved_seg_truth["filter_json"]) if saved_seg_truth and saved_seg_truth["filter_json"] else {}
     saved_seg_title = seg_truth_config.get("title", "Segment Profile Summary")
@@ -1326,158 +1400,449 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             st.error(f"Error reading CSV: {str(e)}")
             st.info("Please ensure your CSV has 3 columns: Metric, TBA, Premium Whisky")
     
+    # CAROUSEL 1: First set of tabbed images
+    st.markdown("---")
+    st.markdown("### Carousel Images - Set 1")
+    st.caption("Upload multiple images that will be displayed as tabs/pages")
+    
+    # Get existing carousel 1 images
+    carousel1_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 1"]
+    carousel1_media = sorted(carousel1_media, key=lambda x: x.get("id", 0))
+    
+    if carousel1_media:
+        st.info(f"✅ {len(carousel1_media)} image(s) already uploaded for Carousel 1. Upload new images to replace them.")
+    
+    uploaded_carousel1 = st.file_uploader(
+        "Upload Images for Carousel 1 (multiple allowed)",
+        type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key=f"seg_carousel1_{segment['id']}"
+    )
+    
+    carousel1_configs = []
+    if uploaded_carousel1:
+        st.markdown("**Configure each image for Carousel 1:**")
+        show_formatting_tips()
+        
+        for idx, img in enumerate(uploaded_carousel1):
+            st.markdown(f"**Image {idx+1}:**")
+            
+            # Get existing data if available
+            existing_tab_title = ""
+            existing_page_title = ""
+            existing_comment = ""
+            if idx < len(carousel1_media):
+                existing_tab_title = carousel1_media[idx].get("title", "")
+                combined_comment = carousel1_media[idx].get("comment", "")
+                
+                # Parse page_title and comment
+                if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                    parts = combined_comment.split("##PAGE_TITLE##")
+                    if len(parts) > 1:
+                        remaining = parts[1]
+                        if "##COMMENT##" in remaining:
+                            page_parts = remaining.split("##COMMENT##")
+                            existing_page_title = page_parts[0]
+                            existing_comment = page_parts[1] if len(page_parts) > 1 else ""
+                        else:
+                            existing_page_title = remaining
+                else:
+                    existing_comment = combined_comment
+            
+            col_img, col_inputs = st.columns([1, 1])
+            
+            with col_img:
+                st.image(img, use_container_width=True)
+            
+            with col_inputs:
+                tab_title = st.text_input(
+                    "Tab Title (short name)",
+                    value=existing_tab_title or f"Page {idx+1}",
+                    key=f"carousel1_tab_{segment['id']}_{idx}",
+                    placeholder=f"e.g., Page {idx+1}"
+                )
+                
+                page_title = st.text_input(
+                    "Page Title (full title)",
+                    value=existing_page_title,
+                    key=f"carousel1_page_{segment['id']}_{idx}",
+                    placeholder="e.g., Consumer Demographics"
+                )
+                
+                comment = st.text_area(
+                    "Comment (optional)",
+                    value=existing_comment,
+                    key=f"carousel1_comment_{segment['id']}_{idx}",
+                    placeholder="Add insights...",
+                    height=120
+                )
+            
+            carousel1_configs.append({"tab_title": tab_title, "page_title": page_title, "comment": comment})
+            
+            if idx < len(uploaded_carousel1) - 1:
+                st.markdown("---")
+        
+        # Save button for carousel 1
+        if st.button("Save Carousel 1 Images", key=f"save_carousel1_{segment['id']}"):
+            from app_core.media import save_media_upload, delete_media_for_section
+            
+            # Delete existing carousel 1 images
+            delete_media_for_section(segment["id"], "Segment Truths", "Carousel 1")
+            
+            # Save all images
+            for idx, uploaded_img in enumerate(uploaded_carousel1):
+                config = carousel1_configs[idx] if idx < len(carousel1_configs) else {"tab_title": f"Page {idx+1}", "page_title": "", "comment": ""}
+                combined_comment = f"##PAGE_TITLE##{config['page_title']}##COMMENT##" + config["comment"]
+                
+                save_media_upload(
+                    uploaded_file=uploaded_img,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment=combined_comment,
+                    label="Carousel 1",
+                    title=config["tab_title"]
+                )
+            
+            st.success(f"{len(uploaded_carousel1)} image(s) saved to Carousel 1!")
+    
+    # CAROUSEL 2: Second set of tabbed images
+    st.markdown("---")
+    st.markdown("### Carousel Images - Set 2")
+    st.caption("Upload multiple images that will be displayed as tabs/pages")
+    
+    # Get existing carousel 2 images
+    carousel2_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 2"]
+    carousel2_media = sorted(carousel2_media, key=lambda x: x.get("id", 0))
+    
+    if carousel2_media:
+        st.info(f"✅ {len(carousel2_media)} image(s) already uploaded for Carousel 2. Upload new images to replace them.")
+    
+    uploaded_carousel2 = st.file_uploader(
+        "Upload Images for Carousel 2 (multiple allowed)",
+        type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key=f"seg_carousel2_{segment['id']}"
+    )
+    
+    carousel2_configs = []
+    if uploaded_carousel2:
+        st.markdown("**Configure each image for Carousel 2:**")
+        show_formatting_tips()
+        
+        for idx, img in enumerate(uploaded_carousel2):
+            st.markdown(f"**Image {idx+1}:**")
+            
+            # Get existing data if available
+            existing_tab_title = ""
+            existing_page_title = ""
+            existing_comment = ""
+            if idx < len(carousel2_media):
+                existing_tab_title = carousel2_media[idx].get("title", "")
+                combined_comment = carousel2_media[idx].get("comment", "")
+                
+                # Parse page_title and comment
+                if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                    parts = combined_comment.split("##PAGE_TITLE##")
+                    if len(parts) > 1:
+                        remaining = parts[1]
+                        if "##COMMENT##" in remaining:
+                            page_parts = remaining.split("##COMMENT##")
+                            existing_page_title = page_parts[0]
+                            existing_comment = page_parts[1] if len(page_parts) > 1 else ""
+                        else:
+                            existing_page_title = remaining
+                else:
+                    existing_comment = combined_comment
+            
+            col_img, col_inputs = st.columns([1, 1])
+            
+            with col_img:
+                st.image(img, use_container_width=True)
+            
+            with col_inputs:
+                tab_title = st.text_input(
+                    "Tab Title (short name)",
+                    value=existing_tab_title or f"Page {idx+1}",
+                    key=f"carousel2_tab_{segment['id']}_{idx}",
+                    placeholder=f"e.g., Page {idx+1}"
+                )
+                
+                page_title = st.text_input(
+                    "Page Title (full title)",
+                    value=existing_page_title,
+                    key=f"carousel2_page_{segment['id']}_{idx}",
+                    placeholder="e.g., Consumption Patterns"
+                )
+                
+                comment = st.text_area(
+                    "Comment (optional)",
+                    value=existing_comment,
+                    key=f"carousel2_comment_{segment['id']}_{idx}",
+                    placeholder="Add insights...",
+                    height=120
+                )
+            
+            carousel2_configs.append({"tab_title": tab_title, "page_title": page_title, "comment": comment})
+            
+            if idx < len(uploaded_carousel2) - 1:
+                st.markdown("---")
+        
+        # Save button for carousel 2
+        if st.button("Save Carousel 2 Images", key=f"save_carousel2_{segment['id']}"):
+            from app_core.media import save_media_upload, delete_media_for_section
+            
+            # Delete existing carousel 2 images
+            delete_media_for_section(segment["id"], "Segment Truths", "Carousel 2")
+            
+            # Save all images
+            for idx, uploaded_img in enumerate(uploaded_carousel2):
+                config = carousel2_configs[idx] if idx < len(carousel2_configs) else {"tab_title": f"Page {idx+1}", "page_title": "", "comment": ""}
+                combined_comment = f"##PAGE_TITLE##{config['page_title']}##COMMENT##" + config["comment"]
+                
+                save_media_upload(
+                    uploaded_file=uploaded_img,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment=combined_comment,
+                    label="Carousel 2",
+                    title=config["tab_title"]
+                )
+            
+            st.success(f"{len(uploaded_carousel2)} image(s) saved to Carousel 2!")
+    
     # Image uploads section - SEPARATE
     st.markdown("---")
-    st.markdown("### Supporting Visuals")
-    st.markdown("**Upload Images (Optional):**")
-    st.caption("Upload up to 3 images with titles and comments")
+    st.markdown("### Placeholder")
     
-    # Show existing images if any
-    from app_core.media import get_media_for_segment
-    existing_media = get_media_for_segment(segment["id"])
-    seg_truth_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
-    
-    if seg_truth_media:
-        st.info(f"✅ {len(seg_truth_media)} image(s) already uploaded. Upload new images to replace them.")
-        with st.expander("View Current Images", expanded=False):
-            for media in seg_truth_media:
-                file_path = media.get("file_path")
-                title = media.get("title", "")
-                comment = media.get("comment", "")
-                if file_path and os.path.exists(file_path):
-                    if title:
-                        st.markdown(f"**{title}**")
-                    st.image(file_path, use_container_width=True)
-                    if comment:
-                        st.caption(comment)
-                    st.markdown("---")
-    
-    # Image 1
-    st.markdown("**Image 1:**")
-    col_img1, col_meta1 = st.columns([1, 1])
-    with col_img1:
-        uploaded_image_1 = st.file_uploader(
-            "Upload Image 1",
-            type=["png", "jpg", "jpeg"],
-            key=f"seg_truth_img1_{segment['id']}",
-            label_visibility="collapsed"
-        )
-        if uploaded_image_1:
-            st.image(uploaded_image_1, use_container_width=True)
-    
-    with col_meta1:
-        title_1 = st.text_input(
-            "Title for Image 1",
-            key=f"seg_truth_title1_{segment['id']}",
-            placeholder="e.g., Consumer Profile"
-        )
-        comment_1 = st.text_area(
-            "Comment for Image 1",
-            key=f"seg_truth_comment1_{segment['id']}",
-            placeholder="Add description or insights...",
-            height=100
-        )
-    
-    st.markdown("---")
-    
-    # Image 2
-    st.markdown("**Image 2:**")
-    col_img2, col_meta2 = st.columns([1, 1])
-    with col_img2:
-        uploaded_image_2 = st.file_uploader(
-            "Upload Image 2",
-            type=["png", "jpg", "jpeg"],
-            key=f"seg_truth_img2_{segment['id']}",
-            label_visibility="collapsed"
-        )
-        if uploaded_image_2:
-            st.image(uploaded_image_2, use_container_width=True)
-    
-    with col_meta2:
-        title_2 = st.text_input(
-            "Title for Image 2",
-            key=f"seg_truth_title2_{segment['id']}",
-            placeholder="e.g., Market Insights"
-        )
-        comment_2 = st.text_area(
-            "Comment for Image 2",
-            key=f"seg_truth_comment2_{segment['id']}",
-            placeholder="Add description or insights...",
-            height=100
-        )
-    
-    st.markdown("---")
-    
-    # Image 3
-    st.markdown("**Image 3:**")
-    col_img3, col_meta3 = st.columns([1, 1])
-    with col_img3:
-        uploaded_image_3 = st.file_uploader(
-            "Upload Image 3",
-            type=["png", "jpg", "jpeg"],
-            key=f"seg_truth_img3_{segment['id']}",
-            label_visibility="collapsed"
-        )
-        if uploaded_image_3:
-            st.image(uploaded_image_3, use_container_width=True)
-    
-    with col_meta3:
-        title_3 = st.text_input(
-            "Title for Image 3",
-            key=f"seg_truth_title3_{segment['id']}",
-            placeholder="e.g., Trends Analysis"
-        )
-        comment_3 = st.text_area(
-            "Comment for Image 3",
-            key=f"seg_truth_comment3_{segment['id']}",
-            placeholder="Add description or insights...",
-            height=100
-        )
-    
-    # Separate save button for images only
-    if st.button("Save Images to Dashboard", key=f"save_seg_images_{segment['id']}"):
-        if not (uploaded_image_1 or uploaded_image_2 or uploaded_image_3):
-            st.error("Please upload at least one image.")
-        else:
-            from app_core.media import save_media_upload
-            
-            # Delete existing images for this section
-            delete_media_for_section(segment["id"], "Segment Truths", "Segment Truth Images")
-            
+    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+        st.caption("Upload up to 5 images with titles and comments")
+        
+        # Show existing images if any
+        from app_core.media import get_media_for_segment
+        existing_media = get_media_for_segment(segment["id"])
+        seg_truth_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
+        
+        if seg_truth_media:
+            st.info(f"✅ {len(seg_truth_media)} image(s) already uploaded. Upload new images to replace them.")
+            with st.expander("View Current Images", expanded=False):
+                for media in seg_truth_media:
+                    file_path = media.get("file_path")
+                    title = media.get("title", "")
+                    comment = media.get("comment", "")
+                    if file_path and os.path.exists(file_path):
+                        if title:
+                            st.markdown(f"**{title}**")
+                        st.image(file_path, use_container_width=True)
+                        if comment:
+                            st.caption(comment)
+                        st.markdown("---")
+        
+        # Image 1
+        st.markdown("**Image 1:**")
+        col_img1, col_meta1 = st.columns([1, 1])
+        with col_img1:
+            uploaded_image_1 = st.file_uploader(
+                "Upload Image 1",
+                type=["png", "jpg", "jpeg"],
+                key=f"seg_truth_img1_{segment['id']}",
+                label_visibility="collapsed"
+            )
             if uploaded_image_1:
-                save_media_upload(
-                    uploaded_file=uploaded_image_1,
-                    segment_id=segment["id"],
-                    section="Segment Truths",
-                    created_by=current_user["username"],
-                    comment=comment_1,
-                    title=title_1,
-                    label="Segment Truth Images"
-                )
-            
+                st.image(uploaded_image_1, use_container_width=True)
+        
+        with col_meta1:
+            title_1 = st.text_input(
+                "Title for Image 1",
+                key=f"seg_truth_title1_{segment['id']}",
+                placeholder="e.g., Consumer Profile"
+            )
+            comment_1 = st.text_area(
+                "Comment for Image 1",
+                key=f"seg_truth_comment1_{segment['id']}",
+                placeholder="Add description or insights...",
+                height=100
+            )
+        
+        st.markdown("---")
+        
+        # Image 2
+        st.markdown("**Image 2:**")
+        col_img2, col_meta2 = st.columns([1, 1])
+        with col_img2:
+            uploaded_image_2 = st.file_uploader(
+                "Upload Image 2",
+                type=["png", "jpg", "jpeg"],
+                key=f"seg_truth_img2_{segment['id']}",
+                label_visibility="collapsed"
+            )
             if uploaded_image_2:
-                save_media_upload(
-                    uploaded_file=uploaded_image_2,
-                    segment_id=segment["id"],
-                    section="Segment Truths",
-                    created_by=current_user["username"],
-                    comment=comment_2,
-                    title=title_2,
-                    label="Segment Truth Images"
-                )
-            
+                st.image(uploaded_image_2, use_container_width=True)
+        
+        with col_meta2:
+            title_2 = st.text_input(
+                "Title for Image 2",
+                key=f"seg_truth_title2_{segment['id']}",
+                placeholder="e.g., Market Insights"
+            )
+            comment_2 = st.text_area(
+                "Comment for Image 2",
+                key=f"seg_truth_comment2_{segment['id']}",
+                placeholder="Add description or insights...",
+                height=100
+            )
+        
+        st.markdown("---")
+        
+        # Image 3
+        st.markdown("**Image 3:**")
+        col_img3, col_meta3 = st.columns([1, 1])
+        with col_img3:
+            uploaded_image_3 = st.file_uploader(
+                "Upload Image 3",
+                type=["png", "jpg", "jpeg"],
+                key=f"seg_truth_img3_{segment['id']}",
+                label_visibility="collapsed"
+            )
             if uploaded_image_3:
-                save_media_upload(
-                    uploaded_file=uploaded_image_3,
-                    segment_id=segment["id"],
-                    section="Segment Truths",
-                    created_by=current_user["username"],
-                    comment=comment_3,
-                    title=title_3,
-                    label="Segment Truth Images"
-                )
-            
-            st.success("Images saved to dashboard!")
+                st.image(uploaded_image_3, use_container_width=True)
+        
+        with col_meta3:
+            title_3 = st.text_input(
+                "Title for Image 3",
+                key=f"seg_truth_title3_{segment['id']}",
+                placeholder="e.g., Trends Analysis"
+            )
+            comment_3 = st.text_area(
+                "Comment for Image 3",
+                key=f"seg_truth_comment3_{segment['id']}",
+                placeholder="Add description or insights...",
+                height=100
+            )
+        
+        st.markdown("---")
+        
+        # Image 4
+        st.markdown("**Image 4:**")
+        col_img4, col_meta4 = st.columns([1, 1])
+        with col_img4:
+            uploaded_image_4 = st.file_uploader(
+                "Upload Image 4",
+                type=["png", "jpg", "jpeg"],
+                key=f"seg_truth_img4_{segment['id']}",
+                label_visibility="collapsed"
+            )
+            if uploaded_image_4:
+                st.image(uploaded_image_4, use_container_width=True)
+        
+        with col_meta4:
+            title_4 = st.text_input(
+                "Title for Image 4",
+                key=f"seg_truth_title4_{segment['id']}",
+                placeholder="e.g., Additional Insights"
+            )
+            comment_4 = st.text_area(
+                "Comment for Image 4",
+                key=f"seg_truth_comment4_{segment['id']}",
+                placeholder="Add description or insights...",
+                height=100
+            )
+        
+        st.markdown("---")
+        
+        # Image 5
+        st.markdown("**Image 5:**")
+        col_img5, col_meta5 = st.columns([1, 1])
+        with col_img5:
+            uploaded_image_5 = st.file_uploader(
+                "Upload Image 5",
+                type=["png", "jpg", "jpeg"],
+                key=f"seg_truth_img5_{segment['id']}",
+                label_visibility="collapsed"
+            )
+            if uploaded_image_5:
+                st.image(uploaded_image_5, use_container_width=True)
+        
+        with col_meta5:
+            title_5 = st.text_input(
+                "Title for Image 5",
+                key=f"seg_truth_title5_{segment['id']}",
+                placeholder="e.g., Summary"
+            )
+            comment_5 = st.text_area(
+                "Comment for Image 5",
+                key=f"seg_truth_comment5_{segment['id']}",
+                placeholder="Add description or insights...",
+                height=100
+            )
+        
+        # Separate save button for images only
+        if st.button("Save Images to Dashboard", key=f"save_seg_images_{segment['id']}"):
+            if not (uploaded_image_1 or uploaded_image_2 or uploaded_image_3 or uploaded_image_4 or uploaded_image_5):
+                st.error("Please upload at least one image.")
+            else:
+                from app_core.media import save_media_upload, delete_media_for_section
+                
+                # Delete existing images for this section
+                delete_media_for_section(segment["id"], "Segment Truths", "Segment Truth Images")
+                
+                if uploaded_image_1:
+                    save_media_upload(
+                        uploaded_file=uploaded_image_1,
+                        segment_id=segment["id"],
+                        section="Segment Truths",
+                        created_by=current_user["username"],
+                        comment=comment_1,
+                        title=title_1,
+                        label="Segment Truth Images"
+                    )
+                
+                if uploaded_image_2:
+                    save_media_upload(
+                        uploaded_file=uploaded_image_2,
+                        segment_id=segment["id"],
+                        section="Segment Truths",
+                        created_by=current_user["username"],
+                        comment=comment_2,
+                        title=title_2,
+                        label="Segment Truth Images"
+                    )
+                
+                if uploaded_image_3:
+                    save_media_upload(
+                        uploaded_file=uploaded_image_3,
+                        segment_id=segment["id"],
+                        section="Segment Truths",
+                        created_by=current_user["username"],
+                        comment=comment_3,
+                        title=title_3,
+                        label="Segment Truth Images"
+                    )
+                
+                if uploaded_image_4:
+                    save_media_upload(
+                        uploaded_file=uploaded_image_4,
+                        segment_id=segment["id"],
+                        section="Segment Truths",
+                        created_by=current_user["username"],
+                        comment=comment_4,
+                        title=title_4,
+                        label="Segment Truth Images"
+                    )
+                
+                if uploaded_image_5:
+                    save_media_upload(
+                        uploaded_file=uploaded_image_5,
+                        segment_id=segment["id"],
+                        section="Segment Truths",
+                        created_by=current_user["username"],
+                        comment=comment_5,
+                        title=title_5,
+                        label="Segment Truth Images"
+                    )
+                
+                st.success("Images saved to dashboard!")
 
 
 def style_state_summary(state_summary: pd.DataFrame) -> pd.DataFrame:

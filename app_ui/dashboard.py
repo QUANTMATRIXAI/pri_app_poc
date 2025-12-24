@@ -908,6 +908,52 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
         st.info("No content published for Segment Truths yet. Editors can configure it in Data Studio.")
         return
     
+    # Display first image at the very top (if exists)
+    from app_core.media import get_media_for_segment
+    media_items = get_media_for_segment(segment["id"])
+    first_image = next((m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "First Image"), None)
+    
+    if first_image:
+        file_path = first_image.get("file_path")
+        title = first_image.get("title", "")
+        comment = first_image.get("comment", "")
+        
+        if file_path and os.path.exists(file_path):
+            # Display title first (outside columns)
+            if title:
+                st.markdown(f"### {title}")
+            
+            # Image on left, comment on right
+            col_img, col_comment = st.columns([1, 1])
+            
+            with col_img:
+                st.image(file_path, use_container_width=True)
+            
+            with col_comment:
+                if comment:
+                    st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
+                            border: 1px solid #B0D4F1;
+                            border-left: 5px solid #2196F3;
+                            padding: 1.5rem 1.8rem;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                            min-height: 300px;
+                        '>
+                            <div style='
+                                font-size: 0.95rem;
+                                line-height: 1.8;
+                                color: #2C2C2C;
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            '>
+                                {format_comment(comment)}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+    
     # Parse configuration
     try:
         config = json.loads(seg_truth_table["filter_json"]) if seg_truth_table["filter_json"] else {}
@@ -1025,10 +1071,254 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
             else:
                 st.info("No P3M Segment Profile data uploaded yet. Please upload CSV in Data Studio.")
     
+    # Display Carousel 1
+    carousel1_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 1"]
+    carousel1_images = sorted(carousel1_images, key=lambda x: x.get("id", 0))
+    
+    if carousel1_images:
+        st.markdown("---")
+        
+        if len(carousel1_images) > 1:
+            # Tabs for carousel 1
+            tab_labels = [media.get("title", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(carousel1_images)]
+            carousel1_tabs = st.tabs(tab_labels)
+            
+            for idx, (tab, media) in enumerate(zip(carousel1_tabs, carousel1_images)):
+                with tab:
+                    file_path = media.get("file_path")
+                    combined_comment = media.get("comment", "")
+                    
+                    # Parse page_title and comment
+                    page_title = ""
+                    comment = ""
+                    if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                        parts = combined_comment.split("##PAGE_TITLE##")
+                        if len(parts) > 1:
+                            remaining = parts[1]
+                            if "##COMMENT##" in remaining:
+                                page_parts = remaining.split("##COMMENT##")
+                                page_title = page_parts[0]
+                                comment = page_parts[1] if len(page_parts) > 1 else ""
+                            else:
+                                page_title = remaining
+                    else:
+                        comment = combined_comment
+                    
+                    if file_path and os.path.exists(file_path):
+                        if page_title:
+                            st.markdown(f"### {page_title}")
+                        
+                        if comment:
+                            col_img, col_comment = st.columns([1, 1])
+                            
+                            with col_img:
+                                st.image(file_path, use_container_width=True)
+                            
+                            with col_comment:
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #F8F9FA;
+                                        border-left: 4px solid #f5b400;
+                                        padding: 1.5rem;
+                                        margin: 1.5rem 0 1rem 0;
+                                        border-radius: 8px;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                    '>
+                                        <div style='
+                                            font-size: 0.95rem;
+                                            line-height: 1.7;
+                                            color: #2C2C2C;
+                                        '>
+                                            {format_comment(comment)}
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                            with col2:
+                                st.image(file_path, use_container_width=True)
+        else:
+            # Single image in carousel 1
+            media = carousel1_images[0]
+            file_path = media.get("file_path")
+            combined_comment = media.get("comment", "")
+            
+            # Parse page_title and comment
+            page_title = ""
+            comment = ""
+            if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                parts = combined_comment.split("##PAGE_TITLE##")
+                if len(parts) > 1:
+                    remaining = parts[1]
+                    if "##COMMENT##" in remaining:
+                        page_parts = remaining.split("##COMMENT##")
+                        page_title = page_parts[0]
+                        comment = page_parts[1] if len(page_parts) > 1 else ""
+                    else:
+                        page_title = remaining
+            else:
+                comment = combined_comment
+            
+            if file_path and os.path.exists(file_path):
+                if page_title:
+                    st.markdown(f"### {page_title}")
+                
+                if comment:
+                    col_img, col_comment = st.columns([1, 1])
+                    
+                    with col_img:
+                        st.image(file_path, use_container_width=True)
+                    
+                    with col_comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                    with col2:
+                        st.image(file_path, use_container_width=True)
+    
+    # Display Carousel 2
+    carousel2_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 2"]
+    carousel2_images = sorted(carousel2_images, key=lambda x: x.get("id", 0))
+    
+    if carousel2_images:
+        st.markdown("---")
+        
+        if len(carousel2_images) > 1:
+            # Tabs for carousel 2
+            tab_labels = [media.get("title", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(carousel2_images)]
+            carousel2_tabs = st.tabs(tab_labels)
+            
+            for idx, (tab, media) in enumerate(zip(carousel2_tabs, carousel2_images)):
+                with tab:
+                    file_path = media.get("file_path")
+                    combined_comment = media.get("comment", "")
+                    
+                    # Parse page_title and comment
+                    page_title = ""
+                    comment = ""
+                    if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                        parts = combined_comment.split("##PAGE_TITLE##")
+                        if len(parts) > 1:
+                            remaining = parts[1]
+                            if "##COMMENT##" in remaining:
+                                page_parts = remaining.split("##COMMENT##")
+                                page_title = page_parts[0]
+                                comment = page_parts[1] if len(page_parts) > 1 else ""
+                            else:
+                                page_title = remaining
+                    else:
+                        comment = combined_comment
+                    
+                    if file_path and os.path.exists(file_path):
+                        if page_title:
+                            st.markdown(f"### {page_title}")
+                        
+                        if comment:
+                            col_img, col_comment = st.columns([1, 1])
+                            
+                            with col_img:
+                                st.image(file_path, use_container_width=True)
+                            
+                            with col_comment:
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #F8F9FA;
+                                        border-left: 4px solid #f5b400;
+                                        padding: 1.5rem;
+                                        margin: 1.5rem 0 1rem 0;
+                                        border-radius: 8px;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                    '>
+                                        <div style='
+                                            font-size: 0.95rem;
+                                            line-height: 1.7;
+                                            color: #2C2C2C;
+                                        '>
+                                            {format_comment(comment)}
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                            with col2:
+                                st.image(file_path, use_container_width=True)
+        else:
+            # Single image in carousel 2
+            media = carousel2_images[0]
+            file_path = media.get("file_path")
+            combined_comment = media.get("comment", "")
+            
+            # Parse page_title and comment
+            page_title = ""
+            comment = ""
+            if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                parts = combined_comment.split("##PAGE_TITLE##")
+                if len(parts) > 1:
+                    remaining = parts[1]
+                    if "##COMMENT##" in remaining:
+                        page_parts = remaining.split("##COMMENT##")
+                        page_title = page_parts[0]
+                        comment = page_parts[1] if len(page_parts) > 1 else ""
+                    else:
+                        page_title = remaining
+            else:
+                comment = combined_comment
+            
+            if file_path and os.path.exists(file_path):
+                if page_title:
+                    st.markdown(f"### {page_title}")
+                
+                if comment:
+                    col_img, col_comment = st.columns([1, 1])
+                    
+                    with col_img:
+                        st.image(file_path, use_container_width=True)
+                    
+                    with col_comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                    with col2:
+                        st.image(file_path, use_container_width=True)
+    
     # Display images one below the other
-    from app_core.media import get_media_for_segment
-    media_items = get_media_for_segment(segment["id"])
     seg_truth_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
+    # Sort by ID to maintain upload order (Image 1, 2, 3, 4, 5)
+    seg_truth_images = sorted(seg_truth_images, key=lambda x: x.get("id", 0))
     
     if seg_truth_images:
         st.markdown("---")
