@@ -1594,164 +1594,151 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
 
 
 def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
-    """Render Segment Trends section with carousel images and custom view"""
+    """Render Segment Trends section with images and custom view"""
     from app_core.media import get_media_for_segment, delete_media_for_section
     from app_core.tables import get_tables_for_segment
     
     # Get images for this section
     media_items = get_media_for_segment(segment["id"])
-    seg_trends_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
     
-    # Sort by ID to maintain upload order (first uploaded = first displayed)
-    seg_trends_images = sorted(seg_trends_images, key=lambda x: x.get("id", 0))
+    # Get all images (now just "Additional Images" - no more carousel)
+    trend_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Additional Images"]
+    trend_images = sorted(trend_images, key=lambda x: x.get("id", 0))
+    
+    # Get placeholder images
+    placeholder_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Placeholder Images"]
+    placeholder_images = sorted(placeholder_images, key=lambda x: x.get("id", 0))
     
     # Get custom trends view
     tables = get_tables_for_segment(segment["id"])
     custom_view = next((t for t in tables if t["section"] == "Segment Trends" and t["name"] == "Custom Trends View"), None)
     
-    if not seg_trends_images and not custom_view:
+    if not trend_images and not placeholder_images and not custom_view:
         st.info("No content published for Segment Trends yet. Editors can configure it in Data Studio.")
         return
     
     st.markdown("### Segment Trends")
     
-    if len(seg_trends_images) > 1:
-        # Tabs for navigation - use titles from database
-        tab_labels = [media.get("title", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(seg_trends_images)]
-        image_tabs = st.tabs(tab_labels)
-        
-        for idx, (tab, media) in enumerate(zip(image_tabs, seg_trends_images)):
-            with tab:
-                file_path = media.get("file_path")
-                tab_title = media.get("title", "")
-                combined_comment = media.get("comment", "")
-                
-                # Parse page_title and comment from combined_comment
-                page_title = ""
-                comment = ""
-                if combined_comment and "##PAGE_TITLE##" in combined_comment:
-                    parts = combined_comment.split("##PAGE_TITLE##")
-                    if len(parts) > 1:
-                        remaining = parts[1]
-                        if "##COMMENT##" in remaining:
-                            page_parts = remaining.split("##COMMENT##")
-                            page_title = page_parts[0]
-                            comment = page_parts[1] if len(page_parts) > 1 else ""
-                        else:
-                            page_title = remaining
-                else:
-                    comment = combined_comment
-                
-                if file_path and os.path.exists(file_path):
-                    # Display page title first (outside columns)
-                    if page_title:
-                        st.markdown(f"### {page_title}")
-                    
-                    # Display image and comment side by side if comment exists
-                    if comment:
-                        col_img, col_comment = st.columns([1, 1])
-                        
-                        with col_img:
-                            st.image(file_path, use_container_width=True)
-                        
-                        with col_comment:
-                            st.markdown(f"""
-                                <div style='
-                                    background: #F8F9FA;
-                                    border-left: 4px solid #f5b400;
-                                    padding: 1.5rem;
-                                    margin: 1.5rem 0 1rem 0;
-                                    border-radius: 8px;
-                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                                '>
-                                    <div style='
-                                        font-size: 0.95rem;
-                                        line-height: 1.7;
-                                        color: #2C2C2C;
-                                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                                    '>
-                                        {format_comment(comment)}
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        # No comment, center the image
-                        col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                        with col2:
-                            st.image(file_path, use_container_width=True)
-                else:
-                    st.warning(f"Image {idx+1} not found.")
-    elif len(seg_trends_images) == 1:
-        # Single image
-        file_path = seg_trends_images[0].get("file_path")
-        tab_title = seg_trends_images[0].get("title", "")
-        combined_comment = seg_trends_images[0].get("comment", "")
-        
-        # Parse page_title and comment from combined_comment
-        page_title = ""
-        comment = ""
-        if combined_comment and "##PAGE_TITLE##" in combined_comment:
-            parts = combined_comment.split("##PAGE_TITLE##")
-            if len(parts) > 1:
-                remaining = parts[1]
-                if "##COMMENT##" in remaining:
-                    page_parts = remaining.split("##COMMENT##")
-                    page_title = page_parts[0]
-                    comment = page_parts[1] if len(page_parts) > 1 else ""
-                else:
-                    page_title = remaining
-        else:
-            comment = combined_comment
-        
-        if file_path and os.path.exists(file_path):
-            # Display page title first (outside columns)
-            if page_title:
-                st.markdown(f"### {page_title}")
+    # Display all images
+    if trend_images:
+        for idx, media in enumerate(trend_images):
+            file_path = media.get("file_path")
+            title = media.get("title", "")
+            comment = media.get("comment", "")
             
-            # Display image and comment side by side if comment exists
-            if comment:
+            if file_path and os.path.exists(file_path):
+                # Display title first (outside columns)
+                if title:
+                    st.markdown(f"### {title}")
+                
+                # Image on left, comment on right
                 col_img, col_comment = st.columns([1, 1])
                 
                 with col_img:
                     st.image(file_path, use_container_width=True)
                 
                 with col_comment:
-                    st.markdown(f"""
-                        <div style='
-                            background: #F8F9FA;
-                            border-left: 4px solid #f5b400;
-                            padding: 1.5rem;
-                            margin: 1.5rem 0 1rem 0;
-                            border-radius: 8px;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                        '>
+                    if comment:
+                        st.markdown(f"""
                             <div style='
-                                font-size: 0.95rem;
-                                line-height: 1.7;
-                                color: #2C2C2C;
-                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
                             '>
-                                {format_comment(comment)}
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
                             </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            else:
-                # No comment, center the image
-                col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                with col2:
-                    st.image(file_path, use_container_width=True)
-        else:
-            st.warning("Image not found.")
+                        """, unsafe_allow_html=True)
+                
+                # Add spacing between images
+                if idx < len(trend_images) - 1:
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for images
+        if is_editor:
+            if st.button("Delete Segment Trends Images", key=f"del_seg_trends_{segment['id']}"):
+                delete_media_for_section(segment["id"], "Segment Trends", "Additional Images")
+                st.success("Segment Trends images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+        
+        # Add separator if there are placeholders or custom view
+        if placeholder_images or custom_view:
+            st.markdown("---")
     
-    # Delete button for editors
-    if is_editor and seg_trends_images:
-        if st.button("Delete Segment Trends Images", key=f"del_seg_trends_{segment['id']}"):
-            delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
-            st.success("Segment Trends images removed")
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
+    # Display placeholder images
+    if placeholder_images:
+        
+        for idx, media in enumerate(placeholder_images):
+            file_path = media.get("file_path")
+            title = media.get("title", "")
+            comment = media.get("comment", "")
+            
+            if file_path and os.path.exists(file_path):
+                # Display title first (outside columns)
+                if title:
+                    st.markdown(f"### {title}")
+                
+                # Image on left, comment on right
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    if comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                # Add spacing between images
+                if idx < len(placeholder_images) - 1:
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for placeholder images
+        if is_editor:
+            if st.button("Delete Placeholder Images", key=f"del_seg_trends_placeholder_{segment['id']}"):
+                delete_media_for_section(segment["id"], "Segment Trends", "Placeholder Images")
+                st.success("Placeholder images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    
+    # Render custom trends view if exists
     
     # Render custom trends view if exists
     if custom_view:
@@ -1981,6 +1968,262 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
     # Render first section (without S&V)
     if brand_view:
         render_brand_truths_section(brand_view, is_editor, segment, "1", show_sv=False)
+    
+    # Display carousel images (BEFORE S&V and SWOT)
+    from app_core.media import get_media_for_segment, delete_media_for_section
+    media_items = get_media_for_segment(segment["id"])
+    brand_carousel_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Brand Carousel"]
+    brand_carousel_images = sorted(brand_carousel_images, key=lambda x: x.get("id", 0))
+    
+    if brand_carousel_images:
+        st.markdown("---")
+        
+        if len(brand_carousel_images) > 1:
+            # Tabs for navigation
+            tab_labels = [media.get("title", f"Page {i+1}") or f"Page {i+1}" for i, media in enumerate(brand_carousel_images)]
+            image_tabs = st.tabs(tab_labels)
+            
+            for idx, (tab, media) in enumerate(zip(image_tabs, brand_carousel_images)):
+                with tab:
+                    file_path = media.get("file_path")
+                    combined_comment = media.get("comment", "")
+                    
+                    # Parse page_title and comment
+                    page_title = ""
+                    comment = ""
+                    if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                        parts = combined_comment.split("##PAGE_TITLE##")
+                        if len(parts) > 1:
+                            remaining = parts[1]
+                            if "##COMMENT##" in remaining:
+                                page_parts = remaining.split("##COMMENT##")
+                                page_title = page_parts[0]
+                                comment = page_parts[1] if len(page_parts) > 1 else ""
+                            else:
+                                page_title = remaining
+                    else:
+                        comment = combined_comment
+                    
+                    if file_path and os.path.exists(file_path):
+                        if page_title:
+                            st.markdown(f"### {page_title}")
+                        
+                        if comment:
+                            col_img, col_comment = st.columns([1, 1])
+                            with col_img:
+                                st.image(file_path, use_container_width=True)
+                            with col_comment:
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #F8F9FA;
+                                        border-left: 4px solid #f5b400;
+                                        padding: 1.5rem;
+                                        margin: 1.5rem 0 1rem 0;
+                                        border-radius: 8px;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                        min-height: 300px;
+                                        max-height: 300px;
+                                        overflow-y: auto;
+                                    '>
+                                        <div style='
+                                            font-size: 0.95rem;
+                                            line-height: 1.7;
+                                            color: #2C2C2C;
+                                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                        '>
+                                            {format_comment(comment)}
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                            with col2:
+                                st.image(file_path, use_container_width=True)
+        elif len(brand_carousel_images) == 1:
+            # Single image
+            media = brand_carousel_images[0]
+            file_path = media.get("file_path")
+            combined_comment = media.get("comment", "")
+            
+            # Parse page_title and comment
+            page_title = ""
+            comment = ""
+            if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                parts = combined_comment.split("##PAGE_TITLE##")
+                if len(parts) > 1:
+                    remaining = parts[1]
+                    if "##COMMENT##" in remaining:
+                        page_parts = remaining.split("##COMMENT##")
+                        page_title = page_parts[0]
+                        comment = page_parts[1] if len(page_parts) > 1 else ""
+                    else:
+                        page_title = remaining
+            else:
+                comment = combined_comment
+            
+            if file_path and os.path.exists(file_path):
+                if page_title:
+                    st.markdown(f"### {page_title}")
+                
+                if comment:
+                    col_img, col_comment = st.columns([1, 1])
+                    with col_img:
+                        st.image(file_path, use_container_width=True)
+                    with col_comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                    with col2:
+                        st.image(file_path, use_container_width=True)
+        
+        # Delete button for carousel
+        if is_editor:
+            if st.button("Delete Carousel Images", key=f"del_brand_carousel_{segment['id']}"):
+                delete_media_for_section(segment["id"], "Brand Truths", "Brand Carousel")
+                st.success("Carousel images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    
+    # Display standalone images (BEFORE S&V and SWOT)
+    brand_standalone_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Standalone Images"]
+    brand_standalone_images = sorted(brand_standalone_images, key=lambda x: x.get("id", 0))
+    
+    if brand_standalone_images:
+        st.markdown("---")
+        
+        for idx, media in enumerate(brand_standalone_images):
+            file_path = media.get("file_path")
+            title = media.get("title", "")
+            comment = media.get("comment", "")
+            
+            if file_path and os.path.exists(file_path):
+                if title:
+                    st.markdown(f"### {title}")
+                
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    if comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                if idx < len(brand_standalone_images) - 1:
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for standalone images
+        if is_editor:
+            if st.button("Delete Standalone Images", key=f"del_brand_standalone_{segment['id']}"):
+                delete_media_for_section(segment["id"], "Brand Truths", "Standalone Images")
+                st.success("Standalone images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    
+    # Display placeholder images
+    brand_placeholder_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Placeholder Images"]
+    brand_placeholder_images = sorted(brand_placeholder_images, key=lambda x: x.get("id", 0))
+    
+    if brand_placeholder_images:
+        st.markdown("---")
+        
+        for idx, media in enumerate(brand_placeholder_images):
+            file_path = media.get("file_path")
+            title = media.get("title", "")
+            comment = media.get("comment", "")
+            
+            if file_path and os.path.exists(file_path):
+                if title:
+                    st.markdown(f"### {title}")
+                
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    if comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                if idx < len(brand_placeholder_images) - 1:
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for placeholder images
+        if is_editor:
+            if st.button("Delete Placeholder Images", key=f"del_brand_placeholder_{segment['id']}"):
+                delete_media_for_section(segment["id"], "Brand Truths", "Placeholder Images")
+                st.success("Placeholder images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     
     # Render S&V section at the very end (only from Section 1 config)
     if brand_view:
@@ -2432,135 +2675,287 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
     try:
         config = json.loads(jtbd_view["filter_json"]) if jtbd_view["filter_json"] else {}
         title = config.get("title", "")
-        description = config.get("description", "")
-        left_header = config.get("left_header", "")
-        right_header = config.get("right_header", "")
-        sections = config.get("sections", [])
+        tabs_data = config.get("tabs", [])
+        
+        # Fallback for old format (single sections array with global headers)
+        if not tabs_data and config.get("sections"):
+            tabs_data = [{
+                "tab_name": "JTBD",
+                "description": config.get("description", ""),
+                "left_header": config.get("left_header", ""),
+                "right_header": config.get("right_header", ""),
+                "sections": config.get("sections", [])
+            }]
         
         if title:
             st.markdown(f"### {title}")
         
-        if description:
-            import html
-            escaped_desc = html.escape(description).replace('\n', '<br>')
-            st.markdown(f"""
-                <div style='
-                    background: #F5F5F5;
-                    border: 1px solid #CCCCCC;
-                    padding: 1rem 1.5rem;
-                    margin: 1rem 0;
-                    border-radius: 8px;
-                    font-size: 1rem;
-                    line-height: 1.6;
-                    color: #2C2C2C;
-                '>
-                    {escaped_desc}
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # Display JTBD sections
-        for section in sections:
-            if section.get("left") or section.get("right"):
-                # Rectangular label on the left (vertical text)
-                cols = st.columns([0.15, 4, 4])
-                
-                with cols[0]:
-                    st.markdown(f"""
-                        <div style='
-                            background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
-                            border: 2px solid #999999;
-                            padding: 1rem 0.3rem;
-                            margin: 0.5rem 0;
-                            border-radius: 6px;
-                            min-height: 300px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            writing-mode: vertical-rl;
-                            text-orientation: mixed;
-                            font-size: 1.1rem;
-                            font-weight: bold;
-                            color: #333333;
-                            text-align: center;
-                        '>
-                            {section.get("label", "")}
-                        </div>
-                    """, unsafe_allow_html=True)
-                
-                with cols[1]:
-                    # Left section with header
-                    if left_header:
-                        st.markdown(f"""
-                            <div style='
-                                background: #D0D0D0;
-                                padding: 0.5rem 1rem;
-                                margin-bottom: 0.5rem;
-                                border-radius: 6px 6px 0 0;
-                                font-weight: bold;
-                                font-size: 1rem;
-                                color: #1A1A1A;
-                            '>
-                                {left_header}
-                            </div>
-                        """, unsafe_allow_html=True)
+        # Display JTBD tabs
+        if len(tabs_data) > 1:
+            # Multiple tabs - use tab interface
+            tab_names = [tab.get("tab_name", f"Tab {i+1}") for i, tab in enumerate(tabs_data)]
+            dashboard_tabs = st.tabs(tab_names)
+            
+            for tab_idx, dashboard_tab in enumerate(dashboard_tabs):
+                with dashboard_tab:
+                    tab = tabs_data[tab_idx]
                     
-                    if section.get("left"):
+                    # Show tab description if exists
+                    if tab.get("description"):
                         import html
-                        escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                        escaped_desc = html.escape(tab["description"]).replace('\n', '<br>')
                         st.markdown(f"""
                             <div style='
                                 background: #F5F5F5;
                                 border: 1px solid #CCCCCC;
-                                padding: 1rem;
-                                margin: 0;
-                                border-radius: 0 0 6px 6px;
-                                min-height: 250px;
-                                font-size: 0.9rem;
-                                line-height: 1.6;
-                                color: #1A1A1A;
-                            '>
-                                {escaped_left}
-                            </div>
-                        """, unsafe_allow_html=True)
-                
-                with cols[2]:
-                    # Right section with header
-                    if right_header:
-                        st.markdown(f"""
-                            <div style='
-                                background: #D0D0D0;
-                                padding: 0.5rem 1rem;
-                                margin-bottom: 0.5rem;
-                                border-radius: 6px 6px 0 0;
-                                font-weight: bold;
+                                padding: 1rem 1.5rem;
+                                margin: 1rem 0;
+                                border-radius: 8px;
                                 font-size: 1rem;
-                                color: #1A1A1A;
+                                line-height: 1.6;
+                                color: #2C2C2C;
                             '>
-                                {right_header}
+                                {escaped_desc}
                             </div>
                         """, unsafe_allow_html=True)
                     
-                    if section.get("right"):
-                        import html
-                        escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                    # Get headers for this tab
+                    left_header = tab.get("left_header", "")
+                    right_header = tab.get("right_header", "")
+                    tab_sections = tab.get("sections", [])
+                    
+                    for section in tab_sections:
+                        if section.get("left") or section.get("right"):
+                            # Rectangular label on the left (vertical text)
+                            cols = st.columns([0.15, 4, 4])
+                            
+                            with cols[0]:
+                                st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                        border: 2px solid #999999;
+                                        padding: 1rem 0.3rem;
+                                        margin: 0.5rem 0;
+                                        border-radius: 6px;
+                                        min-height: 300px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        writing-mode: vertical-rl;
+                                        text-orientation: mixed;
+                                        font-size: 1.1rem;
+                                        font-weight: bold;
+                                        color: #333333;
+                                        text-align: center;
+                                    '>
+                                        {section.get("label", "")}
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            
+                            with cols[1]:
+                                # Left section with header
+                                if left_header:
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #D0D0D0;
+                                            padding: 0.5rem 1rem;
+                                            margin-bottom: 0.5rem;
+                                            border-radius: 6px 6px 0 0;
+                                            font-weight: bold;
+                                            font-size: 1rem;
+                                            color: #1A1A1A;
+                                        '>
+                                            {left_header}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                if section.get("left"):
+                                    import html
+                                    escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F5F5F5;
+                                            border: 1px solid #CCCCCC;
+                                            padding: 1rem;
+                                            margin: 0;
+                                            border-radius: 0 0 6px 6px;
+                                            min-height: 250px;
+                                            font-size: 0.9rem;
+                                            line-height: 1.6;
+                                            color: #1A1A1A;
+                                        '>
+                                            {escaped_left}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            with cols[2]:
+                                # Right section with header
+                                if right_header:
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #D0D0D0;
+                                            padding: 0.5rem 1rem;
+                                            margin-bottom: 0.5rem;
+                                            border-radius: 6px 6px 0 0;
+                                            font-weight: bold;
+                                            font-size: 1rem;
+                                            color: #1A1A1A;
+                                        '>
+                                            {right_header}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                if section.get("right"):
+                                    import html
+                                    escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F5F5F5;
+                                            border: 1px solid #CCCCCC;
+                                            padding: 1rem;
+                                            margin: 0;
+                                            border-radius: 0 0 6px 6px;
+                                            min-height: 250px;
+                                            font-size: 0.9rem;
+                                            line-height: 1.6;
+                                            color: #1A1A1A;
+                                        '>
+                                            {escaped_right}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            # Add spacing between sections
+                            st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        else:
+            # Single tab - display without tab interface
+            tab = tabs_data[0] if tabs_data else {}
+            
+            # Show tab description if exists
+            if tab.get("description"):
+                import html
+                escaped_desc = html.escape(tab["description"]).replace('\n', '<br>')
+                st.markdown(f"""
+                    <div style='
+                        background: #F5F5F5;
+                        border: 1px solid #CCCCCC;
+                        padding: 1rem 1.5rem;
+                        margin: 1rem 0;
+                        border-radius: 8px;
+                        font-size: 1rem;
+                        line-height: 1.6;
+                        color: #2C2C2C;
+                    '>
+                        {escaped_desc}
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Get headers for this tab
+            left_header = tab.get("left_header", "")
+            right_header = tab.get("right_header", "")
+            tab_sections = tab.get("sections", [])
+            
+            for section in tab_sections:
+                if section.get("left") or section.get("right"):
+                    # Rectangular label on the left (vertical text)
+                    cols = st.columns([0.15, 4, 4])
+                    
+                    with cols[0]:
                         st.markdown(f"""
                             <div style='
-                                background: #F5F5F5;
-                                border: 1px solid #CCCCCC;
-                                padding: 1rem;
-                                margin: 0;
-                                border-radius: 0 0 6px 6px;
-                                min-height: 250px;
-                                font-size: 0.9rem;
-                                line-height: 1.6;
-                                color: #1A1A1A;
+                                background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                border: 2px solid #999999;
+                                padding: 1rem 0.3rem;
+                                margin: 0.5rem 0;
+                                border-radius: 6px;
+                                min-height: 300px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                writing-mode: vertical-rl;
+                                text-orientation: mixed;
+                                font-size: 1.1rem;
+                                font-weight: bold;
+                                color: #333333;
+                                text-align: center;
                             '>
-                                {escaped_right}
+                                {section.get("label", "")}
                             </div>
                         """, unsafe_allow_html=True)
-                
-                # Add spacing between sections
-                st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+                    
+                    with cols[1]:
+                        # Left section with header
+                        if left_header:
+                            st.markdown(f"""
+                                <div style='
+                                    background: #D0D0D0;
+                                    padding: 0.5rem 1rem;
+                                    margin-bottom: 0.5rem;
+                                    border-radius: 6px 6px 0 0;
+                                    font-weight: bold;
+                                    font-size: 1rem;
+                                    color: #1A1A1A;
+                                '>
+                                    {left_header}
+                                </div>
+                            """, unsafe_allow_html=True)
+                        
+                        if section.get("left"):
+                            import html
+                            escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F5F5F5;
+                                    border: 1px solid #CCCCCC;
+                                    padding: 1rem;
+                                    margin: 0;
+                                    border-radius: 0 0 6px 6px;
+                                    min-height: 250px;
+                                    font-size: 0.9rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                '>
+                                    {escaped_left}
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with cols[2]:
+                        # Right section with header
+                        if right_header:
+                            st.markdown(f"""
+                                <div style='
+                                    background: #D0D0D0;
+                                    padding: 0.5rem 1rem;
+                                    margin-bottom: 0.5rem;
+                                    border-radius: 6px 6px 0 0;
+                                    font-weight: bold;
+                                    font-size: 1rem;
+                                    color: #1A1A1A;
+                                '>
+                                    {right_header}
+                                </div>
+                            """, unsafe_allow_html=True)
+                        
+                        if section.get("right"):
+                            import html
+                            escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F5F5F5;
+                                    border: 1px solid #CCCCCC;
+                                    padding: 1rem;
+                                    margin: 0;
+                                    border-radius: 0 0 6px 6px;
+                                    min-height: 250px;
+                                    font-size: 0.9rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                '>
+                                    {escaped_right}
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Add spacing between sections
+                    st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
         
         # Delete button for editors
         if is_editor:
@@ -2577,11 +2972,142 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
 
 def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
     """Render Brand Trends - Multiple Custom Trends Views"""
+    
+    # Get media items
+    from app_core.media import get_media_for_segment, delete_media_for_section
+    media_items = get_media_for_segment(segment["id"])
+    
+    # Get standalone images
+    brand_trends_standalone = [m for m in media_items if m.get("section") == "Brand Trends" and m.get("name") == "Standalone Images"]
+    brand_trends_standalone = sorted(brand_trends_standalone, key=lambda x: x.get("id", 0))
+    
+    # Get placeholder images
+    brand_trends_placeholders = [m for m in media_items if m.get("section") == "Brand Trends" and m.get("name") == "Placeholder Images"]
+    brand_trends_placeholders = sorted(brand_trends_placeholders, key=lambda x: x.get("id", 0))
+    
     # Get all custom trends views (View 1, View 2, etc.)
     custom_trends_views = [t for t in tables if t["section"] == "Brand Trends" and t["name"].startswith("Custom Trends View")]
     
-    if not custom_trends_views:
+    if not brand_trends_standalone and not brand_trends_placeholders and not custom_trends_views:
         st.info("No content published for Brand Trends yet. Editors can configure it in Data Studio.")
+        return
+    
+    st.markdown("### Brand Trends")
+    
+    # Display standalone images
+    if brand_trends_standalone:
+        for idx, media in enumerate(brand_trends_standalone):
+            file_path = media.get("file_path")
+            title = media.get("title", "")
+            comment = media.get("comment", "")
+            
+            if file_path and os.path.exists(file_path):
+                if title:
+                    st.markdown(f"### {title}")
+                
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    if comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                if idx < len(brand_trends_standalone) - 1:
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for standalone images
+        if is_editor:
+            if st.button("Delete Standalone Images", key=f"del_bt_standalone_{segment['id']}"):
+                delete_media_for_section(segment["id"], "Brand Trends", "Standalone Images")
+                st.success("Standalone images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+        
+        st.markdown("---")
+    
+    # Display placeholder images
+    if brand_trends_placeholders:
+        for idx, media in enumerate(brand_trends_placeholders):
+            file_path = media.get("file_path")
+            title = media.get("title", "")
+            comment = media.get("comment", "")
+            
+            if file_path and os.path.exists(file_path):
+                if title:
+                    st.markdown(f"### {title}")
+                
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    if comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                if idx < len(brand_trends_placeholders) - 1:
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for placeholder images
+        if is_editor:
+            if st.button("Delete Placeholder Images", key=f"del_bt_placeholder_{segment['id']}"):
+                delete_media_for_section(segment["id"], "Brand Trends", "Placeholder Images")
+                st.success("Placeholder images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+        
+        st.markdown("---")
+    
+    # Display custom trends views
+    if not custom_trends_views:
         return
     
     # Sort views by number (View 1, View 2, etc.)

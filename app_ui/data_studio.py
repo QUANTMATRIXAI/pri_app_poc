@@ -2506,129 +2506,395 @@ def format_extra_comments(extras: list[str] | None) -> str:
 
 
 def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
-    """Configure Segment Trends: Carousel Images"""
+    """Configure Segment Trends: Images and Carousel"""
     st.markdown("#### Segment Trends Configuration")
-    st.caption("Upload images that will be displayed as tabs/pages")
     
-    # Image uploads
-    st.markdown("**Upload Images:**")
-    st.caption("Upload multiple images - each will become a tab on the dashboard")
-    
-    # Show existing images if any
+    # Get existing media
     from app_core.media import get_media_for_segment
     existing_media = get_media_for_segment(segment["id"])
-    seg_trends_media = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Segment Trends Carousel"]
     
-    # Sort by ID to maintain upload order
-    seg_trends_media = sorted(seg_trends_media, key=lambda x: x.get("id", 0))
+    # Get existing images
+    trend_images = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Additional Images"]
+    trend_images = sorted(trend_images, key=lambda x: x.get("id", 0))
     
-    if seg_trends_media:
-        st.info(f"✅ {len(seg_trends_media)} image(s) already uploaded. Upload new images to replace them.")
+    # Show formatting tips
+    show_formatting_tips()
     
-    uploaded_images = st.file_uploader(
-        "Upload Images (multiple allowed)",
-        type=["png", "jpg", "jpeg"],
-        accept_multiple_files=True,
-        key=f"seg_trends_images_{segment['id']}"
-    )
+    # Image 1
+    st.markdown("**Image 1:**")
+    existing_1 = trend_images[0] if len(trend_images) > 0 else None
+    uploaded_add_1 = st.file_uploader("Upload Image 1", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_1_{segment['id']}")
+    title_add_1 = st.text_input("Title for Image 1", value=existing_1.get("title", "") if existing_1 else "", key=f"seg_trends_add_title_1_{segment['id']}")
+    comment_add_1 = st.text_area("Comment for Image 1", value=existing_1.get("comment", "") if existing_1 else "", key=f"seg_trends_add_comment_1_{segment['id']}", height=150)
     
-    # Title and comment inputs for each uploaded image
-    image_configs = []
-    if uploaded_images:
-        st.markdown("---")
-        st.markdown("**Configure each image:**")
-        
-        # Show formatting tips once for all images
-        show_formatting_tips()
-        
-        for idx, img in enumerate(uploaded_images):
-            st.markdown(f"**Image {idx+1}:**")
-            
-            # Get existing data if available
-            existing_tab_title = ""
-            existing_page_title = ""
-            existing_comment = ""
-            if idx < len(seg_trends_media):
-                existing_tab_title = seg_trends_media[idx].get("title", "")
-                combined_comment = seg_trends_media[idx].get("comment", "")
-                
-                # Parse page_title and comment from combined_comment
-                if combined_comment and "##PAGE_TITLE##" in combined_comment:
-                    parts = combined_comment.split("##PAGE_TITLE##")
-                    if len(parts) > 1:
-                        remaining = parts[1]
-                        if "##COMMENT##" in remaining:
-                            page_parts = remaining.split("##COMMENT##")
-                            existing_page_title = page_parts[0]
-                            existing_comment = page_parts[1] if len(page_parts) > 1 else ""
-                        else:
-                            existing_page_title = remaining
-                else:
-                    existing_comment = combined_comment
-            
-            # Layout: Image on left, title + comment on right
-            col_img, col_inputs = st.columns([1, 1])
-            
-            with col_img:
-                st.image(img, use_container_width=True)
-            
-            with col_inputs:
-                tab_title = st.text_input(
-                    "Tab Title (short name for tab)",
-                    value=existing_tab_title or f"Page {idx+1}",
-                    key=f"seg_trends_tab_title_{segment['id']}_{idx}",
-                    placeholder=f"e.g., Page {idx+1}"
-                )
-                
-                page_title = st.text_input(
-                    "Page Title (full title above image)",
-                    value=existing_page_title,
-                    key=f"seg_trends_page_title_{segment['id']}_{idx}",
-                    placeholder="e.g., Outlet Activation: Spread-Out activation..."
-                )
-                
-                comment = st.text_area(
-                    "Comment (optional)",
-                    value=existing_comment,
-                    key=f"seg_trends_comment_{segment['id']}_{idx}",
-                    placeholder="Add insights, observations, or context...",
-                    height=150
-                )
-            
-            image_configs.append({"tab_title": tab_title, "page_title": page_title, "comment": comment})
-            
-            if idx < len(uploaded_images) - 1:
-                st.markdown("---")
+    # Preview existing image 1
+    if existing_1 and not uploaded_add_1:
+        file_path_1 = existing_1.get("file_path")
+        if file_path_1 and os.path.exists(file_path_1):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_1, caption="Current Image 1", use_container_width=True)
     
-    # Save button
-    if st.button("Save Segment Trends Images to Dashboard", key=f"save_seg_trends_{segment['id']}"):
-        if not uploaded_images:
-            st.error("Please upload at least one image.")
+    # Save button for Image 1
+    if st.button("Save Image 1", key=f"save_seg_trends_1_{segment['id']}"):
+        if not uploaded_add_1:
+            st.error("Please upload Image 1.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            
+            # Delete existing Image 1 only
+            if existing_1:
+                delete_media(existing_1["id"])
+            
+            save_media_upload(
+                uploaded_file=uploaded_add_1,
+                segment_id=segment["id"],
+                section="Segment Trends",
+                created_by=current_user["username"],
+                comment=comment_add_1,
+                title=title_add_1,
+                label="Additional Images"
+            )
+            
+            st.success("Image 1 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Image 2
+    st.markdown("**Image 2:**")
+    existing_2 = trend_images[1] if len(trend_images) > 1 else None
+    uploaded_add_2 = st.file_uploader("Upload Image 2", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_2_{segment['id']}")
+    title_add_2 = st.text_input("Title for Image 2", value=existing_2.get("title", "") if existing_2 else "", key=f"seg_trends_add_title_2_{segment['id']}")
+    comment_add_2 = st.text_area("Comment for Image 2", value=existing_2.get("comment", "") if existing_2 else "", key=f"seg_trends_add_comment_2_{segment['id']}", height=150)
+    
+    # Preview existing image 2
+    if existing_2 and not uploaded_add_2:
+        file_path_2 = existing_2.get("file_path")
+        if file_path_2 and os.path.exists(file_path_2):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_2, caption="Current Image 2", use_container_width=True)
+    
+    # Save button for Image 2
+    if st.button("Save Image 2", key=f"save_seg_trends_2_{segment['id']}"):
+        if not uploaded_add_2:
+            st.error("Please upload Image 2.")
         else:
             from app_core.media import save_media_upload
             
-            # Delete existing images for this section
-            delete_media_for_section(segment["id"], "Segment Trends", "Segment Trends Carousel")
+            # Delete existing Image 2 only
+            if existing_2:
+                from app_core.media import delete_media
+                delete_media(existing_2["id"])
             
-            # Save all uploaded images with tab titles, page titles, and comments
-            for idx, uploaded_img in enumerate(uploaded_images):
-                config = image_configs[idx] if idx < len(image_configs) else {"tab_title": f"Page {idx+1}", "page_title": "", "comment": ""}
-                
-                # Store page_title in comment field with special marker, and actual comment after
-                combined_comment = f"##PAGE_TITLE##{config['page_title']}##COMMENT##" + config["comment"]
-                
+            save_media_upload(
+                uploaded_file=uploaded_add_2,
+                segment_id=segment["id"],
+                section="Segment Trends",
+                created_by=current_user["username"],
+                comment=comment_add_2,
+                title=title_add_2,
+                label="Additional Images"
+            )
+            
+            st.success("Image 2 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Image 3
+    st.markdown("**Image 3:**")
+    existing_3 = trend_images[2] if len(trend_images) > 2 else None
+    uploaded_add_3 = st.file_uploader("Upload Image 3", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_3_{segment['id']}")
+    title_add_3 = st.text_input("Title for Image 3", value=existing_3.get("title", "") if existing_3 else "", key=f"seg_trends_add_title_3_{segment['id']}")
+    comment_add_3 = st.text_area("Comment for Image 3", value=existing_3.get("comment", "") if existing_3 else "", key=f"seg_trends_add_comment_3_{segment['id']}", height=150)
+    
+    # Preview existing image 3
+    if existing_3 and not uploaded_add_3:
+        file_path_3 = existing_3.get("file_path")
+        if file_path_3 and os.path.exists(file_path_3):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_3, caption="Current Image 3", use_container_width=True)
+    
+    # Save button for Image 3
+    if st.button("Save Image 3", key=f"save_seg_trends_3_{segment['id']}"):
+        if not uploaded_add_3:
+            st.error("Please upload Image 3.")
+        else:
+            from app_core.media import save_media_upload
+            
+            # Delete existing Image 3 only
+            if existing_3:
+                from app_core.media import delete_media
+                delete_media(existing_3["id"])
+            
+            save_media_upload(
+                uploaded_file=uploaded_add_3,
+                segment_id=segment["id"],
+                section="Segment Trends",
+                created_by=current_user["username"],
+                comment=comment_add_3,
+                title=title_add_3,
+                label="Additional Images"
+            )
+            
+            st.success("Image 3 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Image 4
+    st.markdown("**Image 4:**")
+    existing_4 = trend_images[3] if len(trend_images) > 3 else None
+    uploaded_add_4 = st.file_uploader("Upload Image 4", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_4_{segment['id']}")
+    title_add_4 = st.text_input("Title for Image 4", value=existing_4.get("title", "") if existing_4 else "", key=f"seg_trends_add_title_4_{segment['id']}")
+    comment_add_4 = st.text_area("Comment for Image 4", value=existing_4.get("comment", "") if existing_4 else "", key=f"seg_trends_add_comment_4_{segment['id']}", height=150)
+    
+    # Preview existing image 4
+    if existing_4 and not uploaded_add_4:
+        file_path_4 = existing_4.get("file_path")
+        if file_path_4 and os.path.exists(file_path_4):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_4, caption="Current Image 4", use_container_width=True)
+    
+    # Save button for Image 4
+    if st.button("Save Image 4", key=f"save_seg_trends_4_{segment['id']}"):
+        if not uploaded_add_4:
+            st.error("Please upload Image 4.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            
+            # Delete existing Image 4 only
+            if existing_4:
+                delete_media(existing_4["id"])
+            
+            save_media_upload(
+                uploaded_file=uploaded_add_4,
+                segment_id=segment["id"],
+                section="Segment Trends",
+                created_by=current_user["username"],
+                comment=comment_add_4,
+                title=title_add_4,
+                label="Additional Images"
+            )
+            
+            st.success("Image 4 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Image 5
+    st.markdown("**Image 5:**")
+    existing_5 = trend_images[4] if len(trend_images) > 4 else None
+    uploaded_add_5 = st.file_uploader("Upload Image 5", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_5_{segment['id']}")
+    title_add_5 = st.text_input("Title for Image 5", value=existing_5.get("title", "") if existing_5 else "", key=f"seg_trends_add_title_5_{segment['id']}")
+    comment_add_5 = st.text_area("Comment for Image 5", value=existing_5.get("comment", "") if existing_5 else "", key=f"seg_trends_add_comment_5_{segment['id']}", height=150)
+    
+    # Preview existing image 5
+    if existing_5 and not uploaded_add_5:
+        file_path_5 = existing_5.get("file_path")
+        if file_path_5 and os.path.exists(file_path_5):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_5, caption="Current Image 5", use_container_width=True)
+    
+    # Save button for Image 5
+    if st.button("Save Image 5", key=f"save_seg_trends_5_{segment['id']}"):
+        if not uploaded_add_5:
+            st.error("Please upload Image 5.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            
+            # Delete existing Image 5 only
+            if existing_5:
+                delete_media(existing_5["id"])
+            
+            save_media_upload(
+                uploaded_file=uploaded_add_5,
+                segment_id=segment["id"],
+                section="Segment Trends",
+                created_by=current_user["username"],
+                comment=comment_add_5,
+                title=title_add_5,
+                label="Additional Images"
+            )
+            
+            st.success("Image 5 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Placeholder Images (in expander)
+    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+        # Get existing placeholder images
+        placeholder_images = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Placeholder Images"]
+        placeholder_images = sorted(placeholder_images, key=lambda x: x.get("id", 0))
+        
+        # Placeholder Image 1
+        st.markdown("**Placeholder Image 1:**")
+        existing_p1 = placeholder_images[0] if len(placeholder_images) > 0 else None
+        uploaded_p1 = st.file_uploader("Upload Placeholder Image 1", type=["png", "jpg", "jpeg"], key=f"seg_trends_p1_{segment['id']}")
+        title_p1 = st.text_input("Title for Placeholder 1", value=existing_p1.get("title", "") if existing_p1 else "", key=f"seg_trends_p_title_1_{segment['id']}")
+        comment_p1 = st.text_area("Comment for Placeholder 1", value=existing_p1.get("comment", "") if existing_p1 else "", key=f"seg_trends_p_comment_1_{segment['id']}", height=150)
+        
+        if existing_p1 and not uploaded_p1:
+            file_path_p1 = existing_p1.get("file_path")
+            if file_path_p1 and os.path.exists(file_path_p1):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p1, caption="Current Placeholder 1", use_container_width=True)
+        
+        if st.button("Save Placeholder 1", key=f"save_seg_trends_p1_{segment['id']}"):
+            if not uploaded_p1:
+                st.error("Please upload Placeholder Image 1.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p1:
+                    delete_media(existing_p1["id"])
                 save_media_upload(
-                    uploaded_file=uploaded_img,
+                    uploaded_file=uploaded_p1,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=combined_comment,
-                    label="Segment Trends Carousel",
-                    title=config["tab_title"]
+                    comment=comment_p1,
+                    title=title_p1,
+                    label="Placeholder Images"
                 )
-            
-            st.success(f"{len(uploaded_images)} image(s) saved to dashboard!")
-
+                st.success("Placeholder 1 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 2
+        st.markdown("**Placeholder Image 2:**")
+        existing_p2 = placeholder_images[1] if len(placeholder_images) > 1 else None
+        uploaded_p2 = st.file_uploader("Upload Placeholder Image 2", type=["png", "jpg", "jpeg"], key=f"seg_trends_p2_{segment['id']}")
+        title_p2 = st.text_input("Title for Placeholder 2", value=existing_p2.get("title", "") if existing_p2 else "", key=f"seg_trends_p_title_2_{segment['id']}")
+        comment_p2 = st.text_area("Comment for Placeholder 2", value=existing_p2.get("comment", "") if existing_p2 else "", key=f"seg_trends_p_comment_2_{segment['id']}", height=150)
+        
+        if existing_p2 and not uploaded_p2:
+            file_path_p2 = existing_p2.get("file_path")
+            if file_path_p2 and os.path.exists(file_path_p2):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p2, caption="Current Placeholder 2", use_container_width=True)
+        
+        if st.button("Save Placeholder 2", key=f"save_seg_trends_p2_{segment['id']}"):
+            if not uploaded_p2:
+                st.error("Please upload Placeholder Image 2.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p2:
+                    delete_media(existing_p2["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p2,
+                    segment_id=segment["id"],
+                    section="Segment Trends",
+                    created_by=current_user["username"],
+                    comment=comment_p2,
+                    title=title_p2,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 2 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 3
+        st.markdown("**Placeholder Image 3:**")
+        existing_p3 = placeholder_images[2] if len(placeholder_images) > 2 else None
+        uploaded_p3 = st.file_uploader("Upload Placeholder Image 3", type=["png", "jpg", "jpeg"], key=f"seg_trends_p3_{segment['id']}")
+        title_p3 = st.text_input("Title for Placeholder 3", value=existing_p3.get("title", "") if existing_p3 else "", key=f"seg_trends_p_title_3_{segment['id']}")
+        comment_p3 = st.text_area("Comment for Placeholder 3", value=existing_p3.get("comment", "") if existing_p3 else "", key=f"seg_trends_p_comment_3_{segment['id']}", height=150)
+        
+        if existing_p3 and not uploaded_p3:
+            file_path_p3 = existing_p3.get("file_path")
+            if file_path_p3 and os.path.exists(file_path_p3):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p3, caption="Current Placeholder 3", use_container_width=True)
+        
+        if st.button("Save Placeholder 3", key=f"save_seg_trends_p3_{segment['id']}"):
+            if not uploaded_p3:
+                st.error("Please upload Placeholder Image 3.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p3:
+                    delete_media(existing_p3["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p3,
+                    segment_id=segment["id"],
+                    section="Segment Trends",
+                    created_by=current_user["username"],
+                    comment=comment_p3,
+                    title=title_p3,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 3 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 4
+        st.markdown("**Placeholder Image 4:**")
+        existing_p4 = placeholder_images[3] if len(placeholder_images) > 3 else None
+        uploaded_p4 = st.file_uploader("Upload Placeholder Image 4", type=["png", "jpg", "jpeg"], key=f"seg_trends_p4_{segment['id']}")
+        title_p4 = st.text_input("Title for Placeholder 4", value=existing_p4.get("title", "") if existing_p4 else "", key=f"seg_trends_p_title_4_{segment['id']}")
+        comment_p4 = st.text_area("Comment for Placeholder 4", value=existing_p4.get("comment", "") if existing_p4 else "", key=f"seg_trends_p_comment_4_{segment['id']}", height=150)
+        
+        if existing_p4 and not uploaded_p4:
+            file_path_p4 = existing_p4.get("file_path")
+            if file_path_p4 and os.path.exists(file_path_p4):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p4, caption="Current Placeholder 4", use_container_width=True)
+        
+        if st.button("Save Placeholder 4", key=f"save_seg_trends_p4_{segment['id']}"):
+            if not uploaded_p4:
+                st.error("Please upload Placeholder Image 4.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p4:
+                    delete_media(existing_p4["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p4,
+                    segment_id=segment["id"],
+                    section="Segment Trends",
+                    created_by=current_user["username"],
+                    comment=comment_p4,
+                    title=title_p4,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 4 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 5
+        st.markdown("**Placeholder Image 5:**")
+        existing_p5 = placeholder_images[4] if len(placeholder_images) > 4 else None
+        uploaded_p5 = st.file_uploader("Upload Placeholder Image 5", type=["png", "jpg", "jpeg"], key=f"seg_trends_p5_{segment['id']}")
+        title_p5 = st.text_input("Title for Placeholder 5", value=existing_p5.get("title", "") if existing_p5 else "", key=f"seg_trends_p_title_5_{segment['id']}")
+        comment_p5 = st.text_area("Comment for Placeholder 5", value=existing_p5.get("comment", "") if existing_p5 else "", key=f"seg_trends_p_comment_5_{segment['id']}", height=150)
+        
+        if existing_p5 and not uploaded_p5:
+            file_path_p5 = existing_p5.get("file_path")
+            if file_path_p5 and os.path.exists(file_path_p5):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p5, caption="Current Placeholder 5", use_container_width=True)
+        
+        if st.button("Save Placeholder 5", key=f"save_seg_trends_p5_{segment['id']}"):
+            if not uploaded_p5:
+                st.error("Please upload Placeholder Image 5.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p5:
+                    delete_media(existing_p5["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p5,
+                    segment_id=segment["id"],
+                    section="Segment Trends",
+                    created_by=current_user["username"],
+                    comment=comment_p5,
+                    title=title_p5,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 5 saved!")
     
     st.markdown("---")
     st.markdown("### Custom Trends View Builder")
@@ -2836,6 +3102,400 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
 def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Brand Trends - Custom Trends View Builder with multiple views support"""
     st.markdown("#### Brand Trends Configuration")
+    
+    # Get existing media
+    from app_core.media import get_media_for_segment
+    existing_media = get_media_for_segment(segment["id"])
+    
+    # Standalone Images Section (6 images)
+    st.markdown("### Standalone Images")
+    st.caption("Upload up to 6 images with title and comment")
+    
+    # Get existing standalone images
+    brand_trends_standalone = [m for m in existing_media if m.get("section") == "Brand Trends" and m.get("name") == "Standalone Images"]
+    brand_trends_standalone = sorted(brand_trends_standalone, key=lambda x: x.get("id", 0))
+    
+    show_formatting_tips()
+    
+    # Image 1
+    st.markdown("**Image 1:**")
+    existing_bt1 = brand_trends_standalone[0] if len(brand_trends_standalone) > 0 else None
+    uploaded_bt1 = st.file_uploader("Upload Image 1", type=["png", "jpg", "jpeg"], key=f"brand_trends_img_1_{segment['id']}")
+    title_bt1 = st.text_input("Title for Image 1", value=existing_bt1.get("title", "") if existing_bt1 else "", key=f"bt_title_1_{segment['id']}")
+    comment_bt1 = st.text_area("Comment for Image 1", value=existing_bt1.get("comment", "") if existing_bt1 else "", key=f"bt_comment_1_{segment['id']}", height=150)
+    
+    if existing_bt1 and not uploaded_bt1:
+        file_path_bt1 = existing_bt1.get("file_path")
+        if file_path_bt1 and os.path.exists(file_path_bt1):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_bt1, caption="Current Image 1", use_container_width=True)
+    
+    if st.button("Save Image 1", key=f"save_bt_img1_{segment['id']}"):
+        if not uploaded_bt1:
+            st.error("Please upload Image 1.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_bt1:
+                delete_media(existing_bt1["id"])
+            save_media_upload(
+                uploaded_file=uploaded_bt1,
+                segment_id=segment["id"],
+                section="Brand Trends",
+                created_by=current_user["username"],
+                comment=comment_bt1,
+                title=title_bt1,
+                label="Standalone Images"
+            )
+            st.success("Image 1 saved!")
+    
+    st.markdown("---")
+    
+    # Image 2
+    st.markdown("**Image 2:**")
+    existing_bt2 = brand_trends_standalone[1] if len(brand_trends_standalone) > 1 else None
+    uploaded_bt2 = st.file_uploader("Upload Image 2", type=["png", "jpg", "jpeg"], key=f"brand_trends_img_2_{segment['id']}")
+    title_bt2 = st.text_input("Title for Image 2", value=existing_bt2.get("title", "") if existing_bt2 else "", key=f"bt_title_2_{segment['id']}")
+    comment_bt2 = st.text_area("Comment for Image 2", value=existing_bt2.get("comment", "") if existing_bt2 else "", key=f"bt_comment_2_{segment['id']}", height=150)
+    
+    if existing_bt2 and not uploaded_bt2:
+        file_path_bt2 = existing_bt2.get("file_path")
+        if file_path_bt2 and os.path.exists(file_path_bt2):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_bt2, caption="Current Image 2", use_container_width=True)
+    
+    if st.button("Save Image 2", key=f"save_bt_img2_{segment['id']}"):
+        if not uploaded_bt2:
+            st.error("Please upload Image 2.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_bt2:
+                delete_media(existing_bt2["id"])
+            save_media_upload(
+                uploaded_file=uploaded_bt2,
+                segment_id=segment["id"],
+                section="Brand Trends",
+                created_by=current_user["username"],
+                comment=comment_bt2,
+                title=title_bt2,
+                label="Standalone Images"
+            )
+            st.success("Image 2 saved!")
+    
+    st.markdown("---")
+    
+    # Image 3
+    st.markdown("**Image 3:**")
+    existing_bt3 = brand_trends_standalone[2] if len(brand_trends_standalone) > 2 else None
+    uploaded_bt3 = st.file_uploader("Upload Image 3", type=["png", "jpg", "jpeg"], key=f"brand_trends_img_3_{segment['id']}")
+    title_bt3 = st.text_input("Title for Image 3", value=existing_bt3.get("title", "") if existing_bt3 else "", key=f"bt_title_3_{segment['id']}")
+    comment_bt3 = st.text_area("Comment for Image 3", value=existing_bt3.get("comment", "") if existing_bt3 else "", key=f"bt_comment_3_{segment['id']}", height=150)
+    
+    if existing_bt3 and not uploaded_bt3:
+        file_path_bt3 = existing_bt3.get("file_path")
+        if file_path_bt3 and os.path.exists(file_path_bt3):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_bt3, caption="Current Image 3", use_container_width=True)
+    
+    if st.button("Save Image 3", key=f"save_bt_img3_{segment['id']}"):
+        if not uploaded_bt3:
+            st.error("Please upload Image 3.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_bt3:
+                delete_media(existing_bt3["id"])
+            save_media_upload(
+                uploaded_file=uploaded_bt3,
+                segment_id=segment["id"],
+                section="Brand Trends",
+                created_by=current_user["username"],
+                comment=comment_bt3,
+                title=title_bt3,
+                label="Standalone Images"
+            )
+            st.success("Image 3 saved!")
+    
+    st.markdown("---")
+    
+    # Image 4
+    st.markdown("**Image 4:**")
+    existing_bt4 = brand_trends_standalone[3] if len(brand_trends_standalone) > 3 else None
+    uploaded_bt4 = st.file_uploader("Upload Image 4", type=["png", "jpg", "jpeg"], key=f"brand_trends_img_4_{segment['id']}")
+    title_bt4 = st.text_input("Title for Image 4", value=existing_bt4.get("title", "") if existing_bt4 else "", key=f"bt_title_4_{segment['id']}")
+    comment_bt4 = st.text_area("Comment for Image 4", value=existing_bt4.get("comment", "") if existing_bt4 else "", key=f"bt_comment_4_{segment['id']}", height=150)
+    
+    if existing_bt4 and not uploaded_bt4:
+        file_path_bt4 = existing_bt4.get("file_path")
+        if file_path_bt4 and os.path.exists(file_path_bt4):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_bt4, caption="Current Image 4", use_container_width=True)
+    
+    if st.button("Save Image 4", key=f"save_bt_img4_{segment['id']}"):
+        if not uploaded_bt4:
+            st.error("Please upload Image 4.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_bt4:
+                delete_media(existing_bt4["id"])
+            save_media_upload(
+                uploaded_file=uploaded_bt4,
+                segment_id=segment["id"],
+                section="Brand Trends",
+                created_by=current_user["username"],
+                comment=comment_bt4,
+                title=title_bt4,
+                label="Standalone Images"
+            )
+            st.success("Image 4 saved!")
+    
+    st.markdown("---")
+    
+    # Image 5
+    st.markdown("**Image 5:**")
+    existing_bt5 = brand_trends_standalone[4] if len(brand_trends_standalone) > 4 else None
+    uploaded_bt5 = st.file_uploader("Upload Image 5", type=["png", "jpg", "jpeg"], key=f"brand_trends_img_5_{segment['id']}")
+    title_bt5 = st.text_input("Title for Image 5", value=existing_bt5.get("title", "") if existing_bt5 else "", key=f"bt_title_5_{segment['id']}")
+    comment_bt5 = st.text_area("Comment for Image 5", value=existing_bt5.get("comment", "") if existing_bt5 else "", key=f"bt_comment_5_{segment['id']}", height=150)
+    
+    if existing_bt5 and not uploaded_bt5:
+        file_path_bt5 = existing_bt5.get("file_path")
+        if file_path_bt5 and os.path.exists(file_path_bt5):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_bt5, caption="Current Image 5", use_container_width=True)
+    
+    if st.button("Save Image 5", key=f"save_bt_img5_{segment['id']}"):
+        if not uploaded_bt5:
+            st.error("Please upload Image 5.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_bt5:
+                delete_media(existing_bt5["id"])
+            save_media_upload(
+                uploaded_file=uploaded_bt5,
+                segment_id=segment["id"],
+                section="Brand Trends",
+                created_by=current_user["username"],
+                comment=comment_bt5,
+                title=title_bt5,
+                label="Standalone Images"
+            )
+            st.success("Image 5 saved!")
+    
+    st.markdown("---")
+    
+    # Image 6
+    st.markdown("**Image 6:**")
+    existing_bt6 = brand_trends_standalone[5] if len(brand_trends_standalone) > 5 else None
+    uploaded_bt6 = st.file_uploader("Upload Image 6", type=["png", "jpg", "jpeg"], key=f"brand_trends_img_6_{segment['id']}")
+    title_bt6 = st.text_input("Title for Image 6", value=existing_bt6.get("title", "") if existing_bt6 else "", key=f"bt_title_6_{segment['id']}")
+    comment_bt6 = st.text_area("Comment for Image 6", value=existing_bt6.get("comment", "") if existing_bt6 else "", key=f"bt_comment_6_{segment['id']}", height=150)
+    
+    if existing_bt6 and not uploaded_bt6:
+        file_path_bt6 = existing_bt6.get("file_path")
+        if file_path_bt6 and os.path.exists(file_path_bt6):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_bt6, caption="Current Image 6", use_container_width=True)
+    
+    if st.button("Save Image 6", key=f"save_bt_img6_{segment['id']}"):
+        if not uploaded_bt6:
+            st.error("Please upload Image 6.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_bt6:
+                delete_media(existing_bt6["id"])
+            save_media_upload(
+                uploaded_file=uploaded_bt6,
+                segment_id=segment["id"],
+                section="Brand Trends",
+                created_by=current_user["username"],
+                comment=comment_bt6,
+                title=title_bt6,
+                label="Standalone Images"
+            )
+            st.success("Image 6 saved!")
+    
+    st.markdown("---")
+    
+    # Placeholder Images (in expander)
+    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+        # Get existing placeholder images
+        brand_trends_placeholders = [m for m in existing_media if m.get("section") == "Brand Trends" and m.get("name") == "Placeholder Images"]
+        brand_trends_placeholders = sorted(brand_trends_placeholders, key=lambda x: x.get("id", 0))
+        
+        # Placeholder 1
+        st.markdown("**Placeholder 1:**")
+        existing_btp1 = brand_trends_placeholders[0] if len(brand_trends_placeholders) > 0 else None
+        uploaded_btp1 = st.file_uploader("Upload Placeholder 1", type=["png", "jpg", "jpeg"], key=f"bt_placeholder_1_{segment['id']}")
+        title_btp1 = st.text_input("Title for Placeholder 1", value=existing_btp1.get("title", "") if existing_btp1 else "", key=f"btp_title_1_{segment['id']}")
+        comment_btp1 = st.text_area("Comment for Placeholder 1", value=existing_btp1.get("comment", "") if existing_btp1 else "", key=f"btp_comment_1_{segment['id']}", height=150)
+        
+        if existing_btp1 and not uploaded_btp1:
+            file_path_btp1 = existing_btp1.get("file_path")
+            if file_path_btp1 and os.path.exists(file_path_btp1):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_btp1, caption="Current Placeholder 1", use_container_width=True)
+        
+        if st.button("Save Placeholder 1", key=f"save_btp1_{segment['id']}"):
+            if not uploaded_btp1:
+                st.error("Please upload Placeholder 1.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_btp1:
+                    delete_media(existing_btp1["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_btp1,
+                    segment_id=segment["id"],
+                    section="Brand Trends",
+                    created_by=current_user["username"],
+                    comment=comment_btp1,
+                    title=title_btp1,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 1 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder 2
+        st.markdown("**Placeholder 2:**")
+        existing_btp2 = brand_trends_placeholders[1] if len(brand_trends_placeholders) > 1 else None
+        uploaded_btp2 = st.file_uploader("Upload Placeholder 2", type=["png", "jpg", "jpeg"], key=f"bt_placeholder_2_{segment['id']}")
+        title_btp2 = st.text_input("Title for Placeholder 2", value=existing_btp2.get("title", "") if existing_btp2 else "", key=f"btp_title_2_{segment['id']}")
+        comment_btp2 = st.text_area("Comment for Placeholder 2", value=existing_btp2.get("comment", "") if existing_btp2 else "", key=f"btp_comment_2_{segment['id']}", height=150)
+        
+        if existing_btp2 and not uploaded_btp2:
+            file_path_btp2 = existing_btp2.get("file_path")
+            if file_path_btp2 and os.path.exists(file_path_btp2):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_btp2, caption="Current Placeholder 2", use_container_width=True)
+        
+        if st.button("Save Placeholder 2", key=f"save_btp2_{segment['id']}"):
+            if not uploaded_btp2:
+                st.error("Please upload Placeholder 2.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_btp2:
+                    delete_media(existing_btp2["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_btp2,
+                    segment_id=segment["id"],
+                    section="Brand Trends",
+                    created_by=current_user["username"],
+                    comment=comment_btp2,
+                    title=title_btp2,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 2 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder 3
+        st.markdown("**Placeholder 3:**")
+        existing_btp3 = brand_trends_placeholders[2] if len(brand_trends_placeholders) > 2 else None
+        uploaded_btp3 = st.file_uploader("Upload Placeholder 3", type=["png", "jpg", "jpeg"], key=f"bt_placeholder_3_{segment['id']}")
+        title_btp3 = st.text_input("Title for Placeholder 3", value=existing_btp3.get("title", "") if existing_btp3 else "", key=f"btp_title_3_{segment['id']}")
+        comment_btp3 = st.text_area("Comment for Placeholder 3", value=existing_btp3.get("comment", "") if existing_btp3 else "", key=f"btp_comment_3_{segment['id']}", height=150)
+        
+        if existing_btp3 and not uploaded_btp3:
+            file_path_btp3 = existing_btp3.get("file_path")
+            if file_path_btp3 and os.path.exists(file_path_btp3):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_btp3, caption="Current Placeholder 3", use_container_width=True)
+        
+        if st.button("Save Placeholder 3", key=f"save_btp3_{segment['id']}"):
+            if not uploaded_btp3:
+                st.error("Please upload Placeholder 3.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_btp3:
+                    delete_media(existing_btp3["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_btp3,
+                    segment_id=segment["id"],
+                    section="Brand Trends",
+                    created_by=current_user["username"],
+                    comment=comment_btp3,
+                    title=title_btp3,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 3 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder 4
+        st.markdown("**Placeholder 4:**")
+        existing_btp4 = brand_trends_placeholders[3] if len(brand_trends_placeholders) > 3 else None
+        uploaded_btp4 = st.file_uploader("Upload Placeholder 4", type=["png", "jpg", "jpeg"], key=f"bt_placeholder_4_{segment['id']}")
+        title_btp4 = st.text_input("Title for Placeholder 4", value=existing_btp4.get("title", "") if existing_btp4 else "", key=f"btp_title_4_{segment['id']}")
+        comment_btp4 = st.text_area("Comment for Placeholder 4", value=existing_btp4.get("comment", "") if existing_btp4 else "", key=f"btp_comment_4_{segment['id']}", height=150)
+        
+        if existing_btp4 and not uploaded_btp4:
+            file_path_btp4 = existing_btp4.get("file_path")
+            if file_path_btp4 and os.path.exists(file_path_btp4):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_btp4, caption="Current Placeholder 4", use_container_width=True)
+        
+        if st.button("Save Placeholder 4", key=f"save_btp4_{segment['id']}"):
+            if not uploaded_btp4:
+                st.error("Please upload Placeholder 4.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_btp4:
+                    delete_media(existing_btp4["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_btp4,
+                    segment_id=segment["id"],
+                    section="Brand Trends",
+                    created_by=current_user["username"],
+                    comment=comment_btp4,
+                    title=title_btp4,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 4 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder 5
+        st.markdown("**Placeholder 5:**")
+        existing_btp5 = brand_trends_placeholders[4] if len(brand_trends_placeholders) > 4 else None
+        uploaded_btp5 = st.file_uploader("Upload Placeholder 5", type=["png", "jpg", "jpeg"], key=f"bt_placeholder_5_{segment['id']}")
+        title_btp5 = st.text_input("Title for Placeholder 5", value=existing_btp5.get("title", "") if existing_btp5 else "", key=f"btp_title_5_{segment['id']}")
+        comment_btp5 = st.text_area("Comment for Placeholder 5", value=existing_btp5.get("comment", "") if existing_btp5 else "", key=f"btp_comment_5_{segment['id']}", height=150)
+        
+        if existing_btp5 and not uploaded_btp5:
+            file_path_btp5 = existing_btp5.get("file_path")
+            if file_path_btp5 and os.path.exists(file_path_btp5):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_btp5, caption="Current Placeholder 5", use_container_width=True)
+        
+        if st.button("Save Placeholder 5", key=f"save_btp5_{segment['id']}"):
+            if not uploaded_btp5:
+                st.error("Please upload Placeholder 5.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_btp5:
+                    delete_media(existing_btp5["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_btp5,
+                    segment_id=segment["id"],
+                    section="Brand Trends",
+                    created_by=current_user["username"],
+                    comment=comment_btp5,
+                    title=title_btp5,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 5 saved!")
+    
+    st.markdown("---")
     
     st.markdown("### Custom Trends View Builder")
     st.caption("Create multiple custom views (like slides) with title, description, and numbered sections")
@@ -3077,12 +3737,9 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
     # Parse saved config
     jtbd_config = json.loads(saved_jtbd["filter_json"]) if saved_jtbd and saved_jtbd["filter_json"] else {}
     saved_jtbd_title = jtbd_config.get("title", "Jobs To Be Done")
-    saved_jtbd_description = jtbd_config.get("description", "")
-    saved_left_header = jtbd_config.get("left_header", "What's Working & Holding Us Back?")
-    saved_right_header = jtbd_config.get("right_header", "JTBDs:")
-    saved_jtbd_sections = jtbd_config.get("sections", [])
+    saved_jtbd_tabs = jtbd_config.get("tabs", [])
     
-    # Title and main description - pre-populated with saved values
+    # Title - pre-populated with saved value
     jtbd_title = st.text_input(
         "View Title (editable)",
         value=saved_jtbd_title,
@@ -3091,249 +3748,465 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
         help="This title will appear on the dashboard"
     )
     
-    jtbd_description = st.text_area(
-        "Main Description (optional)",
-        value=saved_jtbd_description,
-        placeholder="Enter overview or context...",
-        height=80,
-        key=f"jtbd_desc_{segment['id']}"
-    )
-    
-    # Column headers (same for all sections) - pre-populated with saved values
-    st.markdown("**Column Headers (applies to all sections):**")
-    col_left_h, col_right_h = st.columns(2)
-    
-    with col_left_h:
-        left_header = st.text_input(
-            "Left Column Header",
-            value=saved_left_header,
-            key=f"jtbd_left_header_{segment['id']}"
-        )
-    
-    with col_right_h:
-        right_header = st.text_input(
-            "Right Column Header",
-            value=saved_right_header,
-            key=f"jtbd_right_header_{segment['id']}"
-        )
-    
     st.markdown("---")
     
-    # Number of JTBD sections
-    num_jtbd_sections = st.number_input(
-        "Number of JTBD Sections (1-8)",
+    # Number of JTBD tabs
+    num_jtbd_tabs = st.number_input(
+        "Number of JTBD Tabs (1-5)",
         min_value=1,
-        max_value=8,
-        value=3,
-        key=f"jtbd_num_sections_{segment['id']}"
+        max_value=5,
+        value=len(saved_jtbd_tabs) if saved_jtbd_tabs else 1,
+        key=f"jtbd_num_tabs_{segment['id']}"
     )
     
-    # JTBD section inputs
-    jtbd_sections_data = []
-    for i in range(num_jtbd_sections):
-        st.markdown(f"**JTBD Section {i+1}:**")
+    # Collect data for all tabs
+    all_tabs_data = []
+    
+    for tab_idx in range(num_jtbd_tabs):
+        st.markdown("---")
+        st.markdown(f"### Tab {tab_idx + 1} Configuration")
         
-        # Get saved section data if available
-        saved_jtbd_section = saved_jtbd_sections[i] if i < len(saved_jtbd_sections) else {}
-        saved_label = saved_jtbd_section.get("label", "LDA-40YO")
-        saved_left = saved_jtbd_section.get("left", "")
-        saved_right = saved_jtbd_section.get("right", "")
+        # Get saved tab data if available
+        saved_tab = saved_jtbd_tabs[tab_idx] if tab_idx < len(saved_jtbd_tabs) else {}
+        saved_tab_name = saved_tab.get("tab_name", f"JTBD {tab_idx + 1}")
+        saved_description = saved_tab.get("description", "")
+        saved_left_header = saved_tab.get("left_header", "What's Working & Holding Us Back?")
+        saved_right_header = saved_tab.get("right_header", "JTBDs:")
+        saved_jtbd_sections = saved_tab.get("sections", [])
         
-        col_label, col_left, col_right = st.columns([1, 2, 2])
+        # Tab name
+        tab_name = st.text_input(
+            f"Tab {tab_idx + 1} Name",
+            value=saved_tab_name,
+            placeholder=f"e.g., Premium Segment, Mass Market",
+            key=f"jtbd_tab{tab_idx}_name_{segment['id']}"
+        )
         
-        with col_label:
-            section_label = st.text_input(
-                f"Section Label",
-                value=saved_label,
-                key=f"jtbd_sec{i}_label_{segment['id']}",
-                placeholder="e.g., LDA-40YO, UP-HR-MP"
+        # Main description for this tab
+        tab_description = st.text_area(
+            f"Tab {tab_idx + 1} Description (optional)",
+            value=saved_description,
+            placeholder="Enter overview or context for this tab...",
+            height=80,
+            key=f"jtbd_tab{tab_idx}_desc_{segment['id']}"
+        )
+        
+        # Column headers for this tab
+        st.markdown(f"**Tab {tab_idx + 1} Column Headers:**")
+        col_left_h, col_right_h = st.columns(2)
+        
+        with col_left_h:
+            left_header = st.text_input(
+                "Left Column Header",
+                value=saved_left_header,
+                key=f"jtbd_tab{tab_idx}_left_header_{segment['id']}"
             )
         
-        with col_left:
-            left_content = st.text_area(
-                f"Left Content",
-                value=saved_left,
-                placeholder="What's Working?\n• Point 1\n• Point 2\n\nWhat's Holding Us Back?\n• Issue 1\n• Issue 2",
-                height=200,
-                key=f"jtbd_sec{i}_left_{segment['id']}"
+        with col_right_h:
+            right_header = st.text_input(
+                "Right Column Header",
+                value=saved_right_header,
+                key=f"jtbd_tab{tab_idx}_right_header_{segment['id']}"
             )
         
-        with col_right:
-            right_content = st.text_area(
-                f"Right Content (JTBDs)",
-                value=saved_right,
-                placeholder="1. First JTBD\n• Detail 1\n• Detail 2\n\n2. Second JTBD\n• Detail 1\n• Detail 2",
-                height=200,
-                key=f"jtbd_sec{i}_right_{segment['id']}"
-            )
+        # Number of JTBD sections for this tab
+        num_jtbd_sections = st.number_input(
+            f"Number of JTBD Sections in Tab {tab_idx + 1} (1-8)",
+            min_value=1,
+            max_value=8,
+            value=len(saved_jtbd_sections) if saved_jtbd_sections else 3,
+            key=f"jtbd_tab{tab_idx}_num_sections_{segment['id']}"
+        )
         
-        jtbd_sections_data.append({
-            "label": section_label,
-            "left": left_content,
-            "right": right_content
+        # JTBD section inputs for this tab
+        jtbd_sections_data = []
+        for i in range(num_jtbd_sections):
+            st.markdown(f"**Tab {tab_idx + 1} - Section {i+1}:**")
+            
+            # Get saved section data if available
+            saved_jtbd_section = saved_jtbd_sections[i] if i < len(saved_jtbd_sections) else {}
+            saved_label = saved_jtbd_section.get("label", "LDA-40YO")
+            saved_left = saved_jtbd_section.get("left", "")
+            saved_right = saved_jtbd_section.get("right", "")
+            
+            col_label, col_left, col_right = st.columns([1, 2, 2])
+            
+            with col_label:
+                section_label = st.text_input(
+                    f"Section Label",
+                    value=saved_label,
+                    key=f"jtbd_tab{tab_idx}_sec{i}_label_{segment['id']}",
+                    placeholder="e.g., LDA-40YO, UP-HR-MP"
+                )
+            
+            with col_left:
+                left_content = st.text_area(
+                    f"Left Content",
+                    value=saved_left,
+                    placeholder="What's Working?\n• Point 1\n• Point 2\n\nWhat's Holding Us Back?\n• Issue 1\n• Issue 2",
+                    height=200,
+                    key=f"jtbd_tab{tab_idx}_sec{i}_left_{segment['id']}"
+                )
+            
+            with col_right:
+                right_content = st.text_area(
+                    f"Right Content (JTBDs)",
+                    value=saved_right,
+                    placeholder="1. First JTBD\n• Detail 1\n• Detail 2\n\n2. Second JTBD\n• Detail 1\n• Detail 2",
+                    height=200,
+                    key=f"jtbd_tab{tab_idx}_sec{i}_right_{segment['id']}"
+                )
+            
+            jtbd_sections_data.append({
+                "label": section_label,
+                "left": left_content,
+                "right": right_content
+            })
+        
+        all_tabs_data.append({
+            "tab_name": tab_name,
+            "description": tab_description,
+            "left_header": left_header,
+            "right_header": right_header,
+            "sections": jtbd_sections_data
         })
+        
+        # Individual save button for this tab
+        if st.button(f"💾 Save Tab {tab_idx + 1} ({tab_name or f'JTBD {tab_idx + 1}'})", key=f"save_jtbd_tab{tab_idx}_{segment['id']}"):
+            if not jtbd_title:
+                st.error("Please provide a title for the JTBD view.")
+            else:
+                # Load existing config to preserve other tabs
+                existing_config = jtbd_config if jtbd_config else {}
+                existing_tabs = existing_config.get("tabs", [])
+                
+                # Update or add this specific tab
+                if tab_idx < len(existing_tabs):
+                    existing_tabs[tab_idx] = {
+                        "tab_name": tab_name,
+                        "description": tab_description,
+                        "left_header": left_header,
+                        "right_header": right_header,
+                        "sections": jtbd_sections_data
+                    }
+                else:
+                    # Extend the list if needed
+                    while len(existing_tabs) < tab_idx:
+                        existing_tabs.append({
+                            "tab_name": f"JTBD {len(existing_tabs) + 1}",
+                            "description": "",
+                            "left_header": "What's Working & Holding Us Back?",
+                            "right_header": "JTBDs:",
+                            "sections": []
+                        })
+                    existing_tabs.append({
+                        "tab_name": tab_name,
+                        "description": tab_description,
+                        "left_header": left_header,
+                        "right_header": right_header,
+                        "sections": jtbd_sections_data
+                    })
+                
+                # Delete existing
+                delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
+                
+                # Save updated configuration
+                config_json = json.dumps({
+                    "title": jtbd_title,
+                    "tabs": existing_tabs
+                })
+                
+                save_table(
+                    name="JTBD View",
+                    section="Battlegrounds",
+                    dataset_id=dataset_id,
+                    segment_id=segment["id"],
+                    columns=["Config"],
+                    filter_json=config_json,
+                    created_by=current_user["username"]
+                )
+                
+                st.success(f"✅ Tab {tab_idx + 1} saved to dashboard!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     
     # Show formatting tips once for all JTBD sections
     show_formatting_tips()
     
     # Preview
-    if jtbd_title or jtbd_description or any(s["left"] or s["right"] for s in jtbd_sections_data):
+    if jtbd_title or any(tab["sections"] for tab in all_tabs_data if any(s["left"] or s["right"] for s in tab["sections"])):
         st.markdown("---")
         st.markdown("**Preview:**")
         
         if jtbd_title:
             st.markdown(f"### {jtbd_title}")
         
-        if jtbd_description:
-            import html
-            escaped_desc = html.escape(jtbd_description).replace('\n', '<br>')
-            st.markdown(f"""
-                <div style='
-                    background: #F5F5F5;
-                    border: 1px solid #CCCCCC;
-                    padding: 1rem 1.5rem;
-                    margin: 1rem 0;
-                    border-radius: 8px;
-                    font-size: 1rem;
-                    line-height: 1.6;
-                    color: #2C2C2C;
-                '>
-                    {escaped_desc}
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # Display JTBD sections
-        for section in jtbd_sections_data:
-            if section["left"] or section["right"]:
-                # Rectangular label on the left (vertical text)
-                cols = st.columns([0.15, 4, 4])
-                
-                with cols[0]:
-                    st.markdown(f"""
-                        <div style='
-                            background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
-                            border: 2px solid #999999;
-                            padding: 1rem 0.3rem;
-                            margin: 0.5rem 0;
-                            border-radius: 6px;
-                            min-height: 300px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            writing-mode: vertical-rl;
-                            text-orientation: mixed;
-                            font-size: 1.1rem;
-                            font-weight: bold;
-                            color: #333333;
-                            text-align: center;
-                        '>
-                            {section["label"]}
-                        </div>
-                    """, unsafe_allow_html=True)
-                
-                with cols[1]:
-                    # Left section with header
-                    if left_header:
-                        st.markdown(f"""
-                            <div style='
-                                background: #D0D0D0;
-                                padding: 0.5rem 1rem;
-                                margin-bottom: 0.5rem;
-                                border-radius: 6px 6px 0 0;
-                                font-weight: bold;
-                                font-size: 1rem;
-                                color: #1A1A1A;
-                            '>
-                                {left_header}
-                            </div>
-                        """, unsafe_allow_html=True)
+        # Display JTBD tabs preview
+        if num_jtbd_tabs > 1:
+            # Create tabs for preview
+            tab_names = [tab["tab_name"] or f"Tab {i+1}" for i, tab in enumerate(all_tabs_data)]
+            preview_tabs = st.tabs(tab_names)
+            
+            for tab_idx, preview_tab in enumerate(preview_tabs):
+                with preview_tab:
+                    tab_data = all_tabs_data[tab_idx]
                     
-                    if section["left"]:
+                    # Show tab description if exists
+                    if tab_data.get("description"):
                         import html
-                        escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                        escaped_desc = html.escape(tab_data["description"]).replace('\n', '<br>')
                         st.markdown(f"""
                             <div style='
                                 background: #F5F5F5;
                                 border: 1px solid #CCCCCC;
-                                padding: 1rem;
-                                margin: 0;
-                                border-radius: 0 0 6px 6px;
-                                min-height: 250px;
-                                font-size: 0.9rem;
-                                line-height: 1.6;
-                                color: #1A1A1A;
-                            '>
-                                {escaped_left}
-                            </div>
-                        """, unsafe_allow_html=True)
-                
-                with cols[2]:
-                    # Right section with header
-                    if right_header:
-                        st.markdown(f"""
-                            <div style='
-                                background: #D0D0D0;
-                                padding: 0.5rem 1rem;
-                                margin-bottom: 0.5rem;
-                                border-radius: 6px 6px 0 0;
-                                font-weight: bold;
+                                padding: 1rem 1.5rem;
+                                margin: 1rem 0;
+                                border-radius: 8px;
                                 font-size: 1rem;
-                                color: #1A1A1A;
+                                line-height: 1.6;
+                                color: #2C2C2C;
                             '>
-                                {right_header}
+                                {escaped_desc}
                             </div>
                         """, unsafe_allow_html=True)
                     
-                    if section["right"]:
-                        import html
-                        escaped_right = html.escape(section["right"]).replace('\n', '<br>')
-                        st.markdown(f"""
-                            <div style='
-                                background: #F5F5F5;
-                                border: 1px solid #CCCCCC;
-                                padding: 1rem;
-                                margin: 0;
-                                border-radius: 0 0 6px 6px;
-                                min-height: 250px;
-                                font-size: 0.9rem;
-                                line-height: 1.6;
-                                color: #1A1A1A;
-                            '>
-                                {escaped_right}
-                            </div>
-                        """, unsafe_allow_html=True)
-                
-                # Add spacing between sections
-                st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
-    
-    # Save button
-    if st.button("Save Brand Trends JTBD to Dashboard", key=f"save_jtbd_{segment['id']}"):
-        if not jtbd_title:
-            st.error("Please provide a title for the JTBD view.")
+                    # Get headers for this tab
+                    tab_left_header = tab_data.get("left_header", "")
+                    tab_right_header = tab_data.get("right_header", "")
+                    
+                    for section in tab_data["sections"]:
+                        if section["left"] or section["right"]:
+                            # Rectangular label on the left (vertical text)
+                            cols = st.columns([0.15, 4, 4])
+                            
+                            with cols[0]:
+                                st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                        border: 2px solid #999999;
+                                        padding: 1rem 0.3rem;
+                                        margin: 0.5rem 0;
+                                        border-radius: 6px;
+                                        min-height: 300px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        writing-mode: vertical-rl;
+                                        text-orientation: mixed;
+                                        font-size: 1.1rem;
+                                        font-weight: bold;
+                                        color: #333333;
+                                        text-align: center;
+                                    '>
+                                        {section["label"]}
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            
+                            with cols[1]:
+                                # Left section with header
+                                if tab_left_header:
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #D0D0D0;
+                                            padding: 0.5rem 1rem;
+                                            margin-bottom: 0.5rem;
+                                            border-radius: 6px 6px 0 0;
+                                            font-weight: bold;
+                                            font-size: 1rem;
+                                            color: #1A1A1A;
+                                        '>
+                                            {tab_left_header}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                if section["left"]:
+                                    import html
+                                    escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F5F5F5;
+                                            border: 1px solid #CCCCCC;
+                                            padding: 1rem;
+                                            margin: 0;
+                                            border-radius: 0 0 6px 6px;
+                                            min-height: 250px;
+                                            font-size: 0.9rem;
+                                            line-height: 1.6;
+                                            color: #1A1A1A;
+                                        '>
+                                            {escaped_left}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            with cols[2]:
+                                # Right section with header
+                                if tab_right_header:
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #D0D0D0;
+                                            padding: 0.5rem 1rem;
+                                            margin-bottom: 0.5rem;
+                                            border-radius: 6px 6px 0 0;
+                                            font-weight: bold;
+                                            font-size: 1rem;
+                                            color: #1A1A1A;
+                                        '>
+                                            {tab_right_header}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                if section["right"]:
+                                    import html
+                                    escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F5F5F5;
+                                            border: 1px solid #CCCCCC;
+                                            padding: 1rem;
+                                            margin: 0;
+                                            border-radius: 0 0 6px 6px;
+                                            min-height: 250px;
+                                            font-size: 0.9rem;
+                                            line-height: 1.6;
+                                            color: #1A1A1A;
+                                        '>
+                                            {escaped_right}
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            # Add spacing between sections
+                            st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
         else:
-            # Delete existing
-            delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
+            # Single tab - display without tabs
+            tab_data = all_tabs_data[0]
             
-            # Save configuration
-            config_data = json.dumps({
-                "title": jtbd_title,
-                "description": jtbd_description,
-                "left_header": left_header,
-                "right_header": right_header,
-                "sections": jtbd_sections_data
-            })
+            # Show tab description if exists
+            if tab_data.get("description"):
+                import html
+                escaped_desc = html.escape(tab_data["description"]).replace('\n', '<br>')
+                st.markdown(f"""
+                    <div style='
+                        background: #F5F5F5;
+                        border: 1px solid #CCCCCC;
+                        padding: 1rem 1.5rem;
+                        margin: 1rem 0;
+                        border-radius: 8px;
+                        font-size: 1rem;
+                        line-height: 1.6;
+                        color: #2C2C2C;
+                    '>
+                        {escaped_desc}
+                    </div>
+                """, unsafe_allow_html=True)
             
-            save_table(
-                name="JTBD View",
-                dataset_id=dataset_id,
-                columns=["Config"],
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="Battlegrounds",
-                filter_json=config_data,
-                comment=""
-            )
-            st.success("Battlegrounds JTBD saved to dashboard!")
+            # Get headers for this tab
+            tab_left_header = tab_data.get("left_header", "")
+            tab_right_header = tab_data.get("right_header", "")
+            
+            for section in tab_data["sections"]:
+                if section["left"] or section["right"]:
+                    # Rectangular label on the left (vertical text)
+                    cols = st.columns([0.15, 4, 4])
+                    
+                    with cols[0]:
+                        st.markdown(f"""
+                            <div style='
+                                background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                border: 2px solid #999999;
+                                padding: 1rem 0.3rem;
+                                margin: 0.5rem 0;
+                                border-radius: 6px;
+                                min-height: 300px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                writing-mode: vertical-rl;
+                                text-orientation: mixed;
+                                font-size: 1.1rem;
+                                font-weight: bold;
+                                color: #333333;
+                                text-align: center;
+                            '>
+                                {section["label"]}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with cols[1]:
+                        # Left section with header
+                        if tab_left_header:
+                            st.markdown(f"""
+                                <div style='
+                                    background: #D0D0D0;
+                                    padding: 0.5rem 1rem;
+                                    margin-bottom: 0.5rem;
+                                    border-radius: 6px 6px 0 0;
+                                    font-weight: bold;
+                                    font-size: 1rem;
+                                    color: #1A1A1A;
+                                '>
+                                    {tab_left_header}
+                                </div>
+                            """, unsafe_allow_html=True)
+                        
+                        if section["left"]:
+                            import html
+                            escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F5F5F5;
+                                    border: 1px solid #CCCCCC;
+                                    padding: 1rem;
+                                    margin: 0;
+                                    border-radius: 0 0 6px 6px;
+                                    min-height: 250px;
+                                    font-size: 0.9rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                '>
+                                    {escaped_left}
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with cols[2]:
+                        # Right section with header
+                        if tab_right_header:
+                            st.markdown(f"""
+                                <div style='
+                                    background: #D0D0D0;
+                                    padding: 0.5rem 1rem;
+                                    margin-bottom: 0.5rem;
+                                    border-radius: 6px 6px 0 0;
+                                    font-weight: bold;
+                                    font-size: 1rem;
+                                    color: #1A1A1A;
+                                '>
+                                    {tab_right_header}
+                                </div>
+                            """, unsafe_allow_html=True)
+                        
+                        if section["right"]:
+                            import html
+                            escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                            st.markdown(f"""
+                                <div style='
+                                    background: #F5F5F5;
+                                    border: 1px solid #CCCCCC;
+                                    padding: 1rem;
+                                    margin: 0;
+                                    border-radius: 0 0 6px 6px;
+                                    min-height: 250px;
+                                    font-size: 0.9rem;
+                                    line-height: 1.6;
+                                    color: #1A1A1A;
+                                '>
+                                    {escaped_right}
+                                </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Add spacing between sections
+                    st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
 
 
 def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -3710,7 +4583,447 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             )
             st.success("Brand Truths saved to dashboard!")
     
-    # S&V section - appears at the very end after Brand Truths section
+    st.markdown("---")
+    
+    # Carousel Images Section (BEFORE S&V)
+    st.markdown("### Carousel Images")
+    st.caption("Upload multiple images that will be displayed as tabs/pages")
+    
+    # Get existing carousel images
+    from app_core.media import get_media_for_segment
+    existing_media = get_media_for_segment(segment["id"])
+    brand_carousel_media = [m for m in existing_media if m.get("section") == "Brand Truths" and m.get("name") == "Brand Carousel"]
+    brand_carousel_media = sorted(brand_carousel_media, key=lambda x: x.get("id", 0))
+    
+    if brand_carousel_media:
+        st.info(f"✅ {len(brand_carousel_media)} carousel image(s) already uploaded. Upload new images to replace them.")
+    
+    uploaded_carousel_images = st.file_uploader(
+        "Upload Carousel Images (multiple allowed)",
+        type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key=f"brand_carousel_images_{segment['id']}"
+    )
+    
+    # Title and comment inputs for each uploaded image
+    carousel_configs = []
+    if uploaded_carousel_images:
+        st.markdown("---")
+        st.markdown("**Configure each carousel image:**")
+        
+        show_formatting_tips()
+        
+        for idx, img in enumerate(uploaded_carousel_images):
+            st.markdown(f"**Carousel Image {idx+1}:**")
+            
+            # Get existing data if available
+            existing_tab_title = ""
+            existing_page_title = ""
+            existing_comment = ""
+            if idx < len(brand_carousel_media):
+                existing_tab_title = brand_carousel_media[idx].get("title", "")
+                combined_comment = brand_carousel_media[idx].get("comment", "")
+                
+                # Parse page_title and comment from combined_comment
+                if combined_comment and "##PAGE_TITLE##" in combined_comment:
+                    parts = combined_comment.split("##PAGE_TITLE##")
+                    if len(parts) > 1:
+                        remaining = parts[1]
+                        if "##COMMENT##" in remaining:
+                            page_parts = remaining.split("##COMMENT##")
+                            existing_page_title = page_parts[0]
+                            existing_comment = page_parts[1] if len(page_parts) > 1 else ""
+                        else:
+                            existing_page_title = remaining
+                else:
+                    existing_comment = combined_comment
+            
+            # Layout: Image on left, title + comment on right
+            col_img, col_inputs = st.columns([1, 1])
+            
+            with col_img:
+                st.image(img, use_container_width=True)
+            
+            with col_inputs:
+                tab_title = st.text_input(
+                    "Tab Title (short name for tab)",
+                    value=existing_tab_title or f"Page {idx+1}",
+                    key=f"brand_carousel_tab_title_{segment['id']}_{idx}",
+                    placeholder=f"e.g., Page {idx+1}"
+                )
+                
+                page_title = st.text_input(
+                    "Page Title (full title above image)",
+                    value=existing_page_title,
+                    key=f"brand_carousel_page_title_{segment['id']}_{idx}",
+                    placeholder="e.g., Brand Performance Overview..."
+                )
+                
+                comment = st.text_area(
+                    "Comment (optional)",
+                    value=existing_comment,
+                    key=f"brand_carousel_comment_{segment['id']}_{idx}",
+                    placeholder="Add insights, observations, or context...",
+                    height=150
+                )
+            
+            carousel_configs.append({"tab_title": tab_title, "page_title": page_title, "comment": comment})
+            
+            if idx < len(uploaded_carousel_images) - 1:
+                st.markdown("---")
+    
+    # Save button for carousel
+    if st.button("Save Carousel Images to Dashboard", key=f"save_brand_carousel_{segment['id']}"):
+        if not uploaded_carousel_images:
+            st.error("Please upload at least one carousel image.")
+        else:
+            from app_core.media import save_media_upload
+            
+            # Delete existing carousel images
+            delete_media_for_section(segment["id"], "Brand Truths", "Brand Carousel")
+            
+            # Save all uploaded images with tab titles, page titles, and comments
+            for idx, uploaded_img in enumerate(uploaded_carousel_images):
+                config = carousel_configs[idx] if idx < len(carousel_configs) else {"tab_title": f"Page {idx+1}", "page_title": "", "comment": ""}
+                
+                # Store page_title in comment field with special marker, and actual comment after
+                combined_comment = f"##PAGE_TITLE##{config['page_title']}##COMMENT##" + config["comment"]
+                
+                save_media_upload(
+                    uploaded_file=uploaded_img,
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    created_by=current_user["username"],
+                    comment=combined_comment,
+                    label="Brand Carousel",
+                    title=config["tab_title"]
+                )
+            
+            st.success(f"{len(uploaded_carousel_images)} carousel image(s) saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Standalone Images Section (BEFORE S&V)
+    st.markdown("### Standalone Images")
+    st.caption("Upload up to 4 standalone images with title and comment")
+    
+    # Get existing standalone images
+    brand_standalone_images = [m for m in existing_media if m.get("section") == "Brand Truths" and m.get("name") == "Standalone Images"]
+    brand_standalone_images = sorted(brand_standalone_images, key=lambda x: x.get("id", 0))
+    
+    show_formatting_tips()
+    
+    # Image 1
+    st.markdown("**Image 1:**")
+    existing_s1 = brand_standalone_images[0] if len(brand_standalone_images) > 0 else None
+    uploaded_s1 = st.file_uploader("Upload Image 1", type=["png", "jpg", "jpeg"], key=f"brand_standalone_1_{segment['id']}")
+    title_s1 = st.text_input("Title for Image 1", value=existing_s1.get("title", "") if existing_s1 else "", key=f"brand_s_title_1_{segment['id']}")
+    comment_s1 = st.text_area("Comment for Image 1", value=existing_s1.get("comment", "") if existing_s1 else "", key=f"brand_s_comment_1_{segment['id']}", height=150)
+    
+    if existing_s1 and not uploaded_s1:
+        file_path_s1 = existing_s1.get("file_path")
+        if file_path_s1 and os.path.exists(file_path_s1):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_s1, caption="Current Image 1", use_container_width=True)
+    
+    if st.button("Save Image 1", key=f"save_brand_s1_{segment['id']}"):
+        if not uploaded_s1:
+            st.error("Please upload Image 1.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_s1:
+                delete_media(existing_s1["id"])
+            save_media_upload(
+                uploaded_file=uploaded_s1,
+                segment_id=segment["id"],
+                section="Brand Truths",
+                created_by=current_user["username"],
+                comment=comment_s1,
+                title=title_s1,
+                label="Standalone Images"
+            )
+            st.success("Image 1 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Image 2
+    st.markdown("**Image 2:**")
+    existing_s2 = brand_standalone_images[1] if len(brand_standalone_images) > 1 else None
+    uploaded_s2 = st.file_uploader("Upload Image 2", type=["png", "jpg", "jpeg"], key=f"brand_standalone_2_{segment['id']}")
+    title_s2 = st.text_input("Title for Image 2", value=existing_s2.get("title", "") if existing_s2 else "", key=f"brand_s_title_2_{segment['id']}")
+    comment_s2 = st.text_area("Comment for Image 2", value=existing_s2.get("comment", "") if existing_s2 else "", key=f"brand_s_comment_2_{segment['id']}", height=150)
+    
+    if existing_s2 and not uploaded_s2:
+        file_path_s2 = existing_s2.get("file_path")
+        if file_path_s2 and os.path.exists(file_path_s2):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_s2, caption="Current Image 2", use_container_width=True)
+    
+    if st.button("Save Image 2", key=f"save_brand_s2_{segment['id']}"):
+        if not uploaded_s2:
+            st.error("Please upload Image 2.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_s2:
+                delete_media(existing_s2["id"])
+            save_media_upload(
+                uploaded_file=uploaded_s2,
+                segment_id=segment["id"],
+                section="Brand Truths",
+                created_by=current_user["username"],
+                comment=comment_s2,
+                title=title_s2,
+                label="Standalone Images"
+            )
+            st.success("Image 2 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Image 3
+    st.markdown("**Image 3:**")
+    existing_s3 = brand_standalone_images[2] if len(brand_standalone_images) > 2 else None
+    uploaded_s3 = st.file_uploader("Upload Image 3", type=["png", "jpg", "jpeg"], key=f"brand_standalone_3_{segment['id']}")
+    title_s3 = st.text_input("Title for Image 3", value=existing_s3.get("title", "") if existing_s3 else "", key=f"brand_s_title_3_{segment['id']}")
+    comment_s3 = st.text_area("Comment for Image 3", value=existing_s3.get("comment", "") if existing_s3 else "", key=f"brand_s_comment_3_{segment['id']}", height=150)
+    
+    if existing_s3 and not uploaded_s3:
+        file_path_s3 = existing_s3.get("file_path")
+        if file_path_s3 and os.path.exists(file_path_s3):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_s3, caption="Current Image 3", use_container_width=True)
+    
+    if st.button("Save Image 3", key=f"save_brand_s3_{segment['id']}"):
+        if not uploaded_s3:
+            st.error("Please upload Image 3.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_s3:
+                delete_media(existing_s3["id"])
+            save_media_upload(
+                uploaded_file=uploaded_s3,
+                segment_id=segment["id"],
+                section="Brand Truths",
+                created_by=current_user["username"],
+                comment=comment_s3,
+                title=title_s3,
+                label="Standalone Images"
+            )
+            st.success("Image 3 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Image 4
+    st.markdown("**Image 4:**")
+    existing_s4 = brand_standalone_images[3] if len(brand_standalone_images) > 3 else None
+    uploaded_s4 = st.file_uploader("Upload Image 4", type=["png", "jpg", "jpeg"], key=f"brand_standalone_4_{segment['id']}")
+    title_s4 = st.text_input("Title for Image 4", value=existing_s4.get("title", "") if existing_s4 else "", key=f"brand_s_title_4_{segment['id']}")
+    comment_s4 = st.text_area("Comment for Image 4", value=existing_s4.get("comment", "") if existing_s4 else "", key=f"brand_s_comment_4_{segment['id']}", height=150)
+    
+    if existing_s4 and not uploaded_s4:
+        file_path_s4 = existing_s4.get("file_path")
+        if file_path_s4 and os.path.exists(file_path_s4):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_s4, caption="Current Image 4", use_container_width=True)
+    
+    if st.button("Save Image 4", key=f"save_brand_s4_{segment['id']}"):
+        if not uploaded_s4:
+            st.error("Please upload Image 4.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_s4:
+                delete_media(existing_s4["id"])
+            save_media_upload(
+                uploaded_file=uploaded_s4,
+                segment_id=segment["id"],
+                section="Brand Truths",
+                created_by=current_user["username"],
+                comment=comment_s4,
+                title=title_s4,
+                label="Standalone Images"
+            )
+            st.success("Image 4 saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Placeholder Images (in expander)
+    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+        # Get existing placeholder images
+        brand_placeholder_images = [m for m in existing_media if m.get("section") == "Brand Truths" and m.get("name") == "Placeholder Images"]
+        brand_placeholder_images = sorted(brand_placeholder_images, key=lambda x: x.get("id", 0))
+        
+        # Placeholder Image 1
+        st.markdown("**Placeholder Image 1:**")
+        existing_p1 = brand_placeholder_images[0] if len(brand_placeholder_images) > 0 else None
+        uploaded_p1 = st.file_uploader("Upload Placeholder Image 1", type=["png", "jpg", "jpeg"], key=f"brand_placeholder_1_{segment['id']}")
+        title_p1 = st.text_input("Title for Placeholder 1", value=existing_p1.get("title", "") if existing_p1 else "", key=f"brand_p_title_1_{segment['id']}")
+        comment_p1 = st.text_area("Comment for Placeholder 1", value=existing_p1.get("comment", "") if existing_p1 else "", key=f"brand_p_comment_1_{segment['id']}", height=150)
+        
+        if existing_p1 and not uploaded_p1:
+            file_path_p1 = existing_p1.get("file_path")
+            if file_path_p1 and os.path.exists(file_path_p1):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p1, caption="Current Placeholder 1", use_container_width=True)
+        
+        if st.button("Save Placeholder 1", key=f"save_brand_p1_{segment['id']}"):
+            if not uploaded_p1:
+                st.error("Please upload Placeholder Image 1.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p1:
+                    delete_media(existing_p1["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p1,
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    created_by=current_user["username"],
+                    comment=comment_p1,
+                    title=title_p1,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 1 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 2
+        st.markdown("**Placeholder Image 2:**")
+        existing_p2 = brand_placeholder_images[1] if len(brand_placeholder_images) > 1 else None
+        uploaded_p2 = st.file_uploader("Upload Placeholder Image 2", type=["png", "jpg", "jpeg"], key=f"brand_placeholder_2_{segment['id']}")
+        title_p2 = st.text_input("Title for Placeholder 2", value=existing_p2.get("title", "") if existing_p2 else "", key=f"brand_p_title_2_{segment['id']}")
+        comment_p2 = st.text_area("Comment for Placeholder 2", value=existing_p2.get("comment", "") if existing_p2 else "", key=f"brand_p_comment_2_{segment['id']}", height=150)
+        
+        if existing_p2 and not uploaded_p2:
+            file_path_p2 = existing_p2.get("file_path")
+            if file_path_p2 and os.path.exists(file_path_p2):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p2, caption="Current Placeholder 2", use_container_width=True)
+        
+        if st.button("Save Placeholder 2", key=f"save_brand_p2_{segment['id']}"):
+            if not uploaded_p2:
+                st.error("Please upload Placeholder Image 2.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p2:
+                    delete_media(existing_p2["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p2,
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    created_by=current_user["username"],
+                    comment=comment_p2,
+                    title=title_p2,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 2 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 3
+        st.markdown("**Placeholder Image 3:**")
+        existing_p3 = brand_placeholder_images[2] if len(brand_placeholder_images) > 2 else None
+        uploaded_p3 = st.file_uploader("Upload Placeholder Image 3", type=["png", "jpg", "jpeg"], key=f"brand_placeholder_3_{segment['id']}")
+        title_p3 = st.text_input("Title for Placeholder 3", value=existing_p3.get("title", "") if existing_p3 else "", key=f"brand_p_title_3_{segment['id']}")
+        comment_p3 = st.text_area("Comment for Placeholder 3", value=existing_p3.get("comment", "") if existing_p3 else "", key=f"brand_p_comment_3_{segment['id']}", height=150)
+        
+        if existing_p3 and not uploaded_p3:
+            file_path_p3 = existing_p3.get("file_path")
+            if file_path_p3 and os.path.exists(file_path_p3):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p3, caption="Current Placeholder 3", use_container_width=True)
+        
+        if st.button("Save Placeholder 3", key=f"save_brand_p3_{segment['id']}"):
+            if not uploaded_p3:
+                st.error("Please upload Placeholder Image 3.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p3:
+                    delete_media(existing_p3["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p3,
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    created_by=current_user["username"],
+                    comment=comment_p3,
+                    title=title_p3,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 3 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 4
+        st.markdown("**Placeholder Image 4:**")
+        existing_p4 = brand_placeholder_images[3] if len(brand_placeholder_images) > 3 else None
+        uploaded_p4 = st.file_uploader("Upload Placeholder Image 4", type=["png", "jpg", "jpeg"], key=f"brand_placeholder_4_{segment['id']}")
+        title_p4 = st.text_input("Title for Placeholder 4", value=existing_p4.get("title", "") if existing_p4 else "", key=f"brand_p_title_4_{segment['id']}")
+        comment_p4 = st.text_area("Comment for Placeholder 4", value=existing_p4.get("comment", "") if existing_p4 else "", key=f"brand_p_comment_4_{segment['id']}", height=150)
+        
+        if existing_p4 and not uploaded_p4:
+            file_path_p4 = existing_p4.get("file_path")
+            if file_path_p4 and os.path.exists(file_path_p4):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p4, caption="Current Placeholder 4", use_container_width=True)
+        
+        if st.button("Save Placeholder 4", key=f"save_brand_p4_{segment['id']}"):
+            if not uploaded_p4:
+                st.error("Please upload Placeholder Image 4.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p4:
+                    delete_media(existing_p4["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p4,
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    created_by=current_user["username"],
+                    comment=comment_p4,
+                    title=title_p4,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 4 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 5
+        st.markdown("**Placeholder Image 5:**")
+        existing_p5 = brand_placeholder_images[4] if len(brand_placeholder_images) > 4 else None
+        uploaded_p5 = st.file_uploader("Upload Placeholder Image 5", type=["png", "jpg", "jpeg"], key=f"brand_placeholder_5_{segment['id']}")
+        title_p5 = st.text_input("Title for Placeholder 5", value=existing_p5.get("title", "") if existing_p5 else "", key=f"brand_p_title_5_{segment['id']}")
+        comment_p5 = st.text_area("Comment for Placeholder 5", value=existing_p5.get("comment", "") if existing_p5 else "", key=f"brand_p_comment_5_{segment['id']}", height=150)
+        
+        if existing_p5 and not uploaded_p5:
+            file_path_p5 = existing_p5.get("file_path")
+            if file_path_p5 and os.path.exists(file_path_p5):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p5, caption="Current Placeholder 5", use_container_width=True)
+        
+        if st.button("Save Placeholder 5", key=f"save_brand_p5_{segment['id']}"):
+            if not uploaded_p5:
+                st.error("Please upload Placeholder Image 5.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p5:
+                    delete_media(existing_p5["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p5,
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    created_by=current_user["username"],
+                    comment=comment_p5,
+                    title=title_p5,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 5 saved!")
+    
+    # S&V section - appears after carousel and standalone images
     st.markdown("---")
     st.markdown("### Strengths & Vulnerabilities Section")
     st.caption("Add a main title and two side-by-side boxes for strengths and vulnerabilities")
@@ -4085,8 +5398,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             comment=""
         )
         st.success("SWOT Analysis saved to dashboard!")
-
-
+    
 
 
 def get_india_geojson_url():
