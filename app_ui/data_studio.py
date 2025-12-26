@@ -295,15 +295,19 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     chart_config = json.loads(saved_chart["filter_json"]) if saved_chart and saved_chart["filter_json"] else {}
     saved_families = chart_config.get("brand_families", [])
     saved_brands = chart_config.get("brands", [])
+    saved_excluded_states = chart_config.get("excluded_states", [])
     saved_chart_comment = saved_chart["comment"] if saved_chart else ""
     
-    # Filters in 2 columns
+    # Filters in 3 columns
     brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+    
+    # Get all states for exclusion filter
+    all_states = sorted(df_filtered["State"].dropna().unique().tolist()) if "State" in df_filtered.columns else []
     
     # Use saved families if available, otherwise default
     default_families = saved_families if saved_families else (brand_families[:2] if len(brand_families) > 2 else brand_families)
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         selected_families = st.multiselect(
@@ -330,6 +334,22 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             selected_brands = []
             st.info("Select Brand Family first")
     
+    with col3:
+        # Filter saved excluded states to only include those still available
+        valid_excluded_states = [s for s in saved_excluded_states if s in all_states] if saved_excluded_states else []
+        excluded_states = st.multiselect(
+            "States to Exclude",
+            options=all_states,
+            default=valid_excluded_states,
+            key=f"ns_excluded_states_{segment['id']}",
+            help="These states will be excluded from all sections below"
+        )
+    
+    # Apply state exclusion filter to df_filtered for all sections below
+    if excluded_states and "State" in df_filtered.columns:
+        df_filtered = df_filtered[~df_filtered["State"].isin(excluded_states)].copy()
+        st.info(f"🚫 Excluding {len(excluded_states)} state(s) from all sections: {', '.join(excluded_states)}")
+    
     # Preview chart
     if selected_brands:
         df_chart = df_filtered[df_filtered["Brand"].isin(selected_brands)]
@@ -337,20 +357,56 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         
         if not df_chart.empty:
             st.markdown("**Preview:**")
-            # Create data for chart
+            # Create data for chart - aggregate NS by Brand and Year
             chart_data = df_chart.groupby(["Brand", "Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
             
-            # Sort brands: 
-            # 1. Calculate 3-year sum for each brand
+            # Create pivot to calculate growth rates
+            pivot_wide = chart_data.pivot_table(
+                index=["Brand", "Brand Family"],
+                columns="PRI Year",
+                values="NS M INR",
+                aggfunc="sum"
+            ).reset_index()
+            
+            # Calculate growth rates and CAGR for each brand
+            growth_rates = {}
+            cagr_values = {}
+            for _, row in pivot_wide.iterrows():
+                brand = row["Brand"]
+                ns_a23 = row.get("A23", 0) or 0
+                ns_a24 = row.get("A24", 0) or 0
+                ns_a25 = row.get("A25", 0) or 0
+                
+                # A24 Growth % (YoY from A23)
+                a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
+                
+                # A25 Growth % (YoY from A24)
+                a25_growth = ((ns_a25 - ns_a24) / ns_a24 * 100) if ns_a24 != 0 else 0
+                
+                # 2-Year CAGR (A23 to A25)
+                cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
+                
+                growth_rates[brand] = {
+                    "A23": None,  # No growth for base year - don't show anything
+                    "A24": round(a24_growth, 1),
+                    "A25": round(a25_growth, 1)
+                }
+                cagr_values[brand] = round(cagr_2yr, 1)
+            
+            # Add growth rate text - empty for A23 (no growth rate for base year)
+            chart_data["Growth Text"] = chart_data.apply(
+                lambda r: f"{growth_rates[r['Brand']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+                axis=1
+            )
+            
+            # Sort brands by Brand Family total NS, then by brand total NS
             brand_totals = chart_data.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
             brand_totals.columns = ["Brand", "Brand Family", "Total"]
             
-            # 2. Calculate family totals (sum of selected brands in each family)
             family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
             family_totals.columns = ["Brand Family", "Family Total"]
             family_totals = family_totals.sort_values("Family Total", ascending=False)
             
-            # 3. Merge and sort: families by total, then brands within family by total
             brand_totals = brand_totals.merge(family_totals, on="Brand Family")
             brand_totals = brand_totals.sort_values(["Family Total", "Total"], ascending=[False, False])
             
@@ -373,18 +429,44 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 y="NS M INR",
                 color="PRI Year",
                 barmode="group",
-                text="NS M INR",
-                height=450,
+                text="Growth Text",
+                height=500,
                 color_discrete_map=color_map,
                 category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand": brand_order}
             )
             
-            # Format text on bars
-            fig.update_traces(texttemplate='%{text:.2s}', textposition='outside')
+            # Format growth rate text on top of bars
+            fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+            
+            # Get max Y value for positioning CAGR boxes
+            max_y = chart_data["NS M INR"].max()
+            
+            # Add CAGR boxes above each brand with neutral styling
+            annotations = []
+            for brand in brand_order:
+                cagr = cagr_values[brand]
+                
+                annotations.append(dict(
+                    x=brand,
+                    y=max_y * 1.15,  # Position above the bars
+                    text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
+                    showarrow=False,
+                    font=dict(size=10, color="white", family="Arial"),
+                    bgcolor="#607D8B",  # Neutral gray-blue color
+                    bordercolor="#FFFFFF",
+                    borderwidth=1,
+                    borderpad=6,
+                    xanchor='center',
+                    yanchor='bottom',
+                    opacity=0.95
+                ))
+            
             fig.update_layout(
                 xaxis_title="Brand",
                 yaxis_title="NS M INR",
-                legend_title="PRI Year"
+                legend_title="PRI Year",
+                annotations=annotations,
+                yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
             )
             st.plotly_chart(fig, use_container_width=True)
     
@@ -410,6 +492,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             filter_config = json.dumps({
                 "brand_families": selected_families,
                 "brands": selected_brands,
+                "excluded_states": excluded_states,
                 "years": years_in_data
             })
             save_chart(
@@ -548,6 +631,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     filter_config = json.dumps({
                         "brand_families": selected_families,
                         "brands": selected_brands,
+                        "excluded_states": excluded_states,
                         "year": "A25",
                         "title": zonal_title
                     })
@@ -643,10 +727,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.markdown("---")
                 
                 # Then let user select states for deep-dive - use saved states if available
-                default_north_states = saved_north_states if saved_north_states else (sorted_states[:4] if (preview_all_states and len(sorted_states) > 4) else (sorted_states if preview_all_states else states_in_north[:4]))
+                available_states = sorted_states if preview_all_states else states_in_north
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_states = [s for s in saved_north_states if s in available_states] if saved_north_states else []
+                default_north_states = valid_saved_states if valid_saved_states else (available_states[:4] if len(available_states) > 4 else available_states)
                 selected_states = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=sorted_states if preview_all_states else states_in_north,
+                    options=available_states,
                     default=default_north_states,
                     key=f"ns_north_states_{segment['id']}"
                 )
@@ -738,6 +825,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         filter_config = json.dumps({
                             "brand_families": selected_families,
                             "brands": selected_brands,
+                            "excluded_states": excluded_states,
                             "states": selected_states,
                             "zone": "North Zone",
                             "title": north_title
@@ -813,10 +901,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.markdown("---")
                 
                 # Use saved states if available
-                default_west_states = saved_west_states if saved_west_states else (sorted_states_west[:4] if (preview_all_west and len(sorted_states_west) > 4) else (sorted_states_west if preview_all_west else states_in_west[:4]))
+                available_states_west = sorted_states_west if preview_all_west else states_in_west
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_west = [s for s in saved_west_states if s in available_states_west] if saved_west_states else []
+                default_west_states = valid_saved_west if valid_saved_west else (available_states_west[:4] if len(available_states_west) > 4 else available_states_west)
                 selected_states_west = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=sorted_states_west if preview_all_west else states_in_west,
+                    options=available_states_west,
                     default=default_west_states,
                     key=f"ns_west_states_{segment['id']}"
                 )
@@ -850,6 +941,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         filter_config = json.dumps({
                             "brand_families": selected_families,
                             "brands": selected_brands,
+                            "excluded_states": excluded_states,
                             "states": selected_states_west,
                             "zone": "West+CSD Zone",
                             "title": west_title
@@ -925,10 +1017,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.markdown("---")
                 
                 # Use saved states if available
-                default_east_states = saved_east_states if saved_east_states else (sorted_states_east[:4] if (preview_all_east and len(sorted_states_east) > 4) else (sorted_states_east if preview_all_east else states_in_east[:4]))
+                available_states_east = sorted_states_east if preview_all_east else states_in_east
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_east = [s for s in saved_east_states if s in available_states_east] if saved_east_states else []
+                default_east_states = valid_saved_east if valid_saved_east else (available_states_east[:4] if len(available_states_east) > 4 else available_states_east)
                 selected_states_east = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=sorted_states_east if preview_all_east else states_in_east,
+                    options=available_states_east,
                     default=default_east_states,
                     key=f"ns_east_states_{segment['id']}"
                 )
@@ -962,6 +1057,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         filter_config = json.dumps({
                             "brand_families": selected_families,
                             "brands": selected_brands,
+                            "excluded_states": excluded_states,
                             "states": selected_states_east,
                             "zone": "East Zone",
                             "title": east_title
@@ -1037,10 +1133,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.markdown("---")
                 
                 # Use saved states if available
-                default_south_states = saved_south_states if saved_south_states else (sorted_states_south[:4] if (preview_all_south and len(sorted_states_south) > 4) else (sorted_states_south if preview_all_south else states_in_south[:4]))
+                available_states_south = sorted_states_south if preview_all_south else states_in_south
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_south = [s for s in saved_south_states if s in available_states_south] if saved_south_states else []
+                default_south_states = valid_saved_south if valid_saved_south else (available_states_south[:4] if len(available_states_south) > 4 else available_states_south)
                 selected_states_south = st.multiselect(
                     "Select States for Brand Deep-Dive",
-                    options=sorted_states_south if preview_all_south else states_in_south,
+                    options=available_states_south,
                     default=default_south_states,
                     key=f"ns_south_states_{segment['id']}"
                 )
@@ -1074,6 +1173,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         filter_config = json.dumps({
                             "brand_families": selected_families,
                             "brands": selected_brands,
+                            "excluded_states": excluded_states,
                             "states": selected_states_south,
                             "zone": "South Zone",
                             "title": south_title

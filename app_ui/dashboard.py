@@ -644,16 +644,15 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
 
 
 def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool) -> None:
-    """Render the brand performance multi-bar chart"""
+    """Render the brand performance chart with NS M INR and growth rates"""
     import plotly.express as px
     
-    st.markdown(f"### Brand Performance - NS M INR by PRI Year")
+    st.markdown(f"### Brand Performance")
     
     # Load data and apply filters
     df = load_dataset(chart_row["dataset_id"])
     if df is None or df.empty:
         st.warning("Dataset not found.")
-
         return
     
     # Filter by segment
@@ -664,6 +663,12 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
     selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
     selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
+    excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
+    
+    # Apply state exclusion filter
+    if excluded_states and "State" in df.columns:
+        df = df[~df["State"].isin(excluded_states)]
+        st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
     
     # Apply filters
     df = df[df["Brand"].isin(selected_brands)]
@@ -671,23 +676,58 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     
     if df.empty:
         st.warning("No data available for selected brands and years.")
-
         return
     
     # Aggregate data
     chart_data = df.groupby(["Brand", "Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
     
-    # Sort brands:
-    # 1. Calculate 3-year sum for each brand
+    # Create pivot to calculate growth rates
+    pivot_wide = chart_data.pivot_table(
+        index=["Brand", "Brand Family"],
+        columns="PRI Year",
+        values="NS M INR",
+        aggfunc="sum"
+    ).reset_index()
+    
+    # Calculate growth rates and CAGR for each brand
+    growth_rates = {}
+    cagr_values = {}
+    for _, row in pivot_wide.iterrows():
+        brand = row["Brand"]
+        ns_a23 = row.get("A23", 0) or 0
+        ns_a24 = row.get("A24", 0) or 0
+        ns_a25 = row.get("A25", 0) or 0
+        
+        # A24 Growth % (YoY from A23)
+        a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
+        
+        # A25 Growth % (YoY from A24)
+        a25_growth = ((ns_a25 - ns_a24) / ns_a24 * 100) if ns_a24 != 0 else 0
+        
+        # 2-Year CAGR (A23 to A25)
+        cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
+        
+        growth_rates[brand] = {
+            "A23": None,  # No growth for base year - don't show anything
+            "A24": round(a24_growth, 1),
+            "A25": round(a25_growth, 1)
+        }
+        cagr_values[brand] = round(cagr_2yr, 1)
+    
+    # Add growth rate text - empty for A23 (no growth rate for base year)
+    chart_data["Growth Text"] = chart_data.apply(
+        lambda r: f"{growth_rates[r['Brand']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+        axis=1
+    )
+    
+    # Sort brands by Brand Family total NS, then by brand total NS
     brand_totals = chart_data.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
     brand_totals.columns = ["Brand", "Brand Family", "Total"]
     
-    # 2. Calculate family totals (sum of selected brands in each family)
     family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
     family_totals.columns = ["Brand Family", "Family Total"]
     family_totals = family_totals.sort_values("Family Total", ascending=False)
     
-    # 3. Merge and sort: families by total, then brands within family by total
     brand_totals = brand_totals.merge(family_totals, on="Brand Family")
     brand_totals = brand_totals.sort_values(["Family Total", "Total"], ascending=[False, False])
     
@@ -708,31 +748,149 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         y="NS M INR",
         color="PRI Year",
         barmode="group",
-        text="NS M INR",
+        text="Growth Text",
         height=500,
         color_discrete_map=color_map,
         category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand": brand_order}
     )
     
-    # Format text on bars to show numbers
-    fig.update_traces(texttemplate='%{text:.2s}', textposition='outside')
+    # Format growth rate text on top of bars
+    fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+    
+    # Get max Y value for positioning CAGR boxes
+    max_y = chart_data["NS M INR"].max()
+    
+    # Add CAGR boxes above each brand with neutral styling
+    annotations = []
+    for brand in brand_order:
+        cagr = cagr_values[brand]
+        
+        annotations.append(dict(
+            x=brand,
+            y=max_y * 1.15,  # Position above the bars
+            text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
+            showarrow=False,
+            font=dict(size=10, color="white", family="Arial"),
+            bgcolor="#607D8B",  # Neutral gray-blue color
+            bordercolor="#FFFFFF",
+            borderwidth=1,
+            borderpad=6,
+            xanchor='center',
+            yanchor='bottom',
+            opacity=0.95
+        ))
+    
     fig.update_layout(
         xaxis_title="Brand",
         yaxis_title="NS M INR",
         legend_title="PRI Year",
-        showlegend=True
+        annotations=annotations,
+        yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
     )
-    
-    st.plotly_chart(fig, use_container_width=True, key=f"brand_chart_{chart_row['id']}")
+    st.plotly_chart(fig, use_container_width=True)
     
     # Show comment below the chart
     comment = chart_row["comment"] if chart_row["comment"] else ""
     if comment:
         st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
     
-    # Show data table
-    with st.expander("View data"):
-        st.dataframe(chart_data, use_container_width=True)
+    # Show data table with growth rates in expander
+    with st.expander("View Data with Growth Rates"):
+        # Create summary table with NS values and growth rates
+        summary_df = pivot_wide.copy()
+        
+        # Calculate growth rates for each brand
+        summary_df["A24 Growth %"] = summary_df.apply(
+            lambda r: round(((r.get("A24", 0) or 0) - (r.get("A23", 0) or 0)) / (r.get("A23", 0) or 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+            axis=1
+        )
+        summary_df["A25 Growth %"] = summary_df.apply(
+            lambda r: round(((r.get("A25", 0) or 0) - (r.get("A24", 0) or 0)) / (r.get("A24", 0) or 1) * 100, 1) if (r.get("A24", 0) or 0) != 0 else 0, 
+            axis=1
+        )
+        summary_df["2-Yr CAGR %"] = summary_df.apply(
+            lambda r: round((((r.get("A25", 0) or 0) / (r.get("A23", 0) or 1)) ** 0.5 - 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+            axis=1
+        )
+        
+        # Calculate Brand Family totals
+        family_summary = []
+        for family in summary_df["Brand Family"].unique():
+            family_data = summary_df[summary_df["Brand Family"] == family]
+            
+            # Sum NS values for the family
+            a23_total = family_data["A23"].sum() if "A23" in family_data.columns else 0
+            a24_total = family_data["A24"].sum() if "A24" in family_data.columns else 0
+            a25_total = family_data["A25"].sum() if "A25" in family_data.columns else 0
+            
+            # Calculate family-level growth rates
+            a24_growth = ((a24_total - a23_total) / a23_total * 100) if a23_total != 0 else 0
+            a25_growth = ((a25_total - a24_total) / a24_total * 100) if a24_total != 0 else 0
+            cagr_2yr = (((a25_total / a23_total) ** 0.5 - 1) * 100) if a23_total != 0 else 0
+            
+            family_summary.append({
+                "Brand Family": family,
+                "Brand": f"📊 {family} Total",
+                "A23": a23_total,
+                "A24": a24_total,
+                "A25": a25_total,
+                "A24 Growth %": round(a24_growth, 1),
+                "A25 Growth %": round(a25_growth, 1),
+                "2-Yr CAGR %": round(cagr_2yr, 1),
+                "is_family_total": True
+            })
+        
+        # Add is_family_total flag to brand rows
+        summary_df["is_family_total"] = False
+        
+        # Combine family totals with brand data
+        family_df = pd.DataFrame(family_summary)
+        combined_df = pd.concat([family_df, summary_df], ignore_index=True)
+        
+        # Sort by Brand Family, then by is_family_total (True first), then by Brand
+        combined_df = combined_df.sort_values(
+            by=["Brand Family", "is_family_total", "Brand"],
+            ascending=[True, False, True]
+        ).reset_index(drop=True)
+        
+        # Reorder columns: Brand Family, Brand, A23, A24, A25, A24 Growth %, A25 Growth %, 2-Yr CAGR %
+        column_order = ["Brand Family", "Brand"]
+        if "A23" in combined_df.columns:
+            column_order.append("A23")
+        if "A24" in combined_df.columns:
+            column_order.append("A24")
+        if "A25" in combined_df.columns:
+            column_order.append("A25")
+        if "A24 Growth %" in combined_df.columns:
+            column_order.append("A24 Growth %")
+        if "A25 Growth %" in combined_df.columns:
+            column_order.append("A25 Growth %")
+        column_order.append("2-Yr CAGR %")
+        
+        # Select and display columns
+        display_df = combined_df[column_order].copy()
+        
+        # Format NS columns with commas
+        for col in ["A23", "A24", "A25"]:
+            if col in display_df.columns:
+                display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
+        
+        # Format growth columns with % symbol
+        for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %"]:
+            if col in display_df.columns:
+                display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+        
+        # Apply styling to highlight family total rows
+        def highlight_family_totals(row):
+            """Highlight the Brand Family total rows"""
+            brand_name = combined_df.loc[row.name, 'Brand']
+            if "Total" in str(brand_name) and "📊" in str(brand_name):
+                return ['background-color: #E8F5E9; font-weight: bold; border-top: 2px solid #4CAF50; border-bottom: 1px solid #4CAF50'] * len(row)
+            return [''] * len(row)
+        
+        # Display with styling
+        styled_df = display_df.style.apply(highlight_family_totals, axis=1)
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
     
     # Delete button for editors
     if is_editor:
@@ -743,8 +901,6 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
                 st.rerun()
             else:
                 st.experimental_rerun()
-    
-
 
 
 def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
@@ -769,6 +925,12 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
     filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
     selected_families = filter_config.get("brand_families", []) if isinstance(filter_config, dict) else []
     selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
+    excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
+    
+    # Apply state exclusion filter
+    if excluded_states and "State" in df.columns:
+        df = df[~df["State"].isin(excluded_states)]
+        st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
     
     # Filter for A24 and A25 (needed for growth calculations)
     df = df[df["PRI Year"].isin(["A24", "A25"])]
@@ -1407,6 +1569,12 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     selected_families = filter_config.get("brand_families", []) if isinstance(filter_config, dict) else []
     selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
     selected_states = filter_config.get("states", []) if isinstance(filter_config, dict) else []
+    excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
+    
+    # Apply state exclusion filter
+    if excluded_states and "State" in df.columns:
+        df = df[~df["State"].isin(excluded_states)]
+        st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
     
     # Filter for A24 and A25 (needed for growth calculations)
     df = df[df["PRI Year"].isin(["A24", "A25"])]
