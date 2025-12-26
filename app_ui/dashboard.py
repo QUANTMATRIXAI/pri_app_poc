@@ -530,6 +530,77 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
         for idx, (zone_label, table_row, zone_name) in enumerate(zone_drilldowns):
             with tabs[idx]:
                 render_zone_drilldown_dashboard(table_row, segment, is_editor, zone_name)
+    
+    # Render Placeholder Images
+    from app_core.media import get_media_for_segment
+    existing_media = get_media_for_segment(segment["id"])
+    placeholder_images = [m for m in existing_media if m.get("section") == "NS Landscape" and m.get("name") == "Placeholder Images"]
+    placeholder_images = sorted(placeholder_images, key=lambda x: x.get("id", 0))
+    
+    if placeholder_images:
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        
+        for idx, img in enumerate(placeholder_images):
+            file_path = img.get("file_path")
+            title = img.get("title", "")
+            comment = img.get("comment", "")
+            
+            if file_path and os.path.exists(file_path):
+                # Display title first (outside columns)
+                if title:
+                    st.markdown(f"### {title}")
+                
+                # Image on left, comment on right
+                col_img, col_comment = st.columns([1, 1])
+                
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                
+                with col_comment:
+                    if comment:
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #f5b400;
+                                padding: 1.5rem;
+                                margin: 1.5rem 0 1rem 0;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                min-height: 300px;
+                                max-height: 300px;
+                                overflow-y: auto;
+                            '>
+                                <div style='
+                                    font-size: 0.95rem;
+                                    line-height: 1.7;
+                                    color: #2C2C2C;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                '>
+                                    {format_comment(comment)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                # Add spacing between images
+                if idx < len(placeholder_images) - 1:
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+        
+        # Delete button for editors
+        if is_editor:
+            if st.button("Delete Placeholder Images", key=f"del_ns_placeholder_{segment['id']}"):
+                from app_core.media import delete_media_for_section
+                delete_media_for_section(segment["id"], "NS Landscape", "Placeholder Images")
+                st.success("Placeholder images removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    
+    # Render Custom Trends View
+    custom_trends = next((t for t in ns_tables if t["name"] == "Custom Trends View"), None)
+    if custom_trends:
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        render_custom_trends_dashboard(custom_trends, segment, is_editor)
 
 
 def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
@@ -1917,6 +1988,107 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     
 
 
+def render_custom_trends_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
+    """Render custom trends view with title, description, and numbered sections"""
+    # Parse configuration
+    filter_config = json.loads(table_row["filter_json"]) if table_row["filter_json"] else {}
+    trends_title = filter_config.get("title", "")
+    trends_description = filter_config.get("description", "")
+    sections_data = filter_config.get("sections", [])
+    
+    if not trends_title and not trends_description and not sections_data:
+        return
+    
+    # Display title
+    if trends_title:
+        st.markdown(f"### {trends_title}")
+    
+    # Display main description
+    if trends_description:
+        formatted_desc = format_comment(trends_description)
+        st.markdown(f"""
+            <div style='
+                background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                border: 1px solid #CCCCCC;
+                padding: 1rem 1.5rem;
+                margin: 1rem 0;
+                border-radius: 8px;
+                text-align: center;
+            '>
+                <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                    {formatted_desc}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Display sections
+    for section in sections_data:
+        if section.get("left") or section.get("right"):
+            cols = st.columns([0.3, 3, 3])
+            
+            with cols[0]:
+                st.markdown(f"""
+                    <div style='
+                        width: 60px;
+                        height: 60px;
+                        border-radius: 50%;
+                        background-color: #FFFFFF;
+                        border: 3px solid #666666;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 1.5rem;
+                        font-weight: bold;
+                        color: #666666;
+                        margin-top: 1rem;
+                    '>
+                        {section.get("number", "")}
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            with cols[1]:
+                if section.get("left"):
+                    formatted_left = format_comment(section["left"])
+                    st.markdown(f"""
+                        <div style='
+                            background: #E3F2FD;
+                            border: 1px solid #90CAF9;
+                            padding: 1rem;
+                            margin: 0.5rem 0;
+                            border-radius: 8px;
+                        '>
+                            <div style='font-size: 0.95rem; line-height: 1.6; color: #1565C0;'>
+                                {formatted_left}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            with cols[2]:
+                if section.get("right"):
+                    formatted_right = format_comment(section["right"])
+                    st.markdown(f"""
+                        <div style='
+                            background: #FFF3E0;
+                            border: 1px solid #FFB74D;
+                            padding: 1rem;
+                            margin: 0.5rem 0;
+                            border-radius: 8px;
+                        '>
+                            <div style='font-size: 0.95rem; line-height: 1.6; color: #E65100;'>
+                                {formatted_right}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Custom Trends View", key=f"del_ns_custom_trends_{table_row['id']}"):
+            delete_table(table_row["id"])
+            st.success("Custom Trends View removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
 
 
 def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:

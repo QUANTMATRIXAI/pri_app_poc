@@ -1397,6 +1397,380 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         st.success("SOUTH Zone Drill-Down saved to dashboard!")
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
+    
+    st.markdown("---")
+    
+    # 5. Placeholder Images (5 images)
+    st.markdown("### 5. Placeholder Images")
+    
+    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+        st.caption("Upload up to 5 images with titles and comments")
+        
+        # Load existing placeholder images
+        from app_core.media import get_media_for_segment
+        existing_media = get_media_for_segment(segment["id"])
+        placeholder_images = [m for m in existing_media if m.get("section") == "NS Landscape" and m.get("name") == "Placeholder Images"]
+        placeholder_images = sorted(placeholder_images, key=lambda x: x.get("id", 0))
+        
+        # Placeholder Image 1
+        st.markdown("**Placeholder Image 1:**")
+        existing_p1 = placeholder_images[0] if len(placeholder_images) > 0 else None
+        uploaded_p1 = st.file_uploader("Upload Placeholder Image 1", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_1_{segment['id']}")
+        title_p1 = st.text_input("Title for Placeholder 1", value=existing_p1.get("title", "") if existing_p1 else "", key=f"ns_p_title_1_{segment['id']}")
+        comment_p1 = st.text_area("Comment for Placeholder 1", value=existing_p1.get("comment", "") if existing_p1 else "", key=f"ns_p_comment_1_{segment['id']}", height=150)
+        
+        if existing_p1 and not uploaded_p1:
+            file_path_p1 = existing_p1.get("file_path")
+            if file_path_p1 and os.path.exists(file_path_p1):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p1, caption="Current Placeholder 1", use_container_width=True)
+        
+        if st.button("Save Placeholder 1", key=f"save_ns_p1_{segment['id']}"):
+            if not uploaded_p1:
+                st.error("Please upload Placeholder Image 1.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p1:
+                    delete_media(existing_p1["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p1,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p1,
+                    title=title_p1,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 1 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 2
+        st.markdown("**Placeholder Image 2:**")
+        existing_p2 = placeholder_images[1] if len(placeholder_images) > 1 else None
+        uploaded_p2 = st.file_uploader("Upload Placeholder Image 2", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_2_{segment['id']}")
+        title_p2 = st.text_input("Title for Placeholder 2", value=existing_p2.get("title", "") if existing_p2 else "", key=f"ns_p_title_2_{segment['id']}")
+        comment_p2 = st.text_area("Comment for Placeholder 2", value=existing_p2.get("comment", "") if existing_p2 else "", key=f"ns_p_comment_2_{segment['id']}", height=150)
+        
+        if existing_p2 and not uploaded_p2:
+            file_path_p2 = existing_p2.get("file_path")
+            if file_path_p2 and os.path.exists(file_path_p2):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p2, caption="Current Placeholder 2", use_container_width=True)
+        
+        if st.button("Save Placeholder 2", key=f"save_ns_p2_{segment['id']}"):
+            if not uploaded_p2:
+                st.error("Please upload Placeholder Image 2.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p2:
+                    delete_media(existing_p2["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p2,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p2,
+                    title=title_p2,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 2 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 3
+        st.markdown("**Placeholder Image 3:**")
+        existing_p3 = placeholder_images[2] if len(placeholder_images) > 2 else None
+        uploaded_p3 = st.file_uploader("Upload Placeholder Image 3", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_3_{segment['id']}")
+        title_p3 = st.text_input("Title for Placeholder 3", value=existing_p3.get("title", "") if existing_p3 else "", key=f"ns_p_title_3_{segment['id']}")
+        comment_p3 = st.text_area("Comment for Placeholder 3", value=existing_p3.get("comment", "") if existing_p3 else "", key=f"ns_p_comment_3_{segment['id']}", height=150)
+        
+        if existing_p3 and not uploaded_p3:
+            file_path_p3 = existing_p3.get("file_path")
+            if file_path_p3 and os.path.exists(file_path_p3):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p3, caption="Current Placeholder 3", use_container_width=True)
+        
+        if st.button("Save Placeholder 3", key=f"save_ns_p3_{segment['id']}"):
+            if not uploaded_p3:
+                st.error("Please upload Placeholder Image 3.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p3:
+                    delete_media(existing_p3["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p3,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p3,
+                    title=title_p3,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 3 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 4
+        st.markdown("**Placeholder Image 4:**")
+        existing_p4 = placeholder_images[3] if len(placeholder_images) > 3 else None
+        uploaded_p4 = st.file_uploader("Upload Placeholder Image 4", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_4_{segment['id']}")
+        title_p4 = st.text_input("Title for Placeholder 4", value=existing_p4.get("title", "") if existing_p4 else "", key=f"ns_p_title_4_{segment['id']}")
+        comment_p4 = st.text_area("Comment for Placeholder 4", value=existing_p4.get("comment", "") if existing_p4 else "", key=f"ns_p_comment_4_{segment['id']}", height=150)
+        
+        if existing_p4 and not uploaded_p4:
+            file_path_p4 = existing_p4.get("file_path")
+            if file_path_p4 and os.path.exists(file_path_p4):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p4, caption="Current Placeholder 4", use_container_width=True)
+        
+        if st.button("Save Placeholder 4", key=f"save_ns_p4_{segment['id']}"):
+            if not uploaded_p4:
+                st.error("Please upload Placeholder Image 4.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p4:
+                    delete_media(existing_p4["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p4,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p4,
+                    title=title_p4,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 4 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 5
+        st.markdown("**Placeholder Image 5:**")
+        existing_p5 = placeholder_images[4] if len(placeholder_images) > 4 else None
+        uploaded_p5 = st.file_uploader("Upload Placeholder Image 5", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_5_{segment['id']}")
+        title_p5 = st.text_input("Title for Placeholder 5", value=existing_p5.get("title", "") if existing_p5 else "", key=f"ns_p_title_5_{segment['id']}")
+        comment_p5 = st.text_area("Comment for Placeholder 5", value=existing_p5.get("comment", "") if existing_p5 else "", key=f"ns_p_comment_5_{segment['id']}", height=150)
+        
+        if existing_p5 and not uploaded_p5:
+            file_path_p5 = existing_p5.get("file_path")
+            if file_path_p5 and os.path.exists(file_path_p5):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p5, caption="Current Placeholder 5", use_container_width=True)
+        
+        if st.button("Save Placeholder 5", key=f"save_ns_p5_{segment['id']}"):
+            if not uploaded_p5:
+                st.error("Please upload Placeholder Image 5.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p5:
+                    delete_media(existing_p5["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p5,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p5,
+                    title=title_p5,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 5 saved!")
+    
+    st.markdown("---")
+    
+    # 6. Custom Trends View Builder
+    st.markdown("### 6. Custom Trends View Builder")
+    st.caption("Create a custom view with title, description, and numbered sections")
+    
+    # Load existing saved configuration
+    existing_tables = get_tables_for_segment(segment["id"])
+    saved_custom_trends = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Custom Trends View"), None)
+    
+    # Parse saved config
+    custom_trends_config = json.loads(saved_custom_trends["filter_json"]) if saved_custom_trends and saved_custom_trends["filter_json"] else {}
+    saved_trends_title = custom_trends_config.get("title", "")
+    saved_trends_description = custom_trends_config.get("description", "")
+    saved_trends_sections = custom_trends_config.get("sections", [])
+    
+    # Title and main description - pre-populated with saved values
+    trends_title = st.text_input(
+        "View Title",
+        value=saved_trends_title,
+        placeholder="e.g., NS Landscape Key Insights",
+        key=f"ns_trends_title_{segment['id']}"
+    )
+    
+    trends_description = st.text_area(
+        "Main Description",
+        value=saved_trends_description,
+        placeholder="e.g., Key insights from NS performance analysis...",
+        height=100,
+        key=f"ns_trends_desc_{segment['id']}"
+    )
+    
+    # Number of sections
+    num_sections = st.number_input(
+        "Number of Sections (1-8)",
+        min_value=1,
+        max_value=8,
+        value=4,
+        key=f"ns_trends_num_sections_{segment['id']}"
+    )
+    
+    # Section inputs
+    sections_data = []
+    for i in range(num_sections):
+        st.markdown(f"**Section {i+1}:**")
+        
+        # Get saved section data if available
+        saved_section = saved_trends_sections[i] if i < len(saved_trends_sections) else {}
+        saved_left = saved_section.get("left", "")
+        saved_right = saved_section.get("right", "")
+        
+        # Two columns for left and right content (no label field)
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            left_content = st.text_area(
+                f"Left content",
+                value=saved_left,
+                placeholder="Enter content for left side...",
+                height=100,
+                key=f"ns_trends_sec{i}_left_{segment['id']}"
+            )
+        
+        with col_right:
+            right_content = st.text_area(
+                f"Right content",
+                value=saved_right,
+                placeholder="Enter content for right side...",
+                height=100,
+                key=f"ns_trends_sec{i}_right_{segment['id']}"
+            )
+        
+        sections_data.append({
+            "number": str(i + 1),  # Just use the section number
+            "left": left_content,
+            "right": right_content
+        })
+    
+    # Show formatting tips once for all text fields
+    show_formatting_tips()
+    
+    # Preview
+    if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
+        st.markdown("---")
+        st.markdown("**Preview:**")
+        
+        if trends_title:
+            st.markdown(f"### {trends_title}")
+        
+        if trends_description:
+            # Format with bold, underline, etc.
+            formatted_desc = format_comment_preview(trends_description)
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                    border: 1px solid #CCCCCC;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    text-align: center;
+                '>
+                    <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                        {formatted_desc}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display sections
+        for section in sections_data:
+            if section["left"] or section["right"]:
+                cols = st.columns([0.3, 3, 3])
+                
+                with cols[0]:
+                    st.markdown(f"""
+                        <div style='
+                            width: 60px;
+                            height: 60px;
+                            border-radius: 50%;
+                            background-color: #FFFFFF;
+                            border: 3px solid #666666;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 1.5rem;
+                            font-weight: bold;
+                            color: #666666;
+                            margin-top: 1rem;
+                        '>
+                            {section["number"]}
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                with cols[1]:
+                    if section["left"]:
+                        formatted_left = format_comment_preview(section["left"])
+                        st.markdown(f"""
+                            <div style='
+                                background: #E3F2FD;
+                                border: 1px solid #90CAF9;
+                                padding: 1rem;
+                                margin: 0.5rem 0;
+                                border-radius: 8px;
+                            '>
+                                <div style='font-size: 0.95rem; line-height: 1.6; color: #1565C0;'>
+                                    {formatted_left}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                with cols[2]:
+                    if section["right"]:
+                        formatted_right = format_comment_preview(section["right"])
+                        st.markdown(f"""
+                            <div style='
+                                background: #FFF3E0;
+                                border: 1px solid #FFB74D;
+                                padding: 1rem;
+                                margin: 0.5rem 0;
+                                border-radius: 8px;
+                            '>
+                                <div style='font-size: 0.95rem; line-height: 1.6; color: #E65100;'>
+                                    {formatted_right}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+    
+    # Save button
+    if st.button("Save Custom Trends View to Dashboard", key=f"save_ns_trends_{segment['id']}"):
+        if not trends_title:
+            st.error("Please provide a title for the custom trends view.")
+        else:
+            # Delete existing custom trends view
+            delete_tables_for_section(segment["id"], "NS Landscape", "Custom Trends View")
+            
+            # Save configuration
+            filter_config = json.dumps({
+                "title": trends_title,
+                "description": trends_description,
+                "sections": sections_data
+            })
+            save_table(
+                name="Custom Trends View",
+                dataset_id=dataset_id,
+                columns=["Custom"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="NS Landscape",
+                filter_json=filter_config,
+                comment=""
+            )
+            st.success("Custom Trends View saved to dashboard!")
 
 
 def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
