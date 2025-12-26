@@ -11,6 +11,7 @@ from app_core.database import (
     ensure_battleground_notes_table,
     ensure_uploads_segment_column,
     ensure_uploads_data_path_column,
+    ensure_segments_excel_columns,
     clear_all_data,
     init_db,
     migrate_charts_table,
@@ -38,6 +39,7 @@ def bootstrap() -> None:
     """Initialize persistence and default data."""
     init_db()
     migrate_charts_table()
+    ensure_segments_excel_columns()  # Add new columns for excel_name and filter_column
     default_segment_id = create_default_segments()
     ensure_uploads_segment_column(default_segment_id)
     ensure_chart_comment_column()

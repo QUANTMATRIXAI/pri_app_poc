@@ -253,6 +253,17 @@ def ensure_battleground_notes_table() -> None:
         conn.commit()
 
 
+def ensure_segments_excel_columns() -> None:
+    """Ensure segments table has excel_name and filter_column columns."""
+    with get_connection() as conn:
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(segments)").fetchall()]
+        if "excel_name" not in cols:
+            conn.execute("ALTER TABLE segments ADD COLUMN excel_name TEXT DEFAULT ''")
+        if "filter_column" not in cols:
+            conn.execute("ALTER TABLE segments ADD COLUMN filter_column TEXT DEFAULT 'Segment_Col_1'")
+        conn.commit()
+
+
 def ensure_media_title_column() -> None:
     """Ensure media table has a title column."""
     with get_connection() as conn:

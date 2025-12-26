@@ -348,16 +348,15 @@ def render_section_placeholder(section: str) -> None:
     st.info(f"No content configured yet for {section}.")
 
 
-def map_segment_name(name: str) -> str:
-    seg_map = {
-        "value": "admix value",
-        "deluxe": "admix deluxe",
-        "premium": "admix premium",
-        "spib": "s& pib",
-        "sp bio": "sp+ib",
-        "spbio": "sp+ib",
-    }
-    return seg_map.get(name.strip().lower(), name.strip().lower())
+def filter_df_by_segment(df: pd.DataFrame, segment: Dict) -> pd.DataFrame:
+    """Filter dataframe by segment using excel_name and filter_column."""
+    excel_name = segment.get("excel_name", segment["name"])
+    filter_column = segment.get("filter_column", "Segment_Col_1")
+    
+    if filter_column not in df.columns:
+        return pd.DataFrame()  # Return empty if column doesn't exist
+    
+    return df[df[filter_column].astype(str).str.strip() == excel_name]
 
 
 def get_latest_upload_row(segment_id: int):
@@ -371,15 +370,11 @@ def get_latest_upload_row(segment_id: int):
 
 
 @st.cache_data(show_spinner=False)
-def get_filtered_df_for_segment(upload_id: int, upload_path: str, segment_name: str):
-    required_cols = {"revised seg", "pri year", "ns m inr", "mfg com"}
-    seg_key = map_segment_name(segment_name)
+def get_filtered_df_for_segment(upload_id: int, upload_path: str, segment_excel_name: str, filter_column: str):
+    excel_name = segment_excel_name.strip()
     years = ["A23", "A24", "A25"]
-    df = query_segment_filtered(upload_path, seg_key, years)
-    cols = {c.lower() for c in df.columns}
-    if not required_cols.issubset(cols):
-        return None, []
-    years_available = [y for y in years if y in df["PRI Year"].unique().tolist()]
+    df = query_segment_filtered(upload_path, excel_name, filter_column, years)
+    years_available = [y for y in years if y in df["PRI Year"].unique().tolist()] if not df.empty else []
     return df, years_available
 
 
@@ -622,8 +617,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             return
         
         # Filter by segment
-        seg_name = map_segment_name(segment["name"])
-        df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+        df = filter_df_by_segment(df, segment)
         
         # Get year filter from config
         filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
@@ -731,8 +725,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         return
     
     # Filter by segment
-    seg_name = map_segment_name(segment["name"])
-    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    df = filter_df_by_segment(df, segment)
     
     # Get filters from config
     filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
@@ -991,8 +984,7 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
         return
     
     # Filter by segment
-    seg_name = map_segment_name(segment["name"])
-    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    df = filter_df_by_segment(df, segment)
     
     # Get filters from config
     filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
@@ -1147,8 +1139,7 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
         return
     
     # Filter by segment
-    seg_name = map_segment_name(segment["name"])
-    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    df = filter_df_by_segment(df, segment)
     
     # Get filters from config
     filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
@@ -1786,12 +1777,10 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     df = load_dataset(table_row["dataset_id"])
     if df is None or df.empty:
         st.warning("Dataset not found.")
-
         return
     
     # Filter by segment
-    seg_name = map_segment_name(segment["name"])
-    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    df = filter_df_by_segment(df, segment)
     
     # Get filters from config
     filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
@@ -3789,16 +3778,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
         return
     
     # Filter by segment
-    seg_map = {
-        "value": "admix value",
-        "deluxe": "admix deluxe",
-        "premium": "admix premium",
-        "spib": "s& pib",
-        "sp bio": "sp+ib",
-        "spbio": "sp+ib",
-    }
-    seg_name = seg_map.get(segment["name"].strip().lower(), segment["name"].strip().lower())
-    df_segment = df[df.get("Revised Seg", "").astype(str).str.strip().str.lower() == seg_name]
+    df_segment = filter_df_by_segment(df, segment)
     
     # Get states and brands from config
     selected_states = tab_config.get("states", [])

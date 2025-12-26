@@ -134,26 +134,20 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     
     df = normalize_dataset_year(df)
 
-    # Filter data by segment
-    seg_map = {
-        "value": "admix value",
-        "deluxe": "admix deluxe",
-        "premium": "admix premium",
-        "spib": "s& pib",
-        "sp bio": "sp+ib",
-        "spbio": "sp+ib",
-    }
-    seg_name = seg_map.get(segment["name"].strip().lower(), segment["name"].strip().lower())
-    df_filtered = df[df.get("Revised Seg", "").astype(str).str.strip().str.lower() == seg_name]
+    # Filter data by segment using excel_name and filter_column
+    excel_name = segment.get("excel_name", segment["name"])
+    filter_column = segment.get("filter_column", "Segment_Col_1")
+    
+    df_filtered = df[df.get(filter_column, "").astype(str).str.strip() == excel_name]
 
     # Show data info
     note = f"Using latest {'global' if using_global else 'segment'} upload: **{latest['filename']}**"
-    st.info(f"{note} | Total rows: {len(df)} | Segment rows: {len(df_filtered)}")
+    st.info(f"{note} | Total rows: {len(df)} | Segment rows: {len(df_filtered)} | Filter: {filter_column} = '{excel_name}'")
 
     # Data preview
     st.markdown("### Segment Data Preview")
     if df_filtered.empty:
-        st.warning(f"No rows found for segment '{segment['name']}' in the uploaded data.")
+        st.warning(f"No rows found for segment '{segment['name']}' (Excel: '{excel_name}', Column: '{filter_column}') in the uploaded data.")
     else:
         st.dataframe(df_filtered.head(200), use_container_width=True)
 

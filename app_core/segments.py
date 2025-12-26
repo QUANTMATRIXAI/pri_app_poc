@@ -3,70 +3,75 @@ from typing import List, Optional
 
 from .database import get_connection
 
-SEGMENT_ORDER = ["Value", "Deluxe", "Premium", "SPIB", "SP BIO"]
+# No longer needed - segments are dynamic
+# SEGMENT_ORDER = ["Value", "Deluxe", "Premium", "SPIB", "SP BIO"]
 
 
 def create_default_segments() -> int:
-    """Ensure the default five segments exist; return the first segment id."""
+    """Ensure the default 12 segments exist; return the first segment id."""
     defaults = [
-        ("Value", "Entry-value seekers focused on affordability.", "#f5b400"),
-        ("Deluxe", "Upgraded experience with curated add-ons.", "#6c8cff"),
-        ("Premium", "High-touch premium tier for loyal customers.", "#34c38f"),
-        ("SPIB", "Strategic projects in business (SPIB).", "#ff7f50"),
-        ("SP BIO", "Specialized bio strategic tier (SP BIO).", "#9c6bdb"),
+        ("Deluxe", "1. Admix Deluxe", "Segment_Col_1", "#6c8cff"),
+        ("Premium", "2. Admix Premium", "Segment_Col_1", "#34c38f"),
+        ("S&PIB Browns", "3. S&PIB Browns", "Segment_Col_1", "#ff7f50"),
+        ("SP+IB Browns", "4. SP+IB Browns", "Segment_Col_1", "#f5b400"),
+        ("S&PIB Whites", "5. S&PIB Whites", "Segment_Col_1", "#9c6bdb"),
+        ("SP+IB Whites", "6. SP+IB Whites", "Segment_Col_1", "#20c997"),
+        ("S&PIB BII Scotch Browns", "7. S&PIB BII Scotch Browns", "Segment_Col_2", "#e83e8c"),
+        ("S&PIB Prem BIO Browns", "8. S&PIB Prem BIO Browns", "Segment_Col_2", "#fd7e14"),
+        ("SP BIO+ BROWNS (SCOTCH)", "9. SP BIO+ Browns (Scotch)", "Segment_Col_2", "#6610f2"),
+        ("Single Malt", "10. Single Malt", "Segment_Col_2", "#17a2b8"),
+        ("Whites", "11. Whites", "Segment_Col_2", "#28a745"),
+        ("SP+IB Others", "12. SP+IB Others", "Segment_Col_1", "#dc3545"),
     ]
+    
     with get_connection() as conn:
-        existing = conn.execute("SELECT id FROM segments ORDER BY id ASC").fetchall()
+        # Get all existing segments
+        existing = conn.execute("SELECT id, name FROM segments ORDER BY id ASC").fetchall()
+        existing_dict = {row["name"]: row["id"] for row in existing}
+        
         now = datetime.datetime.utcnow().isoformat()
-
-        # Rename existing rows to align with defaults when possible
-        for idx, row in enumerate(existing):
-            if idx < len(defaults):
-                name, desc, color = defaults[idx]
+        
+        # Get the names we want to keep
+        target_names = {dashboard_name for dashboard_name, _, _, _ in defaults}
+        
+        # Delete segments that are not in our target list
+        for name, seg_id in existing_dict.items():
+            if name not in target_names:
+                # Delete the segment (this will cascade delete related data)
+                conn.execute("DELETE FROM segments WHERE id = ?", (seg_id,))
+        
+        # Now update or insert the target segments
+        for dashboard_name, excel_name, filter_col, color in defaults:
+            if dashboard_name in existing_dict:
+                # Update existing segment
                 conn.execute(
-                    "UPDATE segments SET name = ?, description = ?, color = ? WHERE id = ?",
-                    (name, desc, color, row["id"]),
+                    "UPDATE segments SET excel_name = ?, filter_column = ?, color = ?, description = '' WHERE name = ?",
+                    (excel_name, filter_col, color, dashboard_name),
                 )
-
-        # Insert missing defaults
-        for idx in range(len(existing), len(defaults)):
-            name, desc, color = defaults[idx]
-            conn.execute(
-                "INSERT INTO segments (name, description, color, created_at) VALUES (?, ?, ?, ?)",
-                (name, desc, color, now),
-            )
+            else:
+                # Insert new segment
+                conn.execute(
+                    "INSERT INTO segments (name, description, color, excel_name, filter_column, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (dashboard_name, "", color, excel_name, filter_col, now),
+                )
 
         conn.commit()
         row = conn.execute("SELECT id FROM segments ORDER BY id ASC LIMIT 1").fetchone()
-        return row["id"]
-
-
-def _sort_segments(rows) -> List[dict]:
-    ordered = []
-    remaining = []
-    order_lookup = {name: idx for idx, name in enumerate(SEGMENT_ORDER)}
-    for r in rows:
-        name = r["name"]
-        if name in order_lookup:
-            ordered.append((order_lookup[name], dict(r)))
-        else:
-            remaining.append(dict(r))
-    ordered_sorted = [pair[1] for pair in sorted(ordered, key=lambda x: x[0])]
-    return ordered_sorted + remaining
+        return row["id"] if row else None
 
 
 def get_segments() -> List[dict]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, name, description, color FROM segments"
+            "SELECT id, name, description, color, excel_name, filter_column FROM segments ORDER BY id ASC"
         ).fetchall()
-    return _sort_segments(rows)
+    return [dict(row) for row in rows]
 
 
 def get_segment(segment_id: int) -> Optional[dict]:
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id, name, description, color FROM segments WHERE id = ?",
+            "SELECT id, name, description, color, excel_name, filter_column FROM segments WHERE id = ?",
             (segment_id,),
         ).fetchone()
         return dict(row) if row else None

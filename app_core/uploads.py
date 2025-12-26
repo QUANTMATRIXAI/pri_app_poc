@@ -187,15 +187,15 @@ def overwrite_dataset(upload_id: int, df: pd.DataFrame) -> None:
     persist_upload_file(upload_id, df)
 
 
-def query_segment_filtered(upload_path: str, segment_key: str, years: list[str]) -> pd.DataFrame:
-    """Use DuckDB to filter the parquet by Revised Seg and PRI Year, returning a pandas DataFrame."""
+def query_segment_filtered(upload_path: str, segment_excel_name: str, filter_column: str, years: list[str]) -> pd.DataFrame:
+    """Use DuckDB to filter the parquet by the appropriate segment column and PRI Year, returning a pandas DataFrame."""
     con = duckdb.connect()
-    seg_key = segment_key.strip().lower()
+    excel_name = segment_excel_name.strip()
     year_list = ", ".join([f"'{y}'" for y in years]) if years else "'A23','A24','A25'"
     query = f"""
         SELECT *
         FROM read_parquet('{upload_path}')
-        WHERE lower(trim("Revised Seg")) = '{seg_key}'
+        WHERE trim("{filter_column}") = '{excel_name}'
           AND "PRI Year" IN ({year_list})
     """
     try:
