@@ -3726,8 +3726,13 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
         except Exception as e:
             st.error(f"Error rendering {view['name']}: {str(e)}")
     else:
-        # Multiple views - use tabs
-        tab_names = [f"View {i+1}" for i in range(len(custom_trends_views))]
+        # Multiple views - use tabs with custom tab titles
+        tab_names = []
+        for i, view in enumerate(custom_trends_views):
+            config = json.loads(view["filter_json"]) if view["filter_json"] else {}
+            tab_title = config.get("tab_title", f"View {i+1}")
+            tab_names.append(tab_title)
+        
         tabs = st.tabs(tab_names)
         
         for tab_idx, (tab, view) in enumerate(zip(tabs, custom_trends_views)):
@@ -3937,251 +3942,266 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
     st.markdown(f"**All India Segment Growth (A25):** {all_india_growth:+.1f}%")
     st.markdown("---")
     
-    # Create main layout: States on left, Strategic Insights on right
-    col_states, col_insights = st.columns([1.2, 2])
+    # Get custom section headers (with defaults)
+    state_perf_header = tab_config.get("state_perf_header", "State Performance")
+    strategic_insights_header = tab_config.get("strategic_insights_header", "Strategic Insights")
     
-    with col_states:
-        st.markdown("### State Performance")
+    # Get state-specific columns configuration
+    state_columns = tab_config.get("state_columns", {})
+    
+    # Get custom column headings (with defaults)
+    col1_heading = tab_config.get("col1_heading", "SOG")
+    col2_heading = tab_config.get("col2_heading", "5Cs")
+    col3_heading = tab_config.get("col3_heading", "Imagery")
+    
+    # Display headers
+    col_states_header, col_insights_header = st.columns([1.2, 2])
+    with col_states_header:
+        st.markdown(f"### {state_perf_header}")
+    with col_insights_header:
+        st.markdown(f"### {strategic_insights_header}")
+    
+    # Process each state - display performance and insights side by side
+    for state_idx, state in enumerate(selected_states):
+        # Filter data for this state
+        df_state = df_calc[df_calc["State"] == state].copy()
         
-        # Process each state
-        for state in selected_states:
-            # Filter data for this state
-            df_state = df_calc[df_calc["State"] == state].copy()
-            
-            if df_state.empty:
-                continue
-            
-            # SEGMENT-LEVEL CALCULATIONS
-            state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
-            state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
-            
-            segment_ms = (state_segment_a25 / all_india_a25 * 100) if all_india_a25 > 0 else 0
-            segment_growth = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
-            btm_status = segment_growth - all_india_growth
-            
-            # State card with BTM status and brand performance
-            btm_color = "#4CAF50" if btm_status >= 0 else "#F44336"
-            btm_bg_color = "#E8F5E9" if btm_status >= 0 else "#FFEBEE"
-            
-            # Create container for state
-            with st.container():
-                # State header with BTM
-                st.markdown(f"""
-                    <div style='background-color: {btm_bg_color}; padding: 0.8rem; border-radius: 0.4rem; margin-bottom: 0.5rem; border-left: 4px solid {btm_color};'>
-                        <h4 style='margin: 0; color: #333;'>{state}</h4>
-                        <div style='margin-top: 0.3rem;'>
-                            <span style='font-size: 0.8rem; color: #666;'>BTM vs AI: </span>
-                            <span style='color: {btm_color}; font-weight: bold; font-size: 1.1rem;'>{btm_status:+.1f}%</span>
-                        </div>
+        if df_state.empty:
+            continue
+        
+        # SEGMENT-LEVEL CALCULATIONS
+        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
+        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
+        
+        segment_ms = (state_segment_a25 / all_india_a25 * 100) if all_india_a25 > 0 else 0
+        segment_growth = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
+        btm_status = segment_growth - all_india_growth
+        
+        # State card with BTM status and brand performance
+        btm_color = "#4CAF50" if btm_status >= 0 else "#F44336"
+        btm_bg_color = "#E8F5E9" if btm_status >= 0 else "#FFEBEE"
+        
+        # Create row for this state
+        col_states, col_insights = st.columns([1.2, 2])
+        
+        with col_states:
+            # State header with BTM
+            st.markdown(f"""
+                <div style='background-color: {btm_bg_color}; padding: 0.8rem; border-radius: 0.4rem; margin-bottom: 0.5rem; border-left: 4px solid {btm_color};'>
+                    <h4 style='margin: 0; color: #333;'>{state}</h4>
+                    <div style='margin-top: 0.3rem;'>
+                        <span style='font-size: 0.8rem; color: #666;'>BTM vs AI: </span>
+                        <span style='color: {btm_color}; font-weight: bold; font-size: 1.1rem;'>{btm_status:+.1f}%</span>
                     </div>
-                """, unsafe_allow_html=True)
-                
-                # Build table data
-                table_data = []
-                
-                # Segment row
-                segment_growth_color = "🟢" if segment_growth >= 0 else "🔴"
-                table_data.append({
-                    "Brand": "SEGMENT",
-                    "MS & Growth": f"{segment_ms:.1f}% {segment_growth_color}({segment_growth:+.1f}%)"
-                })
-                
-                # Brand rows (up to 5)
-                brand_count = 0
-                for brand in selected_brands:
-                    if brand_count >= 5:
-                        break
-                        
-                    df_brand = df_state[df_state["Brand"] == brand].copy()
-                    
-                    if df_brand.empty:
-                        continue
-                    
-                    brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["NS M INR"].sum()
-                    brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["NS M INR"].sum()
-                    
-                    brand_ms = (brand_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
-                    brand_growth = ((brand_a25 - brand_a24) / brand_a24 * 100) if brand_a24 > 0 else 0
-                    
-                    brand_growth_icon = "🟢" if brand_growth >= 0 else "🔴"
-                    
-                    table_data.append({
-                        "Brand": brand,
-                        "MS & Growth": f"{brand_ms:.1f}% {brand_growth_icon}({brand_growth:+.1f}%)"
-                    })
-                    brand_count += 1
-                
-                # Display table with styling
-                if table_data:
-                    df_display = pd.DataFrame(table_data)
-                    
-                    # Style the dataframe - highlight segment row
-                    def highlight_segment(row):
-                        if row['Brand'] == 'SEGMENT':
-                            return ['background-color: #FFF9C4; font-weight: bold'] * len(row)
-                        return [''] * len(row)
-                    
-                    styled_df = df_display.style.apply(highlight_segment, axis=1)
-                    st.dataframe(styled_df, use_container_width=True, hide_index=True, height=min(250, (len(table_data) + 1) * 35))
-                
-                st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
-    
-    with col_insights:
-        st.markdown("### Strategic Insights")
-        
-        # Get state-specific columns configuration
-        state_columns = tab_config.get("state_columns", {})
-        
-        # Get custom column headings (with defaults)
-        col1_heading = tab_config.get("col1_heading", "SOG")
-        col2_heading = tab_config.get("col2_heading", "5Cs")
-        col3_heading = tab_config.get("col3_heading", "Imagery")
-        
-        if state_columns:
-            # Display insights for each state
-            for idx, state in enumerate(selected_states):
-                state_data = state_columns.get(state, {})
-                
-                if any(state_data.values()):  # If any content exists for this state
-                    
-                    # Create 3 columns for custom headings
-                    col_sog, col_5cs, col_imagery = st.columns(3)
-                    
-                    with col_sog:
-                        st.markdown(f"**{col1_heading}**")
-                        sog_content = state_data.get("SOG", "")
-                        edited_sog = st.text_area(
-                            f"{col1_heading} content",
-                            value=sog_content,
-                            placeholder=f"{col1_heading} insights for {state}...",
-                            height=150,
-                            key=f"edit_sog_{state}_{tab_idx}_{segment['id']}",
-                            label_visibility="collapsed"
-                        )
-                        
-                        # Update button for SOG
-                        if edited_sog != sog_content and is_editor:
-                            if st.button(f"Update {col1_heading}", key=f"update_sog_{state}_{tab_idx}_{segment['id']}"):
-                                if bg_config_table:
-                                    # Load full config
-                                    full_config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
-                                    all_tabs = full_config.get("tabs", [])
-                                    
-                                    # Update this specific tab
-                                    if tab_idx < len(all_tabs):
-                                        if state not in state_columns:
-                                            state_columns[state] = {}
-                                        state_columns[state]["SOG"] = edited_sog
-                                        all_tabs[tab_idx]["state_columns"] = state_columns
-                                        
-                                        # Save back to database
-                                        delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
-                                        save_table(
-                                            name="Battlegrounds Config",
-                                            dataset_id=bg_config_table["dataset_id"],
-                                            columns=["Config"],
-                                            created_by=bg_config_table["created_by"],
-                                            segment_id=segment["id"],
-                                            section="Battlegrounds",
-                                            filter_json=json.dumps({"tabs": all_tabs}),
-                                            comment=""
-                                        )
-                                        st.success(f"{col1_heading} updated!")
-                                        if hasattr(st, "rerun"):
-                                            st.rerun()
-                                        else:
-                                            st.experimental_rerun()
-                    
-                    with col_5cs:
-                        st.markdown(f"**{col2_heading}**")
-                        fivecs_content = state_data.get("5Cs", "")
-                        edited_5cs = st.text_area(
-                            f"{col2_heading} content",
-                            value=fivecs_content,
-                            placeholder=f"{col2_heading} insights for {state}...",
-                            height=150,
-                            key=f"edit_5cs_{state}_{tab_idx}_{segment['id']}",
-                            label_visibility="collapsed"
-                        )
-                        
-                        # Update button for 5Cs
-                        if edited_5cs != fivecs_content and is_editor:
-                            if st.button(f"Update {col2_heading}", key=f"update_5cs_{state}_{tab_idx}_{segment['id']}"):
-                                if bg_config_table:
-                                    # Load full config
-                                    full_config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
-                                    all_tabs = full_config.get("tabs", [])
-                                    
-                                    # Update this specific tab
-                                    if tab_idx < len(all_tabs):
-                                        if state not in state_columns:
-                                            state_columns[state] = {}
-                                        state_columns[state]["5Cs"] = edited_5cs
-                                        all_tabs[tab_idx]["state_columns"] = state_columns
-                                        
-                                        # Save back to database
-                                        delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
-                                        save_table(
-                                            name="Battlegrounds Config",
-                                            dataset_id=bg_config_table["dataset_id"],
-                                            columns=["Config"],
-                                            created_by=bg_config_table["created_by"],
-                                            segment_id=segment["id"],
-                                            section="Battlegrounds",
-                                            filter_json=json.dumps({"tabs": all_tabs}),
-                                            comment=""
-                                        )
-                                        st.success(f"{col2_heading} updated!")
-                                        if hasattr(st, "rerun"):
-                                            st.rerun()
-                                        else:
-                                            st.experimental_rerun()
-                    
-                    with col_imagery:
-                        st.markdown(f"**{col3_heading}**")
-                        imagery_content = state_data.get("Imagery", "")
-                        edited_imagery = st.text_area(
-                            f"{col3_heading} content",
-                            value=imagery_content,
-                            placeholder=f"{col3_heading} insights for {state}...",
-                            height=150,
-                            key=f"edit_imagery_{state}_{tab_idx}_{segment['id']}",
-                            label_visibility="collapsed"
-                        )
-                        
-                        # Update button for Imagery
-                        if edited_imagery != imagery_content and is_editor:
-                            if st.button(f"Update {col3_heading}", key=f"update_imagery_{state}_{tab_idx}_{segment['id']}"):
-                                # Update the state_columns data
-                                if state not in state_columns:
-                                    state_columns[state] = {}
-                                state_columns[state]["Imagery"] = edited_imagery
-                                tab_config["state_columns"] = state_columns
-                                
-                                # Save back to database
-                                delete_tables_for_section(segment["id"], "Battlegrounds", f"Tab {tab_idx + 1}")
-                                save_table(
-                                    name=f"Tab {tab_idx + 1}",
-                                    dataset_id=jtbd_view["dataset_id"],
-                                    columns=["Config"],
-                                    created_by=jtbd_view["created_by"],
-                                    segment_id=segment["id"],
-                                    section="Battlegrounds",
-                                    filter_json=json.dumps(tab_config),
-                                    comment=""
-                                )
-                                st.success(f"{col3_heading} updated!")
-                                if hasattr(st, "rerun"):
-                                    st.rerun()
-                                else:
-                                    st.experimental_rerun()
-                    
-                    # Add spacing between states
-                    if idx < len(selected_states) - 1:
-                        st.markdown("<div style='height: 2rem; margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
+                </div>
+            """, unsafe_allow_html=True)
             
-        else:
-            st.info("No strategic insights configured for this tab.")
+            # Build table data
+            table_data = []
+            
+            # Segment row
+            segment_growth_color = "🟢" if segment_growth >= 0 else "🔴"
+            table_data.append({
+                "Brand": "SEGMENT",
+                "MS & Growth": f"{segment_ms:.1f}% {segment_growth_color}({segment_growth:+.1f}%)"
+            })
+            
+            # Brand rows (up to 5)
+            brand_count = 0
+            for brand in selected_brands:
+                if brand_count >= 5:
+                    break
+                    
+                df_brand = df_state[df_state["Brand"] == brand].copy()
+                
+                if df_brand.empty:
+                    continue
+                
+                brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["NS M INR"].sum()
+                brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["NS M INR"].sum()
+                
+                brand_ms = (brand_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
+                brand_growth = ((brand_a25 - brand_a24) / brand_a24 * 100) if brand_a24 > 0 else 0
+                
+                brand_growth_icon = "🟢" if brand_growth >= 0 else "🔴"
+                
+                table_data.append({
+                    "Brand": brand,
+                    "MS & Growth": f"{brand_ms:.1f}% {brand_growth_icon}({brand_growth:+.1f}%)"
+                })
+                brand_count += 1
+            
+            # Display table with styling
+            if table_data:
+                df_display = pd.DataFrame(table_data)
+                
+                # Style the dataframe - highlight segment row
+                def highlight_segment(row):
+                    if row['Brand'] == 'SEGMENT':
+                        return ['background-color: #FFF9C4; font-weight: bold'] * len(row)
+                    return [''] * len(row)
+                
+                styled_df = df_display.style.apply(highlight_segment, axis=1)
+                st.dataframe(styled_df, use_container_width=True, hide_index=True, height=min(250, (len(table_data) + 1) * 35))
+        
+        with col_insights:
+            # Display insights for this state
+            state_data = state_columns.get(state, {})
+            
+            if any(state_data.values()):  # If any content exists for this state
+                # Create 3 columns for custom headings
+                col_sog, col_5cs, col_imagery = st.columns(3)
+                
+                with col_sog:
+                    st.markdown(f"**{col1_heading}**")
+                    sog_content = state_data.get("SOG", "")
+                    edited_sog = st.text_area(
+                        f"{col1_heading} content",
+                        value=sog_content,
+                        placeholder=f"{col1_heading} insights for {state}...",
+                        height=150,
+                        key=f"edit_sog_{state}_{state_idx}_{tab_idx}_{segment['id']}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Update button for SOG
+                    if edited_sog != sog_content and is_editor:
+                        if st.button(f"Update {col1_heading}", key=f"update_sog_{state}_{state_idx}_{tab_idx}_{segment['id']}"):
+                            # Get the full config
+                            from app_core.tables import get_tables_for_segment
+                            existing_tables = get_tables_for_segment(segment["id"])
+                            bg_config_table = next((t for t in existing_tables if t["section"] == "Battlegrounds" and t["name"] == "Battlegrounds Config"), None)
+                            
+                            if bg_config_table:
+                                # Load full config
+                                full_config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
+                                all_tabs = full_config.get("tabs", [])
+                                
+                                # Update this specific tab
+                                if tab_idx < len(all_tabs):
+                                    if "state_columns" not in all_tabs[tab_idx]:
+                                        all_tabs[tab_idx]["state_columns"] = {}
+                                    if state not in all_tabs[tab_idx]["state_columns"]:
+                                        all_tabs[tab_idx]["state_columns"][state] = {}
+                                    all_tabs[tab_idx]["state_columns"][state]["SOG"] = edited_sog
+                                    
+                                    # Save back to database
+                                    delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
+                                    save_table(
+                                        name="Battlegrounds Config",
+                                        dataset_id=bg_config_table["dataset_id"],
+                                        columns=["Config"],
+                                        created_by=bg_config_table["created_by"],
+                                        segment_id=segment["id"],
+                                        section="Battlegrounds",
+                                        filter_json=json.dumps({"tabs": all_tabs}),
+                                        comment=""
+                                    )
+                                    st.success(f"{col1_heading} updated!")
+                                    if hasattr(st, "rerun"):
+                                        st.rerun()
+                                    else:
+                                        st.experimental_rerun()
+                
+                with col_5cs:
+                    st.markdown(f"**{col2_heading}**")
+                    fivecs_content = state_data.get("5Cs", "")
+                    edited_5cs = st.text_area(
+                        f"{col2_heading} content",
+                        value=fivecs_content,
+                        placeholder=f"{col2_heading} insights for {state}...",
+                        height=150,
+                        key=f"edit_5cs_{state}_{state_idx}_{tab_idx}_{segment['id']}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Update button for 5Cs
+                    if edited_5cs != fivecs_content and is_editor:
+                        if st.button(f"Update {col2_heading}", key=f"update_5cs_{state}_{state_idx}_{tab_idx}_{segment['id']}"):
+                            from app_core.tables import get_tables_for_segment
+                            existing_tables = get_tables_for_segment(segment["id"])
+                            bg_config_table = next((t for t in existing_tables if t["section"] == "Battlegrounds" and t["name"] == "Battlegrounds Config"), None)
+                            
+                            if bg_config_table:
+                                full_config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
+                                all_tabs = full_config.get("tabs", [])
+                                
+                                if tab_idx < len(all_tabs):
+                                    if "state_columns" not in all_tabs[tab_idx]:
+                                        all_tabs[tab_idx]["state_columns"] = {}
+                                    if state not in all_tabs[tab_idx]["state_columns"]:
+                                        all_tabs[tab_idx]["state_columns"][state] = {}
+                                    all_tabs[tab_idx]["state_columns"][state]["5Cs"] = edited_5cs
+                                    
+                                    delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
+                                    save_table(
+                                        name="Battlegrounds Config",
+                                        dataset_id=bg_config_table["dataset_id"],
+                                        columns=["Config"],
+                                        created_by=bg_config_table["created_by"],
+                                        segment_id=segment["id"],
+                                        section="Battlegrounds",
+                                        filter_json=json.dumps({"tabs": all_tabs}),
+                                        comment=""
+                                    )
+                                    st.success(f"{col2_heading} updated!")
+                                    if hasattr(st, "rerun"):
+                                        st.rerun()
+                                    else:
+                                        st.experimental_rerun()
+                
+                with col_imagery:
+                    st.markdown(f"**{col3_heading}**")
+                    imagery_content = state_data.get("Imagery", "")
+                    edited_imagery = st.text_area(
+                        f"{col3_heading} content",
+                        value=imagery_content,
+                        placeholder=f"{col3_heading} insights for {state}...",
+                        height=150,
+                        key=f"edit_imagery_{state}_{state_idx}_{tab_idx}_{segment['id']}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Update button for Imagery
+                    if edited_imagery != imagery_content and is_editor:
+                        if st.button(f"Update {col3_heading}", key=f"update_imagery_{state}_{state_idx}_{tab_idx}_{segment['id']}"):
+                            from app_core.tables import get_tables_for_segment
+                            existing_tables = get_tables_for_segment(segment["id"])
+                            bg_config_table = next((t for t in existing_tables if t["section"] == "Battlegrounds" and t["name"] == "Battlegrounds Config"), None)
+                            
+                            if bg_config_table:
+                                full_config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
+                                all_tabs = full_config.get("tabs", [])
+                                
+                                if tab_idx < len(all_tabs):
+                                    if "state_columns" not in all_tabs[tab_idx]:
+                                        all_tabs[tab_idx]["state_columns"] = {}
+                                    if state not in all_tabs[tab_idx]["state_columns"]:
+                                        all_tabs[tab_idx]["state_columns"][state] = {}
+                                    all_tabs[tab_idx]["state_columns"][state]["Imagery"] = edited_imagery
+                                    
+                                    delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
+                                    save_table(
+                                        name="Battlegrounds Config",
+                                        dataset_id=bg_config_table["dataset_id"],
+                                        columns=["Config"],
+                                        created_by=bg_config_table["created_by"],
+                                        segment_id=segment["id"],
+                                        section="Battlegrounds",
+                                        filter_json=json.dumps({"tabs": all_tabs}),
+                                        comment=""
+                                    )
+                                    st.success(f"{col3_heading} updated!")
+                                    if hasattr(st, "rerun"):
+                                        st.rerun()
+                                    else:
+                                        st.experimental_rerun()
+            else:
+                st.info(f"No insights configured for {state}")
+        
+        # Add spacing between states
+        if state_idx < len(selected_states) - 1:
+            st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
 
 
 def render_india_map_dashboard(tabs_config: List[Dict]) -> None:

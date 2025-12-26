@@ -4199,10 +4199,20 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         saved_title = view_config.get("title", "")
         saved_description = view_config.get("description", "")
         saved_sections = view_config.get("sections", [])
+        saved_tab_title = view_config.get("tab_title", f"View {view_num}")
+        
+        # Tab title (for display in tabs)
+        tab_title = st.text_input(
+            f"Tab Title for View {view_num}",
+            value=saved_tab_title,
+            placeholder=f"e.g., Performance Overview, Market Analysis, etc.",
+            key=f"brand_trends_tab_title_v{view_num}_{segment['id']}",
+            help="This will be the tab name shown in the dashboard"
+        )
         
         # Title and main description
         trends_title = st.text_input(
-            f"View {view_num} - Title",
+            f"View {view_num} - Content Title",
             value=saved_title,
             placeholder=f"e.g., Brand Performance Trends - Part {view_num}",
             key=f"brand_trends_title_v{view_num}_{segment['id']}"
@@ -4383,7 +4393,8 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 config_data = json.dumps({
                     "title": trends_title,
                     "description": trends_description,
-                    "sections": sections_data
+                    "sections": sections_data,
+                    "tab_title": tab_title
                 })
                 
                 save_table(
@@ -6484,6 +6495,61 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         # Get saved tab data
         saved_tab = saved_tabs[i] if i < len(saved_tabs) else {"name": ["DOMINATE", "DRIVE", "DISRUPT"][i], "states": [], "families": [], "brands": []}
         
+        # Show existing images if any
+        from app_core.media import get_media_for_segment
+        existing_media = get_media_for_segment(segment["id"])
+        tab_media = [m for m in existing_media if m.get("section") == "Battlegrounds" and m.get("name") == f"Tab {i+1} Images"]
+        
+        # Get existing images
+        existing_img1 = next((m for m in tab_media if "Image 1" in m.get("comment", "")), None)
+        existing_img2 = next((m for m in tab_media if "Image 2" in m.get("comment", "")), None)
+        
+        # IMAGE 1 (TOP) - FIRST
+        st.markdown("**Image 1 (Top):**")
+        st.caption("This image will appear at the top of the tab")
+        
+        col_img1, col_inputs1 = st.columns([1, 1])
+        
+        with col_img1:
+            # Show existing or new upload
+            if existing_img1 and not st.session_state.get(f"replace_img1_tab{i}_{segment['id']}", False):
+                file_path = existing_img1.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    if str(file_path).lower().endswith((".ppt", ".pptx")):
+                        st.caption(f"📄 Current: {os.path.basename(file_path)}")
+                    else:
+                        st.image(file_path, caption="Current Image 1", use_container_width=True)
+            
+            uploaded_image_1 = st.file_uploader(
+                f"Upload new image (replaces existing)",
+                type=["png", "jpg", "jpeg", "pptx"],
+                key=f"bg_tab{i}_img1_{segment['id']}",
+                label_visibility="collapsed"
+            )
+            if uploaded_image_1:
+                if uploaded_image_1.name.endswith(('.png', '.jpg', '.jpeg')):
+                    st.image(uploaded_image_1, caption="New Image 1", use_container_width=True)
+                else:
+                    st.info(f"📄 {uploaded_image_1.name}")
+        
+        with col_inputs1:
+            img1_title = st.text_input(
+                "Title for Image 1",
+                value=existing_img1.get("title", "") if existing_img1 else "",
+                key=f"bg_tab{i}_img1_title_{segment['id']}",
+                placeholder="Enter title for top image"
+            )
+            
+            img1_comment = st.text_area(
+                "Comment for Image 1 (optional)",
+                value=existing_img1.get("comment", "").replace(f"Tab {i+1} - Image 1", "").strip() if existing_img1 else "",
+                key=f"bg_tab{i}_img1_comment_{segment['id']}",
+                placeholder="Add insights, observations, or context...",
+                height=150
+            )
+        
+        st.markdown("---")
+        
         # Default colors for each tab
         default_colors = ["#4CAF50", "#FFC107", "#F44336"]  # Green, Yellow, Red
         
@@ -6505,6 +6571,28 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 key=f"bg_tab{i}_color_{segment['id']}",
                 help="Color for map and state assignments"
             )
+        
+        # Section headers customization
+        st.markdown("**Customize Section Headers:**")
+        col_h1, col_h2 = st.columns(2)
+        
+        with col_h1:
+            state_perf_header = st.text_input(
+                "Left Section Header",
+                value=saved_tab.get("state_perf_header", "State Performance"),
+                key=f"bg_tab{i}_state_header_{segment['id']}",
+                placeholder="e.g., State Performance, Regional Analysis"
+            )
+        
+        with col_h2:
+            strategic_insights_header = st.text_input(
+                "Right Section Header",
+                value=saved_tab.get("strategic_insights_header", "Strategic Insights"),
+                key=f"bg_tab{i}_insights_header_{segment['id']}",
+                placeholder="e.g., Strategic Insights, Key Findings"
+            )
+        
+        st.markdown("---")
         
         # State selection - exclude states already selected in previous tabs
         col1, col2 = st.columns(2)
@@ -6666,72 +6754,12 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         st.markdown("---")
         
-        # Image uploads
-        st.markdown("**Upload Images:**")
-        st.caption("Upload 2 images for this tab (one at top, one at bottom)")
-        
-        # Show formatting tips once for both images
+        # Show formatting tips
         show_formatting_tips()
         
-        # Show existing images if any
-        from app_core.media import get_media_for_segment
-        existing_media = get_media_for_segment(segment["id"])
-        tab_media = [m for m in existing_media if m.get("section") == "Battlegrounds" and m.get("name") == f"Tab {i+1} Images"]
-        
-        # Get existing images
-        existing_img1 = next((m for m in tab_media if "Image 1" in m.get("comment", "")), None)
-        existing_img2 = next((m for m in tab_media if "Image 2" in m.get("comment", "")), None)
-        
-        if tab_media:
-            st.info(f"✅ {len(tab_media)} image(s) already uploaded for this tab. Upload new images to replace them.")
-        
-        # IMAGE 1 (TOP)
-        st.markdown("---")
-        st.markdown("**Image 1 (Top):**")
-        
-        col_img1, col_inputs1 = st.columns([1, 1])
-        
-        with col_img1:
-            # Show existing or new upload
-            if existing_img1 and not st.session_state.get(f"replace_img1_tab{i}_{segment['id']}", False):
-                file_path = existing_img1.get("file_path")
-                if file_path and os.path.exists(file_path):
-                    if str(file_path).lower().endswith((".ppt", ".pptx")):
-                        st.caption(f"📄 Current: {os.path.basename(file_path)}")
-                    else:
-                        st.image(file_path, caption="Current Image 1", use_container_width=True)
-            
-            uploaded_image_1 = st.file_uploader(
-                f"Upload new image (replaces existing)",
-                type=["png", "jpg", "jpeg", "pptx"],
-                key=f"bg_tab{i}_img1_{segment['id']}",
-                label_visibility="collapsed"
-            )
-            if uploaded_image_1:
-                if uploaded_image_1.name.endswith(('.png', '.jpg', '.jpeg')):
-                    st.image(uploaded_image_1, caption="New Image 1", use_container_width=True)
-                else:
-                    st.info(f"📄 {uploaded_image_1.name}")
-        
-        with col_inputs1:
-            img1_title = st.text_input(
-                "Title for Image 1",
-                value=existing_img1.get("title", "") if existing_img1 else "",
-                key=f"bg_tab{i}_img1_title_{segment['id']}",
-                placeholder="Enter title for top image"
-            )
-            
-            img1_comment = st.text_area(
-                "Comment for Image 1 (optional)",
-                value=existing_img1.get("comment", "").replace(f"Tab {i+1} - Image 1", "").strip() if existing_img1 else "",
-                key=f"bg_tab{i}_img1_comment_{segment['id']}",
-                placeholder="Add insights, observations, or context...",
-                height=150
-            )
-        
         # IMAGE 2 (BOTTOM)
-        st.markdown("---")
         st.markdown("**Image 2 (Bottom):**")
+        st.caption("This image will appear at the bottom of the tab")
         
         col_img2, col_inputs2 = st.columns([1, 1])
         
@@ -6796,7 +6824,9 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                     "state_columns": state_columns_data,  # Store state-specific columns
                     "col1_heading": col1_heading,  # Store custom column headings
                     "col2_heading": col2_heading,
-                    "col3_heading": col3_heading
+                    "col3_heading": col3_heading,
+                    "state_perf_header": state_perf_header,  # Store section headers
+                    "strategic_insights_header": strategic_insights_header
                 }
                 
                 # Delete and save updated config
