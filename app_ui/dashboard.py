@@ -13,7 +13,7 @@ from app_core.constants import SECTIONS
 from app_core.filters import apply_filters
 from app_core.media import delete_media_for_section, get_media_for_segment
 from app_core.battlegrounds import get_battleground_notes
-from app_core.tables import build_table_preview, delete_table
+from app_core.tables import build_table_preview, delete_table, get_tables_for_segment, delete_tables_for_section, save_table
 from app_core.uploads import count_uploads_for_segment, overwrite_dataset, get_uploads, query_segment_filtered, load_dataset
 
 from .charts import plot_chart
@@ -1389,6 +1389,9 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                     profile_dict = json.loads(saved_p3m_profile["filter_json"])
                     df_profile = pd.DataFrame(profile_dict)
                     
+                    # Replace None/NaN values with empty strings for display
+                    df_profile = df_profile.fillna("")
+                    
                     # Calculate index for conditional formatting
                     def calculate_index(row):
                         """Calculate index from TBA and Premium Whisky values"""
@@ -2422,16 +2425,16 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
                 # Apply styling to dataframe
                 styled_df = df_profile.style.apply(color_all_brand_columns, axis=1)
                 
-                # Get list of columns to display (exclude _index columns)
-                display_columns = [col for col in df_profile.columns if not col.startswith("_index_")]
+                # Create column config to hide _index columns
+                column_config = {col: None for col in df_profile.columns if col.startswith("_index_")}
                 
-                # Display only the visible columns
+                # Display dataframe
                 st.dataframe(
                     styled_df, 
                     use_container_width=True, 
                     hide_index=True,
                     height=600,
-                    column_order=display_columns
+                    column_config=column_config
                 )
                 
                 # Delete button for editors
@@ -2763,55 +2766,60 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
         # Display brand sections with intelligent layout
         total_brands = len(brands)
         
-        # Determine layout based on number of brands
-        if total_brands <= 4:
-            # 1-4: Show all in one row
-            layout = [total_brands]
-        elif total_brands == 5:
-            # 5: 3 + 2
-            layout = [3, 2]
-        elif total_brands == 6:
-            # 6: 3 + 3
-            layout = [3, 3]
-        elif total_brands == 7:
-            # 7: 4 + 3
-            layout = [4, 3]
-        else:  # 8
-            # 8: 4 + 4
-            layout = [4, 4]
-        
-        # Display brands according to layout
-        brand_idx = 0
-        for row_size in layout:
-            row_brands = brands[brand_idx:brand_idx + row_size]
-            cols = st.columns(row_size)
-            brand_idx += row_size
+        # Only display if there are brands
+        if total_brands == 0:
+            st.info("No brand sections configured yet.")
+        else:
+            # Determine layout based on number of brands
+            if total_brands <= 4:
+                # 1-4: Show all in one row
+                layout = [total_brands]
+            elif total_brands == 5:
+                # 5: 3 + 2
+                layout = [3, 2]
+            elif total_brands == 6:
+                # 6: 3 + 3
+                layout = [3, 3]
+            elif total_brands == 7:
+                # 7: 4 + 3
+                layout = [4, 3]
+            else:  # 8
+                # 8: 4 + 4
+                layout = [4, 4]
             
-            for idx, (col, brand) in enumerate(zip(cols, row_brands)):
-                with col:
-                    # Display brand name as header
-                    if brand.get("name"):
-                        st.markdown(f"### {brand['name']}")
+            # Display brands according to layout
+            brand_idx = 0
+            for row_size in layout:
+                if row_size > 0:  # Safety check
+                    row_brands = brands[brand_idx:brand_idx + row_size]
+                    cols = st.columns(row_size)
+                    brand_idx += row_size
                     
-                    # Display brand content
-                    if brand.get("content"):
-                        import html
-                        escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
-                        st.markdown(f"""
-                            <div style='
-                                background: #F5F5F5;
-                                border: 1px solid #CCCCCC;
-                                padding: 1rem;
-                                margin: 0.5rem 0;
-                                border-radius: 8px;
-                                height: 300px;
-                                overflow-y: auto;
-                            '>
-                                <div style='font-size: 0.9rem; line-height: 1.6; color: #1A1A1A;'>
-                                    {escaped_content}
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                    for idx, (col, brand) in enumerate(zip(cols, row_brands)):
+                        with col:
+                            # Display brand name as header
+                            if brand.get("name"):
+                                st.markdown(f"### {brand['name']}")
+                            
+                            # Display brand content
+                            if brand.get("content"):
+                                import html
+                                escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #F5F5F5;
+                                        border: 1px solid #CCCCCC;
+                                        padding: 1rem;
+                                        margin: 0.5rem 0;
+                                        border-radius: 8px;
+                                        height: 300px;
+                                        overflow-y: auto;
+                                    '>
+                                        <div style='font-size: 0.9rem; line-height: 1.6; color: #1A1A1A;'>
+                                            {escaped_content}
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
             
             # Add spacing between rows
             st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
@@ -2845,43 +2853,24 @@ def render_sv_section(sv_data: Dict) -> None:
         if strength_content:
             st.markdown(f"""
                 <div style='
-                    position: relative;
-                    margin: 1rem 0;
+                    background: linear-gradient(135deg, #E8F5E9 0%, #F1F8F4 100%);
+                    border: 2px dashed #4CAF50;
+                    border-radius: 15px;
+                    padding: 1.5rem;
+                    min-height: 300px;
                 '>
-                    <svg width="100%" height="100%" style="position: absolute; top: 0; left: 0; pointer-events: none;" preserveAspectRatio="none">
-                        <polygon points="0,0 100%,0 100%,85% 50%,100% 0,85%" 
-                            fill="url(#greenGrad)" 
-                            stroke="#4CAF50" 
-                            stroke-width="3" 
-                            stroke-dasharray="10,5"
-                            vector-effect="non-scaling-stroke"/>
-                        <defs>
-                            <linearGradient id="greenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#E8F5E9;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#C8E6C9;stop-opacity:1" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
                     <div style='
-                        padding: 2rem 2.5rem 4rem 2.5rem;
-                        position: relative;
-                        z-index: 1;
-                    '>
-                        <h4 style='
-                            color: #2E7D32;
-                            margin: 0 0 1.5rem 0;
-                            font-size: 1.4rem;
-                            font-weight: 700;
-                            text-align: center;
-                        '>{strength_title}</h4>
-                        <div style='
-                            font-size: 0.95rem;
-                            line-height: 1.8;
-                            color: #1B5E20;
-                        '>
-                            {format_comment(strength_content)}
-                        </div>
-                    </div>
+                        text-align: center;
+                        font-size: 1.2rem;
+                        font-weight: 600;
+                        color: #2E7D32;
+                        margin-bottom: 1rem;
+                    '>{strength_title}</div>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #1B5E20;
+                    '>{format_comment(strength_content)}</div>
                 </div>
             """, unsafe_allow_html=True)
     
@@ -2892,43 +2881,24 @@ def render_sv_section(sv_data: Dict) -> None:
         if vuln_content:
             st.markdown(f"""
                 <div style='
-                    position: relative;
-                    margin: 1rem 0;
+                    background: linear-gradient(135deg, #FCE4EC 0%, #F8E8EE 100%);
+                    border: 2px dashed #E91E63;
+                    border-radius: 15px;
+                    padding: 1.5rem;
+                    min-height: 300px;
                 '>
-                    <svg width="100%" height="100%" style="position: absolute; top: 0; left: 0; pointer-events: none;" preserveAspectRatio="none">
-                        <polygon points="0,0 100%,0 100%,85% 50%,100% 0,85%" 
-                            fill="url(#pinkGrad)" 
-                            stroke="#E91E63" 
-                            stroke-width="3" 
-                            stroke-dasharray="10,5"
-                            vector-effect="non-scaling-stroke"/>
-                        <defs>
-                            <linearGradient id="pinkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#FCE4EC;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#F8BBD0;stop-opacity:1" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
                     <div style='
-                        padding: 2rem 2.5rem 4rem 2.5rem;
-                        position: relative;
-                        z-index: 1;
-                    '>
-                        <h4 style='
-                            color: #C2185B;
-                            margin: 0 0 1.5rem 0;
-                            font-size: 1.4rem;
-                            font-weight: 700;
-                            text-align: center;
-                        '>{vuln_title}</h4>
-                        <div style='
-                            font-size: 0.95rem;
-                            line-height: 1.8;
-                            color: #880E4F;
-                        '>
-                            {format_comment(vuln_content)}
-                        </div>
-                    </div>
+                        text-align: center;
+                        font-size: 1.2rem;
+                        font-weight: 600;
+                        color: #C2185B;
+                        margin-bottom: 1rem;
+                    '>{vuln_title}</div>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #880E4F;
+                    '>{format_comment(vuln_content)}</div>
                 </div>
             """, unsafe_allow_html=True)
     
@@ -2958,9 +2928,11 @@ def render_swot_section(swot_data: Dict) -> None:
                     border: 3px solid #2196F3;
                     border-radius: 15px;
                     padding: 2rem;
-                    min-height: 300px;
+                    height: 400px;
                     box-shadow: 0 4px 6px rgba(33, 150, 243, 0.2);
                     position: relative;
+                    display: flex;
+                    flex-direction: column;
                 '>
                     <div style='
                         position: absolute;
@@ -2984,13 +2956,18 @@ def render_swot_section(swot_data: Dict) -> None:
                         font-size: 1.5rem;
                         font-weight: 700;
                         color: #1565C0;
-                        margin-bottom: 1.5rem;
+                        margin-bottom: 1rem;
                         letter-spacing: 1px;
+                        flex-shrink: 0;
                     '>STRENGTHS</div>
                     <div style='
                         font-size: 0.95rem;
                         line-height: 1.8;
                         color: #0D47A1;
+                        overflow-y: auto;
+                        flex-grow: 1;
+                        padding-right: 0.5rem;
+                        padding-bottom: 3rem;
                     '>
                         {format_comment(strengths)}
                     </div>
@@ -3006,9 +2983,11 @@ def render_swot_section(swot_data: Dict) -> None:
                     border: 3px solid #FF9800;
                     border-radius: 15px;
                     padding: 2rem;
-                    min-height: 300px;
+                    height: 400px;
                     box-shadow: 0 4px 6px rgba(255, 152, 0, 0.2);
                     position: relative;
+                    display: flex;
+                    flex-direction: column;
                 '>
                     <div style='
                         position: absolute;
@@ -3032,13 +3011,18 @@ def render_swot_section(swot_data: Dict) -> None:
                         font-size: 1.5rem;
                         font-weight: 700;
                         color: #E65100;
-                        margin-bottom: 1.5rem;
+                        margin-bottom: 1rem;
                         letter-spacing: 1px;
+                        flex-shrink: 0;
                     '>WEAKNESS</div>
                     <div style='
                         font-size: 0.95rem;
                         line-height: 1.8;
                         color: #BF360C;
+                        overflow-y: auto;
+                        flex-grow: 1;
+                        padding-right: 0.5rem;
+                        padding-bottom: 3rem;
                     '>
                         {format_comment(weaknesses)}
                     </div>
@@ -3059,9 +3043,11 @@ def render_swot_section(swot_data: Dict) -> None:
                     border: 3px solid #4CAF50;
                     border-radius: 15px;
                     padding: 2rem;
-                    min-height: 300px;
+                    height: 400px;
                     box-shadow: 0 4px 6px rgba(76, 175, 80, 0.2);
                     position: relative;
+                    display: flex;
+                    flex-direction: column;
                 '>
                     <div style='
                         position: absolute;
@@ -3085,13 +3071,18 @@ def render_swot_section(swot_data: Dict) -> None:
                         font-size: 1.5rem;
                         font-weight: 700;
                         color: #2E7D32;
-                        margin-bottom: 1.5rem;
+                        margin-bottom: 1rem;
                         letter-spacing: 1px;
+                        flex-shrink: 0;
                     '>OPPORTUNITIES</div>
                     <div style='
                         font-size: 0.95rem;
                         line-height: 1.8;
                         color: #1B5E20;
+                        overflow-y: auto;
+                        flex-grow: 1;
+                        padding-right: 0.5rem;
+                        padding-bottom: 3rem;
                     '>
                         {format_comment(opportunities)}
                     </div>
@@ -3107,9 +3098,11 @@ def render_swot_section(swot_data: Dict) -> None:
                     border: 3px solid #F44336;
                     border-radius: 15px;
                     padding: 2rem;
-                    min-height: 300px;
+                    height: 400px;
                     box-shadow: 0 4px 6px rgba(244, 67, 54, 0.2);
                     position: relative;
+                    display: flex;
+                    flex-direction: column;
                 '>
                     <div style='
                         position: absolute;
@@ -3133,13 +3126,18 @@ def render_swot_section(swot_data: Dict) -> None:
                         font-size: 1.5rem;
                         font-weight: 700;
                         color: #C62828;
-                        margin-bottom: 1.5rem;
+                        margin-bottom: 1rem;
                         letter-spacing: 1px;
+                        flex-shrink: 0;
                     '>THREATS</div>
                     <div style='
                         font-size: 0.95rem;
                         line-height: 1.8;
                         color: #B71C1C;
+                        overflow-y: auto;
+                        flex-grow: 1;
+                        padding-right: 0.5rem;
+                        padding-bottom: 3rem;
                     '>
                         {format_comment(threats)}
                     </div>
@@ -3213,27 +3211,33 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                     
                     for section in tab_sections:
                         if section.get("left") or section.get("right"):
-                            # Rectangular label on the left (vertical text)
-                            cols = st.columns([0.15, 4, 4])
+                            # Create a container div to hold the entire row
+                            st.markdown('<div style="display: flex; gap: 0.5rem; margin-bottom: 2rem;">', unsafe_allow_html=True)
+                            
+                            # Create columns for label and content - wider label column
+                            cols = st.columns([0.5, 4.75, 4.75])
                             
                             with cols[0]:
+                                # Vertical label that stretches full height
                                 st.markdown(f"""
                                     <div style='
-                                        background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                        background: linear-gradient(135deg, #E8E8E8 0%, #D0D0D0 100%);
                                         border: 2px solid #999999;
-                                        padding: 1rem 0.3rem;
-                                        margin: 0.5rem 0;
-                                        border-radius: 6px;
-                                        min-height: 300px;
+                                        padding: 1rem 0.5rem;
+                                        border-radius: 8px;
                                         display: flex;
                                         align-items: center;
                                         justify-content: center;
                                         writing-mode: vertical-rl;
-                                        text-orientation: mixed;
-                                        font-size: 1.1rem;
-                                        font-weight: bold;
+                                        transform: rotate(180deg);
+                                        font-size: 0.95rem;
+                                        font-weight: 700;
                                         color: #333333;
                                         text-align: center;
+                                        letter-spacing: 0.5px;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                        height: 100%;
+                                        min-width: 50px;
                                     '>
                                         {section.get("label", "")}
                                     </div>
@@ -3241,78 +3245,91 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                             
                             with cols[1]:
                                 # Left section with header
+                                content_html = ""
                                 if left_header:
-                                    st.markdown(f"""
+                                    content_html += f"""
                                         <div style='
-                                            background: #D0D0D0;
-                                            padding: 0.5rem 1rem;
-                                            margin-bottom: 0.5rem;
-                                            border-radius: 6px 6px 0 0;
-                                            font-weight: bold;
-                                            font-size: 1rem;
+                                            background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                            padding: 0.6rem 1rem;
+                                            border-radius: 8px 8px 0 0;
+                                            font-weight: 700;
+                                            font-size: 0.95rem;
                                             color: #1A1A1A;
+                                            text-align: center;
+                                            border: 1px solid #B0B0B0;
+                                            border-bottom: none;
                                         '>
                                             {left_header}
                                         </div>
-                                    """, unsafe_allow_html=True)
+                                    """
                                 
                                 if section.get("left"):
                                     import html
                                     escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
-                                    st.markdown(f"""
+                                    border_radius = "0 0 8px 8px" if left_header else "8px"
+                                    content_html += f"""
                                         <div style='
-                                            background: #F5F5F5;
+                                            background: #FFFFFF;
                                             border: 1px solid #CCCCCC;
-                                            padding: 1rem;
-                                            margin: 0;
-                                            border-radius: 0 0 6px 6px;
-                                            min-height: 250px;
+                                            padding: 1.2rem;
+                                            border-radius: {border_radius};
+                                            min-height: 280px;
                                             font-size: 0.9rem;
-                                            line-height: 1.6;
+                                            line-height: 1.7;
                                             color: #1A1A1A;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
                                             {escaped_left}
                                         </div>
-                                    """, unsafe_allow_html=True)
+                                    """
+                                
+                                if content_html:
+                                    st.markdown(content_html, unsafe_allow_html=True)
                             
                             with cols[2]:
                                 # Right section with header
+                                content_html = ""
                                 if right_header:
-                                    st.markdown(f"""
+                                    content_html += f"""
                                         <div style='
-                                            background: #D0D0D0;
-                                            padding: 0.5rem 1rem;
-                                            margin-bottom: 0.5rem;
-                                            border-radius: 6px 6px 0 0;
-                                            font-weight: bold;
-                                            font-size: 1rem;
+                                            background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                            padding: 0.6rem 1rem;
+                                            border-radius: 8px 8px 0 0;
+                                            font-weight: 700;
+                                            font-size: 0.95rem;
                                             color: #1A1A1A;
+                                            text-align: center;
+                                            border: 1px solid #B0B0B0;
+                                            border-bottom: none;
                                         '>
                                             {right_header}
                                         </div>
-                                    """, unsafe_allow_html=True)
+                                    """
                                 
                                 if section.get("right"):
                                     import html
                                     escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
-                                    st.markdown(f"""
+                                    border_radius = "0 0 8px 8px" if right_header else "8px"
+                                    content_html += f"""
                                         <div style='
-                                            background: #F5F5F5;
+                                            background: #FFFFFF;
                                             border: 1px solid #CCCCCC;
-                                            padding: 1rem;
-                                            margin: 0;
-                                            border-radius: 0 0 6px 6px;
-                                            min-height: 250px;
+                                            padding: 1.2rem;
+                                            border-radius: {border_radius};
+                                            min-height: 280px;
                                             font-size: 0.9rem;
-                                            line-height: 1.6;
+                                            line-height: 1.7;
                                             color: #1A1A1A;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
                                             {escaped_right}
                                         </div>
-                                    """, unsafe_allow_html=True)
+                                    """
+                                
+                                if content_html:
+                                    st.markdown(content_html, unsafe_allow_html=True)
                             
-                            # Add spacing between sections
-                            st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+                            st.markdown('</div>', unsafe_allow_html=True)
         else:
             # Single tab - display without tab interface
             tab = tabs_data[0] if tabs_data else {}
@@ -3343,27 +3360,30 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
             
             for section in tab_sections:
                 if section.get("left") or section.get("right"):
-                    # Rectangular label on the left (vertical text)
-                    cols = st.columns([0.15, 4, 4])
+                    # Create row with label and content - give more space to label
+                    cols = st.columns([0.5, 4.75, 4.75])
                     
                     with cols[0]:
+                        # Vertical label that matches content height
                         st.markdown(f"""
                             <div style='
-                                background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                background: linear-gradient(135deg, #E8E8E8 0%, #D0D0D0 100%);
                                 border: 2px solid #999999;
-                                padding: 1rem 0.3rem;
-                                margin: 0.5rem 0;
-                                border-radius: 6px;
-                                min-height: 300px;
+                                padding: 1rem 0.5rem;
+                                border-radius: 8px;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
                                 writing-mode: vertical-rl;
-                                text-orientation: mixed;
-                                font-size: 1.1rem;
-                                font-weight: bold;
+                                transform: rotate(180deg);
+                                font-size: 0.95rem;
+                                font-weight: 700;
                                 color: #333333;
                                 text-align: center;
+                                letter-spacing: 0.5px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                min-height: 320px;
+                                margin-right: 0.5rem;
                             '>
                                 {section.get("label", "")}
                             </div>
@@ -3374,13 +3394,15 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                         if left_header:
                             st.markdown(f"""
                                 <div style='
-                                    background: #D0D0D0;
-                                    padding: 0.5rem 1rem;
-                                    margin-bottom: 0.5rem;
-                                    border-radius: 6px 6px 0 0;
-                                    font-weight: bold;
-                                    font-size: 1rem;
+                                    background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                    padding: 0.6rem 1rem;
+                                    border-radius: 8px 8px 0 0;
+                                    font-weight: 700;
+                                    font-size: 0.95rem;
                                     color: #1A1A1A;
+                                    text-align: center;
+                                    border: 1px solid #B0B0B0;
+                                    border-bottom: none;
                                 '>
                                     {left_header}
                                 </div>
@@ -3389,17 +3411,18 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                         if section.get("left"):
                             import html
                             escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                            border_top = "0 0 8px 8px" if left_header else "8px"
                             st.markdown(f"""
                                 <div style='
-                                    background: #F5F5F5;
+                                    background: #FFFFFF;
                                     border: 1px solid #CCCCCC;
-                                    padding: 1rem;
-                                    margin: 0;
-                                    border-radius: 0 0 6px 6px;
-                                    min-height: 250px;
+                                    padding: 1.2rem;
+                                    border-radius: {border_top};
+                                    min-height: 280px;
                                     font-size: 0.9rem;
-                                    line-height: 1.6;
+                                    line-height: 1.7;
                                     color: #1A1A1A;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
                                     {escaped_left}
                                 </div>
@@ -3410,13 +3433,15 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                         if right_header:
                             st.markdown(f"""
                                 <div style='
-                                    background: #D0D0D0;
-                                    padding: 0.5rem 1rem;
-                                    margin-bottom: 0.5rem;
-                                    border-radius: 6px 6px 0 0;
-                                    font-weight: bold;
-                                    font-size: 1rem;
+                                    background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                    padding: 0.6rem 1rem;
+                                    border-radius: 8px 8px 0 0;
+                                    font-weight: 700;
+                                    font-size: 0.95rem;
                                     color: #1A1A1A;
+                                    text-align: center;
+                                    border: 1px solid #B0B0B0;
+                                    border-bottom: none;
                                 '>
                                     {right_header}
                                 </div>
@@ -3425,17 +3450,18 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                         if section.get("right"):
                             import html
                             escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                            border_top = "0 0 8px 8px" if right_header else "8px"
                             st.markdown(f"""
                                 <div style='
-                                    background: #F5F5F5;
+                                    background: #FFFFFF;
                                     border: 1px solid #CCCCCC;
-                                    padding: 1rem;
-                                    margin: 0;
-                                    border-radius: 0 0 6px 6px;
-                                    min-height: 250px;
+                                    padding: 1.2rem;
+                                    border-radius: {border_top};
+                                    min-height: 280px;
                                     font-size: 0.9rem;
-                                    line-height: 1.6;
+                                    line-height: 1.7;
                                     color: #1A1A1A;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
                                     {escaped_right}
                                 </div>
@@ -3600,12 +3626,10 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
     # Sort views by number (View 1, View 2, etc.)
     custom_trends_views.sort(key=lambda x: int(x["name"].replace("Custom Trends View ", "")) if x["name"].replace("Custom Trends View ", "").isdigit() else 0)
     
-    # Render each view
-    for view_idx, view in enumerate(custom_trends_views):
-        if view_idx > 0:
-            st.markdown("---")
-            st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
-        
+    # Create tabs for multiple views
+    if len(custom_trends_views) == 1:
+        # Single view - no tabs needed
+        view = custom_trends_views[0]
         try:
             config = json.loads(view["filter_json"]) if view["filter_json"] else {}
             title = config.get("title", "")
@@ -3690,18 +3714,120 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
                                 </div>
                             """, unsafe_allow_html=True)
             
-            # Delete button for editors (for each view)
+            # Delete button for editors
             if is_editor:
-                view_name = view["name"]
-                if st.button(f"Delete {view_name}", key=f"del_brand_trends_{view['id']}_{segment['id']}"):
+                if st.button(f"Delete {view['name']}", key=f"del_brand_trends_{view['id']}_{segment['id']}"):
                     delete_table(view["id"])
-                    st.success(f"{view_name} removed")
+                    st.success(f"{view['name']} removed")
                     if hasattr(st, "rerun"):
                         st.rerun()
                     else:
                         st.experimental_rerun()
         except Exception as e:
             st.error(f"Error rendering {view['name']}: {str(e)}")
+    else:
+        # Multiple views - use tabs
+        tab_names = [f"View {i+1}" for i in range(len(custom_trends_views))]
+        tabs = st.tabs(tab_names)
+        
+        for tab_idx, (tab, view) in enumerate(zip(tabs, custom_trends_views)):
+            with tab:
+                try:
+                    config = json.loads(view["filter_json"]) if view["filter_json"] else {}
+                    title = config.get("title", "")
+                    description = config.get("description", "")
+                    sections = config.get("sections", [])
+                    
+                    if title:
+                        st.markdown(f"### {title}")
+                    
+                    if description:
+                        st.markdown(f"""
+                            <div style='
+                                background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                                border: 1px solid #CCCCCC;
+                                padding: 1rem 1.5rem;
+                                margin: 1rem 0;
+                                border-radius: 8px;
+                                text-align: center;
+                            '>
+                                <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                                    {format_comment(description)}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Display sections
+                    for section in sections:
+                        if section.get("left") or section.get("right"):
+                            cols = st.columns([0.3, 3, 3])
+                            
+                            with cols[0]:
+                                st.markdown(f"""
+                                    <div style='
+                                        width: 60px;
+                                        height: 60px;
+                                        border-radius: 50%;
+                                        background-color: #FFFFFF;
+                                        border: 3px solid #666666;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        font-size: 1.5rem;
+                                        font-weight: bold;
+                                        color: #666666;
+                                        margin-top: 1rem;
+                                    '>
+                                        {section.get("number", "")}
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            
+                            with cols[1]:
+                                if section.get("left"):
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #E3F2FD;
+                                            border: 1px solid #90CAF9;
+                                            padding: 1rem;
+                                            margin: 0.5rem 0;
+                                            border-radius: 8px;
+                                            min-height: 100px;
+                                        '>
+                                            <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                                {format_comment(section["left"])}
+                                            </div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            with cols[2]:
+                                if section.get("right"):
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F3E5F5;
+                                            border: 1px solid #CE93D8;
+                                            padding: 1rem;
+                                            margin: 0.5rem 0;
+                                            border-radius: 8px;
+                                            min-height: 100px;
+                                        '>
+                                            <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                                {format_comment(section["right"])}
+                                            </div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                    
+                    # Delete button for editors (for each view)
+                    if is_editor:
+                        view_name = view["name"]
+                        if st.button(f"Delete {view_name}", key=f"del_brand_trends_{view['id']}_{segment['id']}"):
+                            delete_table(view["id"])
+                            st.success(f"{view_name} removed")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+                except Exception as e:
+                    st.error(f"Error rendering {view['name']}: {str(e)}")
 
 
 
@@ -3758,11 +3884,12 @@ def normalize_state_name(state_name: str) -> str:
     return state_mapping.get(normalized, state_name)
 
 
-def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_id: int) -> None:
+def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_id: int, tab_idx: int = 0, is_editor: bool = False) -> None:
     """Render state performance calculations for a Battlegrounds tab"""
     
     # Get the data
     from app_core.uploads import get_uploads, load_dataset
+    from app_core.tables import get_tables_for_segment
     
     uploads = get_uploads(segment_id=segment_id)
     if not uploads:
@@ -3776,6 +3903,10 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
     
     if df is None or df.empty:
         return
+    
+    # Get battlegrounds config table for saving updates
+    tables = get_tables_for_segment(segment_id)
+    bg_config_table = next((t for t in tables if t["section"] == "Battlegrounds" and t["name"] == "Battlegrounds Config"), None)
     
     # Filter by segment
     df_segment = filter_df_by_segment(df, segment)
@@ -3901,6 +4032,11 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
         # Get state-specific columns configuration
         state_columns = tab_config.get("state_columns", {})
         
+        # Get custom column headings (with defaults)
+        col1_heading = tab_config.get("col1_heading", "SOG")
+        col2_heading = tab_config.get("col2_heading", "5Cs")
+        col3_heading = tab_config.get("col3_heading", "Imagery")
+        
         if state_columns:
             # Display insights for each state
             for idx, state in enumerate(selected_states):
@@ -3908,173 +4044,137 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                 
                 if any(state_data.values()):  # If any content exists for this state
                     
-                    # Create 3 columns for SOG, 5Cs, Imagery
+                    # Create 3 columns for custom headings
                     col_sog, col_5cs, col_imagery = st.columns(3)
                     
                     with col_sog:
+                        st.markdown(f"**{col1_heading}**")
                         sog_content = state_data.get("SOG", "")
-                        if sog_content:
-                            st.markdown(f"""
-                                <div style='
-                                    background-color: #FFFFFF;
-                                    padding: 1.2rem;
-                                    border-radius: 4px;
-                                    border: 1px solid #E8E8E8;
-                                    border-top: 3px solid #27AE60;
-                                    min-height: 150px;
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-                                    display: flex;
-                                    flex-direction: column;
-                                '>
-                                    <h5 style='
-                                        margin: 0 0 0.8rem 0;
-                                        color: #27AE60;
-                                        font-size: 0.9rem;
-                                        font-weight: 700;
-                                        text-transform: uppercase;
-                                        letter-spacing: 0.8px;
-                                    '>SOG</h5>
-                                    <div style='
-                                        font-size: 0.85rem;
-                                        color: #4A4A4A;
-                                        line-height: 1.7;
-                                        flex: 1;
-                                    '>
-                                        {format_comment(sog_content)}
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                                <div style='
-                                    background-color: #F8F9FA;
-                                    padding: 1.2rem;
-                                    border-radius: 4px;
-                                    border: 1px solid #E8E8E8;
-                                    border-top: 3px solid #D0D0D0;
-                                    min-height: 150px;
-                                '>
-                                    <h5 style='
-                                        margin: 0 0 0.8rem 0;
-                                        color: #A0A0A0;
-                                        font-size: 0.9rem;
-                                        font-weight: 700;
-                                        text-transform: uppercase;
-                                        letter-spacing: 0.8px;
-                                    '>SOG</h5>
-                                    <p style='margin: 0; font-size: 0.8rem; color: #B0B0B0; font-style: italic;'>No data available</p>
-                                </div>
-                            """, unsafe_allow_html=True)
+                        edited_sog = st.text_area(
+                            f"{col1_heading} content",
+                            value=sog_content,
+                            placeholder=f"{col1_heading} insights for {state}...",
+                            height=150,
+                            key=f"edit_sog_{state}_{tab_idx}_{segment['id']}",
+                            label_visibility="collapsed"
+                        )
+                        
+                        # Update button for SOG
+                        if edited_sog != sog_content and is_editor:
+                            if st.button(f"Update {col1_heading}", key=f"update_sog_{state}_{tab_idx}_{segment['id']}"):
+                                if bg_config_table:
+                                    # Load full config
+                                    full_config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
+                                    all_tabs = full_config.get("tabs", [])
+                                    
+                                    # Update this specific tab
+                                    if tab_idx < len(all_tabs):
+                                        if state not in state_columns:
+                                            state_columns[state] = {}
+                                        state_columns[state]["SOG"] = edited_sog
+                                        all_tabs[tab_idx]["state_columns"] = state_columns
+                                        
+                                        # Save back to database
+                                        delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
+                                        save_table(
+                                            name="Battlegrounds Config",
+                                            dataset_id=bg_config_table["dataset_id"],
+                                            columns=["Config"],
+                                            created_by=bg_config_table["created_by"],
+                                            segment_id=segment["id"],
+                                            section="Battlegrounds",
+                                            filter_json=json.dumps({"tabs": all_tabs}),
+                                            comment=""
+                                        )
+                                        st.success(f"{col1_heading} updated!")
+                                        if hasattr(st, "rerun"):
+                                            st.rerun()
+                                        else:
+                                            st.experimental_rerun()
                     
                     with col_5cs:
+                        st.markdown(f"**{col2_heading}**")
                         fivecs_content = state_data.get("5Cs", "")
-                        if fivecs_content:
-                            st.markdown(f"""
-                                <div style='
-                                    background-color: #FFFFFF;
-                                    padding: 1.2rem;
-                                    border-radius: 4px;
-                                    border: 1px solid #E8E8E8;
-                                    border-top: 3px solid #3498DB;
-                                    min-height: 150px;
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-                                    display: flex;
-                                    flex-direction: column;
-                                '>
-                                    <h5 style='
-                                        margin: 0 0 0.8rem 0;
-                                        color: #3498DB;
-                                        font-size: 0.9rem;
-                                        font-weight: 700;
-                                        text-transform: uppercase;
-                                        letter-spacing: 0.8px;
-                                    '>5Cs</h5>
-                                    <div style='
-                                        font-size: 0.85rem;
-                                        color: #4A4A4A;
-                                        line-height: 1.7;
-                                        flex: 1;
-                                    '>
-                                        {format_comment(fivecs_content)}
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                                <div style='
-                                    background-color: #F8F9FA;
-                                    padding: 1.2rem;
-                                    border-radius: 4px;
-                                    border: 1px solid #E8E8E8;
-                                    border-top: 3px solid #D0D0D0;
-                                    min-height: 150px;
-                                '>
-                                    <h5 style='
-                                        margin: 0 0 0.8rem 0;
-                                        color: #A0A0A0;
-                                        font-size: 0.9rem;
-                                        font-weight: 700;
-                                        text-transform: uppercase;
-                                        letter-spacing: 0.8px;
-                                    '>5Cs</h5>
-                                    <p style='margin: 0; font-size: 0.8rem; color: #B0B0B0; font-style: italic;'>No data available</p>
-                                </div>
-                            """, unsafe_allow_html=True)
+                        edited_5cs = st.text_area(
+                            f"{col2_heading} content",
+                            value=fivecs_content,
+                            placeholder=f"{col2_heading} insights for {state}...",
+                            height=150,
+                            key=f"edit_5cs_{state}_{tab_idx}_{segment['id']}",
+                            label_visibility="collapsed"
+                        )
+                        
+                        # Update button for 5Cs
+                        if edited_5cs != fivecs_content and is_editor:
+                            if st.button(f"Update {col2_heading}", key=f"update_5cs_{state}_{tab_idx}_{segment['id']}"):
+                                if bg_config_table:
+                                    # Load full config
+                                    full_config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
+                                    all_tabs = full_config.get("tabs", [])
+                                    
+                                    # Update this specific tab
+                                    if tab_idx < len(all_tabs):
+                                        if state not in state_columns:
+                                            state_columns[state] = {}
+                                        state_columns[state]["5Cs"] = edited_5cs
+                                        all_tabs[tab_idx]["state_columns"] = state_columns
+                                        
+                                        # Save back to database
+                                        delete_tables_for_section(segment["id"], "Battlegrounds", "Battlegrounds Config")
+                                        save_table(
+                                            name="Battlegrounds Config",
+                                            dataset_id=bg_config_table["dataset_id"],
+                                            columns=["Config"],
+                                            created_by=bg_config_table["created_by"],
+                                            segment_id=segment["id"],
+                                            section="Battlegrounds",
+                                            filter_json=json.dumps({"tabs": all_tabs}),
+                                            comment=""
+                                        )
+                                        st.success(f"{col2_heading} updated!")
+                                        if hasattr(st, "rerun"):
+                                            st.rerun()
+                                        else:
+                                            st.experimental_rerun()
                     
                     with col_imagery:
+                        st.markdown(f"**{col3_heading}**")
                         imagery_content = state_data.get("Imagery", "")
-                        if imagery_content:
-                            st.markdown(f"""
-                                <div style='
-                                    background-color: #FFFFFF;
-                                    padding: 1.2rem;
-                                    border-radius: 4px;
-                                    border: 1px solid #E8E8E8;
-                                    border-top: 3px solid #E67E22;
-                                    min-height: 150px;
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-                                    display: flex;
-                                    flex-direction: column;
-                                '>
-                                    <h5 style='
-                                        margin: 0 0 0.8rem 0;
-                                        color: #E67E22;
-                                        font-size: 0.9rem;
-                                        font-weight: 700;
-                                        text-transform: uppercase;
-                                        letter-spacing: 0.8px;
-                                    '>Imagery</h5>
-                                    <div style='
-                                        font-size: 0.85rem;
-                                        color: #4A4A4A;
-                                        line-height: 1.7;
-                                        flex: 1;
-                                    '>
-                                        {format_comment(imagery_content)}
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                                <div style='
-                                    background-color: #F8F9FA;
-                                    padding: 1.2rem;
-                                    border-radius: 4px;
-                                    border: 1px solid #E8E8E8;
-                                    border-top: 3px solid #D0D0D0;
-                                    min-height: 150px;
-                                '>
-                                    <h5 style='
-                                        margin: 0 0 0.8rem 0;
-                                        color: #A0A0A0;
-                                        font-size: 0.9rem;
-                                        font-weight: 700;
-                                        text-transform: uppercase;
-                                        letter-spacing: 0.8px;
-                                    '>Imagery</h5>
-                                    <p style='margin: 0; font-size: 0.8rem; color: #B0B0B0; font-style: italic;'>No data available</p>
-                                </div>
-                            """, unsafe_allow_html=True)
+                        edited_imagery = st.text_area(
+                            f"{col3_heading} content",
+                            value=imagery_content,
+                            placeholder=f"{col3_heading} insights for {state}...",
+                            height=150,
+                            key=f"edit_imagery_{state}_{tab_idx}_{segment['id']}",
+                            label_visibility="collapsed"
+                        )
+                        
+                        # Update button for Imagery
+                        if edited_imagery != imagery_content and is_editor:
+                            if st.button(f"Update {col3_heading}", key=f"update_imagery_{state}_{tab_idx}_{segment['id']}"):
+                                # Update the state_columns data
+                                if state not in state_columns:
+                                    state_columns[state] = {}
+                                state_columns[state]["Imagery"] = edited_imagery
+                                tab_config["state_columns"] = state_columns
+                                
+                                # Save back to database
+                                delete_tables_for_section(segment["id"], "Battlegrounds", f"Tab {tab_idx + 1}")
+                                save_table(
+                                    name=f"Tab {tab_idx + 1}",
+                                    dataset_id=jtbd_view["dataset_id"],
+                                    columns=["Config"],
+                                    created_by=jtbd_view["created_by"],
+                                    segment_id=segment["id"],
+                                    section="Battlegrounds",
+                                    filter_json=json.dumps(tab_config),
+                                    comment=""
+                                )
+                                st.success(f"{col3_heading} updated!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
                     
                     # Add spacing between states
                     if idx < len(selected_states) - 1:
@@ -4382,7 +4482,7 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                 
                 # STATE PERFORMANCE CALCULATIONS (Between Images)
                 st.markdown("### 📊 State Performance Analysis")
-                render_battlegrounds_calculations(segment, tab_config, segment["id"])
+                render_battlegrounds_calculations(segment, tab_config, segment["id"], idx, is_editor)
                 
                 st.markdown("---")
                 

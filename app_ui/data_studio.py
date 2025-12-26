@@ -4652,27 +4652,29 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                     
                     for section in tab_data["sections"]:
                         if section["left"] or section["right"]:
-                            # Rectangular label on the left (vertical text)
-                            cols = st.columns([0.15, 4, 4])
+                            # Rectangular label on the left (vertical text - inverted)
+                            cols = st.columns([0.5, 4.75, 4.75])
                             
                             with cols[0]:
                                 st.markdown(f"""
                                     <div style='
-                                        background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                        background: linear-gradient(135deg, #E8E8E8 0%, #D0D0D0 100%);
                                         border: 2px solid #999999;
-                                        padding: 1rem 0.3rem;
-                                        margin: 0.5rem 0;
-                                        border-radius: 6px;
+                                        padding: 1rem 0.5rem;
+                                        border-radius: 8px;
                                         min-height: 300px;
                                         display: flex;
                                         align-items: center;
                                         justify-content: center;
                                         writing-mode: vertical-rl;
-                                        text-orientation: mixed;
-                                        font-size: 1.1rem;
-                                        font-weight: bold;
+                                        transform: rotate(180deg);
+                                        font-size: 0.95rem;
+                                        font-weight: 700;
                                         color: #333333;
                                         text-align: center;
+                                        letter-spacing: 0.5px;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                        min-width: 50px;
                                     '>
                                         {section["label"]}
                                     </div>
@@ -4683,13 +4685,15 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                 if tab_left_header:
                                     st.markdown(f"""
                                         <div style='
-                                            background: #D0D0D0;
-                                            padding: 0.5rem 1rem;
-                                            margin-bottom: 0.5rem;
-                                            border-radius: 6px 6px 0 0;
-                                            font-weight: bold;
-                                            font-size: 1rem;
+                                            background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                            padding: 0.6rem 1rem;
+                                            border-radius: 8px 8px 0 0;
+                                            font-weight: 700;
+                                            font-size: 0.95rem;
                                             color: #1A1A1A;
+                                            text-align: center;
+                                            border: 1px solid #B0B0B0;
+                                            border-bottom: none;
                                         '>
                                             {tab_left_header}
                                         </div>
@@ -4698,17 +4702,18 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                 if section["left"]:
                                     import html
                                     escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                                    border_radius = "0 0 8px 8px" if tab_left_header else "8px"
                                     st.markdown(f"""
                                         <div style='
-                                            background: #F5F5F5;
+                                            background: #FFFFFF;
                                             border: 1px solid #CCCCCC;
-                                            padding: 1rem;
-                                            margin: 0;
-                                            border-radius: 0 0 6px 6px;
+                                            padding: 1.2rem;
+                                            border-radius: {border_radius};
                                             min-height: 250px;
                                             font-size: 0.9rem;
-                                            line-height: 1.6;
+                                            line-height: 1.7;
                                             color: #1A1A1A;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
                                             {escaped_left}
                                         </div>
@@ -4719,13 +4724,15 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                 if tab_right_header:
                                     st.markdown(f"""
                                         <div style='
-                                            background: #D0D0D0;
-                                            padding: 0.5rem 1rem;
-                                            margin-bottom: 0.5rem;
-                                            border-radius: 6px 6px 0 0;
-                                            font-weight: bold;
-                                            font-size: 1rem;
+                                            background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                            padding: 0.6rem 1rem;
+                                            border-radius: 8px 8px 0 0;
+                                            font-weight: 700;
+                                            font-size: 0.95rem;
                                             color: #1A1A1A;
+                                            text-align: center;
+                                            border: 1px solid #B0B0B0;
+                                            border-bottom: none;
                                         '>
                                             {tab_right_header}
                                         </div>
@@ -4734,24 +4741,25 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                 if section["right"]:
                                     import html
                                     escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                                    border_radius = "0 0 8px 8px" if tab_right_header else "8px"
                                     st.markdown(f"""
                                         <div style='
-                                            background: #F5F5F5;
+                                            background: #FFFFFF;
                                             border: 1px solid #CCCCCC;
-                                            padding: 1rem;
-                                            margin: 0;
-                                            border-radius: 0 0 6px 6px;
+                                            padding: 1.2rem;
+                                            border-radius: {border_radius};
                                             min-height: 250px;
                                             font-size: 0.9rem;
-                                            line-height: 1.6;
+                                            line-height: 1.7;
                                             color: #1A1A1A;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
                                             {escaped_right}
                                         </div>
                                     """, unsafe_allow_html=True)
                             
                             # Add spacing between sections
-                            st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+                            st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
         else:
             # Single tab - display without tabs
             tab_data = all_tabs_data[0]
@@ -4781,27 +4789,29 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
             
             for section in tab_data["sections"]:
                 if section["left"] or section["right"]:
-                    # Rectangular label on the left (vertical text)
-                    cols = st.columns([0.15, 4, 4])
+                    # Rectangular label on the left (vertical text - inverted)
+                    cols = st.columns([0.5, 4.75, 4.75])
                     
                     with cols[0]:
                         st.markdown(f"""
                             <div style='
-                                background: linear-gradient(to bottom, #E8E8E8 0%, #D0D0D0 100%);
+                                background: linear-gradient(135deg, #E8E8E8 0%, #D0D0D0 100%);
                                 border: 2px solid #999999;
-                                padding: 1rem 0.3rem;
-                                margin: 0.5rem 0;
-                                border-radius: 6px;
+                                padding: 1rem 0.5rem;
+                                border-radius: 8px;
                                 min-height: 300px;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
                                 writing-mode: vertical-rl;
-                                text-orientation: mixed;
-                                font-size: 1.1rem;
-                                font-weight: bold;
+                                transform: rotate(180deg);
+                                font-size: 0.95rem;
+                                font-weight: 700;
                                 color: #333333;
                                 text-align: center;
+                                letter-spacing: 0.5px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                min-width: 50px;
                             '>
                                 {section["label"]}
                             </div>
@@ -4812,13 +4822,15 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                         if tab_left_header:
                             st.markdown(f"""
                                 <div style='
-                                    background: #D0D0D0;
-                                    padding: 0.5rem 1rem;
-                                    margin-bottom: 0.5rem;
-                                    border-radius: 6px 6px 0 0;
-                                    font-weight: bold;
-                                    font-size: 1rem;
+                                    background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                    padding: 0.6rem 1rem;
+                                    border-radius: 8px 8px 0 0;
+                                    font-weight: 700;
+                                    font-size: 0.95rem;
                                     color: #1A1A1A;
+                                    text-align: center;
+                                    border: 1px solid #B0B0B0;
+                                    border-bottom: none;
                                 '>
                                     {tab_left_header}
                                 </div>
@@ -4827,17 +4839,18 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                         if section["left"]:
                             import html
                             escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                            border_radius = "0 0 8px 8px" if tab_left_header else "8px"
                             st.markdown(f"""
                                 <div style='
-                                    background: #F5F5F5;
+                                    background: #FFFFFF;
                                     border: 1px solid #CCCCCC;
-                                    padding: 1rem;
-                                    margin: 0;
-                                    border-radius: 0 0 6px 6px;
+                                    padding: 1.2rem;
+                                    border-radius: {border_radius};
                                     min-height: 250px;
                                     font-size: 0.9rem;
-                                    line-height: 1.6;
+                                    line-height: 1.7;
                                     color: #1A1A1A;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
                                     {escaped_left}
                                 </div>
@@ -4848,13 +4861,15 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                         if tab_right_header:
                             st.markdown(f"""
                                 <div style='
-                                    background: #D0D0D0;
-                                    padding: 0.5rem 1rem;
-                                    margin-bottom: 0.5rem;
-                                    border-radius: 6px 6px 0 0;
-                                    font-weight: bold;
-                                    font-size: 1rem;
+                                    background: linear-gradient(to right, #D0D0D0 0%, #C0C0C0 100%);
+                                    padding: 0.6rem 1rem;
+                                    border-radius: 8px 8px 0 0;
+                                    font-weight: 700;
+                                    font-size: 0.95rem;
                                     color: #1A1A1A;
+                                    text-align: center;
+                                    border: 1px solid #B0B0B0;
+                                    border-bottom: none;
                                 '>
                                     {tab_right_header}
                                 </div>
@@ -4863,24 +4878,25 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                         if section["right"]:
                             import html
                             escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                            border_radius = "0 0 8px 8px" if tab_right_header else "8px"
                             st.markdown(f"""
                                 <div style='
-                                    background: #F5F5F5;
+                                    background: #FFFFFF;
                                     border: 1px solid #CCCCCC;
-                                    padding: 1rem;
-                                    margin: 0;
-                                    border-radius: 0 0 6px 6px;
+                                    padding: 1.2rem;
+                                    border-radius: {border_radius};
                                     min-height: 250px;
                                     font-size: 0.9rem;
-                                    line-height: 1.6;
+                                    line-height: 1.7;
                                     color: #1A1A1A;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
                                     {escaped_right}
                                 </div>
                             """, unsafe_allow_html=True)
                     
                     # Add spacing between sections
-                    st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
 
 
 def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -4917,6 +4933,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             try:
                 saved_data = json.loads(saved_brand_profile["filter_json"])
                 df_saved = pd.DataFrame(saved_data.get("data", {}))
+                # Replace None/NaN values with empty strings for display
+                df_saved = df_saved.fillna("")
                 st.dataframe(df_saved, use_container_width=True, hide_index=True)
             except:
                 st.error("Error loading saved data")
@@ -4933,6 +4951,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         try:
             # Read CSV
             df_brand_csv = pd.read_csv(uploaded_brand_csv)
+            
+            # Replace None/NaN values with empty strings for display
+            df_brand_csv = df_brand_csv.fillna("")
             
             if len(df_brand_csv.columns) < 2:
                 st.error("CSV must have at least 2 columns: Metric column and at least one brand column")
@@ -5936,7 +5957,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         border: 2px solid #2196F3;
                         border-radius: 12px;
                         padding: 1.5rem;
-                        min-height: 250px;
+                        height: 350px;
+                        display: flex;
+                        flex-direction: column;
                     '>
                         <div style='
                             text-align: center;
@@ -5944,11 +5967,15 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             font-weight: 700;
                             color: #1565C0;
                             margin-bottom: 1rem;
+                            flex-shrink: 0;
                         '>STRENGTHS</div>
                         <div style='
                             font-size: 0.9rem;
                             line-height: 1.7;
                             color: #0D47A1;
+                            overflow-y: auto;
+                            flex-grow: 1;
+                            padding-right: 0.5rem;
                         '>{swot_s_content.replace(chr(10), '<br>')}</div>
                     </div>
                 """, unsafe_allow_html=True)
@@ -5961,7 +5988,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         border: 2px solid #FF9800;
                         border-radius: 12px;
                         padding: 1.5rem;
-                        min-height: 250px;
+                        height: 350px;
+                        display: flex;
+                        flex-direction: column;
                     '>
                         <div style='
                             text-align: center;
@@ -5969,11 +5998,15 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             font-weight: 700;
                             color: #E65100;
                             margin-bottom: 1rem;
+                            flex-shrink: 0;
                         '>WEAKNESS</div>
                         <div style='
                             font-size: 0.9rem;
                             line-height: 1.7;
                             color: #BF360C;
+                            overflow-y: auto;
+                            flex-grow: 1;
+                            padding-right: 0.5rem;
                         '>{swot_w_content.replace(chr(10), '<br>')}</div>
                     </div>
                 """, unsafe_allow_html=True)
@@ -5991,7 +6024,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         border: 2px solid #4CAF50;
                         border-radius: 12px;
                         padding: 1.5rem;
-                        min-height: 250px;
+                        height: 350px;
+                        display: flex;
+                        flex-direction: column;
                     '>
                         <div style='
                             text-align: center;
@@ -5999,11 +6034,15 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             font-weight: 700;
                             color: #2E7D32;
                             margin-bottom: 1rem;
+                            flex-shrink: 0;
                         '>OPPORTUNITIES</div>
                         <div style='
                             font-size: 0.9rem;
                             line-height: 1.7;
                             color: #1B5E20;
+                            overflow-y: auto;
+                            flex-grow: 1;
+                            padding-right: 0.5rem;
                         '>{swot_o_content.replace(chr(10), '<br>')}</div>
                     </div>
                 """, unsafe_allow_html=True)
@@ -6016,7 +6055,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         border: 2px solid #F44336;
                         border-radius: 12px;
                         padding: 1.5rem;
-                        min-height: 250px;
+                        height: 350px;
+                        display: flex;
+                        flex-direction: column;
                     '>
                         <div style='
                             text-align: center;
@@ -6024,11 +6065,15 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             font-weight: 700;
                             color: #C62828;
                             margin-bottom: 1rem;
+                            flex-shrink: 0;
                         '>THREATS</div>
                         <div style='
                             font-size: 0.9rem;
                             line-height: 1.7;
                             color: #B71C1C;
+                            overflow-y: auto;
+                            flex-grow: 1;
+                            padding-right: 0.5rem;
                         '>{swot_t_content.replace(chr(10), '<br>')}</div>
                     </div>
                 """, unsafe_allow_html=True)
@@ -6525,7 +6570,37 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         # State-specific additional columns configuration
         st.markdown("**Additional Analysis Columns (Per State):**")
-        st.caption("Configure SOG, 5Cs, and Imagery content for each selected state")
+        st.caption("Configure column headings and content for each selected state")
+        
+        # Custom column heading names
+        st.markdown("**Customize Column Headings:**")
+        col_h1, col_h2, col_h3 = st.columns(3)
+        
+        with col_h1:
+            col1_heading = st.text_input(
+                "Column 1 Heading",
+                value=saved_tab.get("col1_heading", "SOG"),
+                key=f"bg_tab{i}_col1_heading_{segment['id']}",
+                placeholder="e.g., SOG"
+            )
+        
+        with col_h2:
+            col2_heading = st.text_input(
+                "Column 2 Heading",
+                value=saved_tab.get("col2_heading", "5Cs"),
+                key=f"bg_tab{i}_col2_heading_{segment['id']}",
+                placeholder="e.g., 5Cs"
+            )
+        
+        with col_h3:
+            col3_heading = st.text_input(
+                "Column 3 Heading",
+                value=saved_tab.get("col3_heading", "Imagery"),
+                key=f"bg_tab{i}_col3_heading_{segment['id']}",
+                placeholder="e.g., Imagery"
+            )
+        
+        st.markdown("---")
         
         # Get saved state-specific columns
         saved_state_columns = saved_tab.get("state_columns", {})
@@ -6534,7 +6609,6 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         if selected_states:
             for state in selected_states:
-                st.markdown(f"---")
                 st.markdown(f"**{state}:**")
                 
                 # Get saved data for this state
@@ -6548,28 +6622,28 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 
                 with col_sog:
                     sog_content = st.text_area(
-                        "SOG",
+                        col1_heading,
                         value=saved_state_data.get("SOG", ""),
                         key=f"bg_tab{i}_state_{state}_sog_{segment['id']}",
-                        placeholder=f"SOG insights for {state}...",
+                        placeholder=f"{col1_heading} insights for {state}...",
                         height=120
                     )
                 
                 with col_5cs:
                     fivecs_content = st.text_area(
-                        "5Cs",
+                        col2_heading,
                         value=saved_state_data.get("5Cs", ""),
                         key=f"bg_tab{i}_state_{state}_5cs_{segment['id']}",
-                        placeholder=f"5Cs insights for {state}...",
+                        placeholder=f"{col2_heading} insights for {state}...",
                         height=120
                     )
                 
                 with col_imagery:
                     imagery_content = st.text_area(
-                        "Imagery",
+                        col3_heading,
                         value=saved_state_data.get("Imagery", ""),
                         key=f"bg_tab{i}_state_{state}_imagery_{segment['id']}",
-                        placeholder=f"Imagery insights for {state}...",
+                        placeholder=f"{col3_heading} insights for {state}...",
                         height=120
                     )
                 
@@ -6578,8 +6652,10 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                     "5Cs": fivecs_content,
                     "Imagery": imagery_content
                 }
+                
+                st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
         else:
-            st.info("Select states to configure their SOG, 5Cs, and Imagery content")
+            st.info(f"Select states to configure their {col1_heading}, {col2_heading}, and {col3_heading} content")
         
         # Show preview if states and brands are selected
         if selected_states and selected_brands:
@@ -6717,7 +6793,10 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                     "families": selected_families,
                     "brands": selected_brands,
                     "calc_comment": calc_comment,
-                    "state_columns": state_columns_data  # Store state-specific columns
+                    "state_columns": state_columns_data,  # Store state-specific columns
+                    "col1_heading": col1_heading,  # Store custom column headings
+                    "col2_heading": col2_heading,
+                    "col3_heading": col3_heading
                 }
                 
                 # Delete and save updated config
