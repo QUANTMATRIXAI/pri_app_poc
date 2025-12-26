@@ -511,6 +511,212 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
+    # 2.5. Brand Family Performance Chart Configuration
+    st.markdown("### 2.5. Brand Family Performance Chart")
+    st.caption("Multi-bar chart showing NS M INR by Brand Family across PRI Years (select from Section 2 brands)")
+    
+    # Load existing saved chart
+    existing_charts = get_charts_for_segment(segment["id"])
+    saved_family_chart = next((c for c in existing_charts if c["section"] == "NS Landscape" and c["name"] == "Brand Family Performance"), None)
+    saved_family_comment = saved_family_chart["comment"] if saved_family_chart else ""
+    
+    # Parse saved config
+    if saved_family_chart and saved_family_chart["filter_json"]:
+        family_config = json.loads(saved_family_chart["filter_json"])
+        saved_family_families = family_config.get("brand_families", [])
+        saved_family_brands = family_config.get("brands", [])
+    else:
+        saved_family_families = []
+        saved_family_brands = []
+    
+    # Show available options from Section 2
+    if not selected_families or not selected_brands:
+        st.warning("⚠️ Please configure Section 2 (Brand Performance Chart) first to select Brand Families and Brands.")
+    else:
+        st.info(f"📌 Available from Section 2: {len(selected_families)} Brand Families, {len(selected_brands)} Brands")
+        
+        # Brand Family filter (only show families from Section 2)
+        st.markdown("**Select Brand Families to display:**")
+        selected_families_family = st.multiselect(
+            "Brand Families",
+            options=sorted(selected_families),
+            default=[f for f in saved_family_families if f in selected_families] if saved_family_families else selected_families,
+            key=f"family_chart_families_{segment['id']}",
+            label_visibility="collapsed"
+        )
+        
+        # Brand filter (only show brands from Section 2, filtered by selected families)
+        if selected_families_family:
+            # Filter brands that belong to selected families
+            df_temp = df_filtered[df_filtered["Brand Family"].isin(selected_families_family)]
+            available_brands_family = [b for b in selected_brands if b in df_temp["Brand"].unique()]
+            
+            st.markdown("**Select Brands to include:**")
+            selected_brands_family = st.multiselect(
+                "Brands",
+                options=sorted(available_brands_family),
+                default=[b for b in saved_family_brands if b in available_brands_family] if saved_family_brands else available_brands_family,
+                key=f"family_chart_brands_{segment['id']}",
+                label_visibility="collapsed"
+            )
+        else:
+            selected_brands_family = []
+            st.warning("Please select at least one Brand Family first.")
+    
+    # Preview chart if brands are selected
+    if selected_brands_family:
+        df_family_chart = df_filtered[df_filtered["Brand"].isin(selected_brands_family)]
+        df_family_chart = df_family_chart[df_family_chart["PRI Year"].isin(years_in_data)]
+        
+        # Apply state exclusion from Section 2
+        if excluded_states and "State" in df_family_chart.columns:
+            df_family_chart = df_family_chart[~df_family_chart["State"].isin(excluded_states)]
+            st.caption(f"🚫 Using Section 2 state exclusions: {len(excluded_states)} state(s)")
+        
+        if not df_family_chart.empty:
+            st.markdown("**Preview:**")
+            # Aggregate by Brand Family and Year
+            family_chart_data = df_family_chart.groupby(["Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+            
+            # Create pivot to calculate growth rates and CAGR
+            family_pivot = family_chart_data.pivot_table(
+                index="Brand Family",
+                columns="PRI Year",
+                values="NS M INR",
+                aggfunc="sum"
+            ).reset_index()
+            
+            # Calculate growth rates and CAGR for each family
+            family_growth_rates = {}
+            family_cagr_values = {}
+            for _, row in family_pivot.iterrows():
+                family = row["Brand Family"]
+                ns_a23 = row.get("A23", 0) or 0
+                ns_a24 = row.get("A24", 0) or 0
+                ns_a25 = row.get("A25", 0) or 0
+                
+                # A24 Growth % (YoY from A23)
+                a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
+                
+                # A25 Growth % (YoY from A24)
+                a25_growth = ((ns_a25 - ns_a24) / ns_a24 * 100) if ns_a24 != 0 else 0
+                
+                # 2-Year CAGR (A23 to A25)
+                cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
+                
+                family_growth_rates[family] = {
+                    "A23": None,
+                    "A24": round(a24_growth, 1),
+                    "A25": round(a25_growth, 1)
+                }
+                family_cagr_values[family] = round(cagr_2yr, 1)
+            
+            # Add growth rate text
+            family_chart_data["Growth Text"] = family_chart_data.apply(
+                lambda r: f"{family_growth_rates[r['Brand Family']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+                axis=1
+            )
+            
+            # Sort families by total NS
+            family_totals = family_chart_data.groupby("Brand Family")["NS M INR"].sum().reset_index()
+            family_totals.columns = ["Brand Family", "Total"]
+            family_totals = family_totals.sort_values("Total", ascending=False)
+            family_order = family_totals["Brand Family"].tolist()
+            
+            # Green color scheme
+            color_map = {
+                "A23": "#90EE90",
+                "A24": "#4CAF50",
+                "A25": "#1B5E20"
+            }
+            
+            fig = px.bar(
+                family_chart_data,
+                x="Brand Family",
+                y="NS M INR",
+                color="PRI Year",
+                barmode="group",
+                text="Growth Text",
+                height=500,
+                color_discrete_map=color_map,
+                category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand Family": family_order}
+            )
+            
+            # Format growth rate text on top of bars
+            fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+            
+            # Get max Y value for positioning CAGR boxes
+            max_y = family_chart_data["NS M INR"].max()
+            
+            # Add CAGR boxes above each brand family
+            annotations = []
+            for family in family_order:
+                cagr = family_cagr_values[family]
+                
+                annotations.append(dict(
+                    x=family,
+                    y=max_y * 1.15,
+                    text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
+                    showarrow=False,
+                    font=dict(size=10, color="white", family="Arial"),
+                    bgcolor="#607D8B",
+                    bordercolor="#FFFFFF",
+                    borderwidth=1,
+                    borderpad=6,
+                    xanchor='center',
+                    yanchor='bottom',
+                    opacity=0.95
+                ))
+            
+            fig.update_layout(
+                xaxis_title="Brand Family",
+                yaxis_title="NS M INR",
+                legend_title="PRI Year",
+                annotations=annotations,
+                yaxis=dict(range=[0, max_y * 1.25])
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # Comment box for family chart
+    family_chart_comment = st.text_area(
+        "Add comment for Brand Family chart (optional)",
+        value=saved_family_comment,
+        key=f"ns_family_chart_comment_{segment['id']}",
+        placeholder="Add insights about brand family performance...",
+        height=120
+    )
+    
+    show_formatting_tips()
+    
+    if st.button("Save Brand Family Chart to Dashboard", key=f"save_family_chart_{segment['id']}"):
+        if not selected_families_family or not selected_brands_family:
+            st.error("Please select Brand Families and Brands.")
+        else:
+            # Delete existing chart
+            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
+            
+            # Save configuration with Section 2.5 filters (use Section 2 state exclusions)
+            filter_config = json.dumps({
+                "brand_families": selected_families_family,
+                "brands": selected_brands_family,
+                "excluded_states": excluded_states,  # Use Section 2 state exclusions
+                "years": years_in_data
+            })
+            save_chart(
+                name="Brand Family Performance",
+                chart_type="bar",
+                x_col="Brand Family",
+                y_cols=["NS M INR"],
+                dataset_id=dataset_id,
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="NS Landscape",
+                filter_json=filter_config,
+                comment=family_chart_comment
+            )
+            st.success("Brand Family Performance Chart saved to dashboard!")
+    
+    st.markdown("---")
     # 3. Zonal Pivot Table Configuration
     st.markdown("### 3. Zonal Pivot Table (Brand Family x Zone)")
     st.caption("Pivot table showing NS M INR for A25 by Brand Family, Brand, and Zone")

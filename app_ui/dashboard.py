@@ -480,32 +480,33 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
         st.info("No content published for NS Landscape yet. Editors can configure it in Data Studio.")
         return
     
-    # Render side by side in 2 columns
+    # Get all components
     pivot_table = next((t for t in ns_tables if t["name"] == "Manufacturing Pivot"), None)
     brand_chart = next((c for c in ns_charts if c["name"] == "Brand Performance"), None)
+    family_chart = next((c for c in ns_charts if c["name"] == "Brand Family Performance"), None)
     zonal_table = next((t for t in ns_tables if t["name"] == "Zonal Pivot"), None)
     north_drilldown = next((t for t in ns_tables if t["name"] == "NORTH State Drill-Down"), None)
     west_drilldown = next((t for t in ns_tables if t["name"] == "WEST+CSD State Drill-Down"), None)
     east_drilldown = next((t for t in ns_tables if t["name"] == "EAST State Drill-Down"), None)
     south_drilldown = next((t for t in ns_tables if t["name"] == "SOUTH State Drill-Down"), None)
     
-    if pivot_table and brand_chart:
-        # Both exist - show side by side
-        col1, col2 = st.columns(2)
-        with col1:
-            render_manufacturing_pivot_dashboard(pivot_table, segment, is_editor)
-        with col2:
-            render_brand_chart_dashboard(brand_chart, segment, is_editor)
-    elif pivot_table:
-        # Only pivot
+    # Render Manufacturing Pivot (table and comment side by side)
+    if pivot_table:
         render_manufacturing_pivot_dashboard(pivot_table, segment, is_editor)
-    elif brand_chart:
-        # Only chart
+    
+    # Render Brand Performance Chart below (full width)
+    if brand_chart:
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
         render_brand_chart_dashboard(brand_chart, segment, is_editor)
+    
+    # Render Brand Family chart below (full width)
+    if family_chart:
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        render_brand_family_chart_dashboard(family_chart, segment, is_editor)
     
     # Render zonal table below (full width)
     if zonal_table:
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
         render_zonal_pivot_dashboard(zonal_table, segment, is_editor)
     
     # Render zone state drill-downs in tabs
@@ -520,7 +521,7 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
         zone_drilldowns.append(("SOUTH", south_drilldown, "South Zone"))
     
     if zone_drilldowns:
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
         
         # Create tabs for each zone
         tab_labels = [zone[0] for zone in zone_drilldowns]
@@ -532,115 +533,118 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
 
 
 def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
-    """Render the manufacturing pivot table with YoY and CAGR"""
+    """Render the manufacturing pivot table with YoY and CAGR - table and comment side by side"""
     # Get custom title from config
     filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
     custom_title = filter_config.get("title", "NS Overview") if isinstance(filter_config, dict) else "NS Overview"
     
     st.markdown(f"### {custom_title}")
     
-    # Load data and apply filters
-    df = load_dataset(table_row["dataset_id"])
-    if df is None or df.empty:
-        st.warning("Dataset not found.")
-
-        return
+    # Create two columns: table on left, comment on right
+    col1, col2 = st.columns([2, 1])
     
-    # Filter by segment
-    seg_name = map_segment_name(segment["name"])
-    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    with col1:
+        # Load data and apply filters
+        df = load_dataset(table_row["dataset_id"])
+        if df is None or df.empty:
+            st.warning("Dataset not found.")
+            return
+        
+        # Filter by segment
+        seg_name = map_segment_name(segment["name"])
+        df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+        
+        # Get year filter from config
+        filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+        selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
+        df = df[df["PRI Year"].isin(selected_years)]
+        
+        if df.empty:
+            st.warning("No data available for selected filters.")
+            return
+        
+        # Create pivot
+        pivot = pd.pivot_table(
+            df,
+            index="Mfg Com",
+            columns="PRI Year",
+            values="NS M INR",
+            aggfunc="sum",
+            fill_value=0
+        )
+        pivot = pivot.reindex(columns=selected_years, fill_value=0)
+        
+        # Add Segment Total
+        segment_total = pivot.sum(axis=0).to_frame().T
+        segment_total.index = ["Segment Total"]
+        pivot = pd.concat([pivot, segment_total], axis=0)
+        
+        # Keep only growth columns and CAGR (no base year)
+        columns_to_keep = ["Mfg Com"]
+        
+        # Calculate YoY Growth
+        for i in range(1, len(selected_years)):
+            prev_year = selected_years[i-1]
+            curr_year = selected_years[i]
+            col_name = f"{curr_year} Growth %"
+            pivot[col_name] = ((pivot[curr_year] - pivot[prev_year]) / pivot[prev_year] * 100).replace([np.inf, -np.inf], 0).fillna(0).round(1)
+            columns_to_keep.append(col_name)
+        
+        # Calculate 2-Year CAGR
+        if "A23" in selected_years and "A25" in selected_years:
+            start = pivot["A23"]
+            end = pivot["A25"]
+            pivot["2 Yr CAGR %"] = np.where(
+                start > 0,
+                ((end / start) ** 0.5 - 1) * 100,
+                0
+            ).round(1)
+            columns_to_keep.append("2 Yr CAGR %")
+        
+        # Format and sort
+        pivot = pivot.reset_index()
+        pivot = pivot.rename(columns={"index": "Mfg Com"})
+        
+        custom_order = ["Segment Total", "PRI", "Diageo", "Others"]
+        pivot["sort_key"] = pivot["Mfg Com"].apply(lambda x: custom_order.index(x) if x in custom_order else 999)
+        pivot = pivot.sort_values("sort_key").drop(columns=["sort_key"]).reset_index(drop=True)
+        
+        # Select only required columns
+        final_columns = [col for col in columns_to_keep if col in pivot.columns]
+        pivot_display = pivot[final_columns].copy()
+        
+        # Format growth and CAGR columns to show % symbol
+        for col in pivot_display.columns:
+            if 'Growth %' in col or 'CAGR %' in col:
+                pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+        
+        # Apply styling to highlight Segment Total row
+        def highlight_segment_total(row):
+            """Highlight the Segment Total row with golden background"""
+            mfg_com = pivot_display.loc[row.name, 'Mfg Com']
+            if mfg_com == "Segment Total":
+                return ['background-color: #FFF3CD; font-weight: bold; border-top: 3px solid #f5b400; border-bottom: 3px solid #f5b400; color: #856404'] * len(row)
+            return [''] * len(row)
     
-    # Get year filter from config
-    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
-    selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
-    df = df[df["PRI Year"].isin(selected_years)]
+        # Display with styling
+        styled_pivot = pivot_display.style.apply(highlight_segment_total, axis=1)
+        st.dataframe(styled_pivot, use_container_width=True, hide_index=True)
     
-    if df.empty:
-        st.warning("No data available for selected filters.")
-
-        return
-    
-    # Create pivot
-    pivot = pd.pivot_table(
-        df,
-        index="Mfg Com",
-        columns="PRI Year",
-        values="NS M INR",
-        aggfunc="sum",
-        fill_value=0
-    )
-    pivot = pivot.reindex(columns=selected_years, fill_value=0)
-    
-    # Add Segment Total
-    segment_total = pivot.sum(axis=0).to_frame().T
-    segment_total.index = ["Segment Total"]
-    pivot = pd.concat([pivot, segment_total], axis=0)
-    
-    # Keep only growth columns and CAGR (no base year)
-    columns_to_keep = ["Mfg Com"]
-    
-    # Calculate YoY Growth
-    for i in range(1, len(selected_years)):
-        prev_year = selected_years[i-1]
-        curr_year = selected_years[i]
-        col_name = f"{curr_year} Growth %"
-        pivot[col_name] = ((pivot[curr_year] - pivot[prev_year]) / pivot[prev_year] * 100).replace([np.inf, -np.inf], 0).fillna(0).round(1)
-        columns_to_keep.append(col_name)
-    
-    # Calculate 2-Year CAGR
-    if "A23" in selected_years and "A25" in selected_years:
-        start = pivot["A23"]
-        end = pivot["A25"]
-        pivot["2 Yr CAGR %"] = np.where(
-            start > 0,
-            ((end / start) ** 0.5 - 1) * 100,
-            0
-        ).round(1)
-        columns_to_keep.append("2 Yr CAGR %")
-    
-    # Format and sort
-    pivot = pivot.reset_index()
-    pivot = pivot.rename(columns={"index": "Mfg Com"})
-    
-    custom_order = ["Segment Total", "PRI", "Diageo", "Others"]
-    pivot["sort_key"] = pivot["Mfg Com"].apply(lambda x: custom_order.index(x) if x in custom_order else 999)
-    pivot = pivot.sort_values("sort_key").drop(columns=["sort_key"]).reset_index(drop=True)
-    
-    # Select only required columns
-    final_columns = [col for col in columns_to_keep if col in pivot.columns]
-    pivot_display = pivot[final_columns].copy()
-    
-    # Format growth and CAGR columns to show % symbol
-    for col in pivot_display.columns:
-        if 'Growth %' in col or 'CAGR %' in col:
-            pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
-    
-    # Apply styling to highlight Segment Total row
-    def highlight_segment_total(row):
-        """Highlight the Segment Total row with golden background"""
-        mfg_com = pivot_display.loc[row.name, 'Mfg Com']
-        if mfg_com == "Segment Total":
-            return ['background-color: #FFF3CD; font-weight: bold; border-top: 3px solid #f5b400; border-bottom: 3px solid #f5b400; color: #856404'] * len(row)
-        return [''] * len(row)
-    
-    # Display with styling
-    styled_pivot = pivot_display.style.apply(highlight_segment_total, axis=1)
-    st.dataframe(styled_pivot, use_container_width=True, hide_index=True)
-    
-    # Show comment below the table
-    comment = table_row["comment"] if table_row["comment"] else ""
-    if comment:
-        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
-    
-    # Delete button for editors
-    if is_editor:
-        if st.button("Delete Pivot Table", key=f"del_pivot_{table_row['id']}"):
-            delete_table(table_row["id"])
-            st.success("Pivot table removed")
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
+    with col2:
+        # Show comment in right column
+        comment = table_row["comment"] if table_row["comment"] else ""
+        if comment:
+            st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
+        
+        # Delete button for editors
+        if is_editor:
+            if st.button("Delete Pivot Table", key=f"del_pivot_{table_row['id']}"):
+                delete_table(table_row["id"])
+                st.success("Pivot table removed")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
 
 
 def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool) -> None:
@@ -897,6 +901,160 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         if st.button("Delete Brand Chart", key=f"del_chart_{chart_row['id']}"):
             delete_chart(chart_row["id"])
             st.success("Brand chart removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+
+
+def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool) -> None:
+    """Render the brand family performance chart with NS M INR and growth rates"""
+    import plotly.express as px
+    
+    st.markdown(f"### Brand Family Performance")
+    
+    # Load data and apply filters
+    df = load_dataset(chart_row["dataset_id"])
+    if df is None or df.empty:
+        st.warning("Dataset not found.")
+        return
+    
+    # Filter by segment
+    seg_name = map_segment_name(segment["name"])
+    df = df[df["Revised Seg"].astype(str).str.strip().str.lower() == seg_name]
+    
+    # Get filters from config
+    filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
+    selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
+    selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
+    excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
+    
+    # Apply state exclusion filter
+    if excluded_states and "State" in df.columns:
+        df = df[~df["State"].isin(excluded_states)]
+        st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
+    
+    # Apply filters
+    df = df[df["Brand"].isin(selected_brands)]
+    df = df[df["PRI Year"].isin(selected_years)]
+    
+    if df.empty:
+        st.warning("No data available for selected brands and years.")
+        return
+    
+    # Aggregate by Brand Family and Year
+    chart_data = df.groupby(["Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+    
+    # Create pivot to calculate growth rates
+    pivot_wide = chart_data.pivot_table(
+        index="Brand Family",
+        columns="PRI Year",
+        values="NS M INR",
+        aggfunc="sum"
+    ).reset_index()
+    
+    # Calculate growth rates and CAGR for each family
+    growth_rates = {}
+    cagr_values = {}
+    for _, row in pivot_wide.iterrows():
+        family = row["Brand Family"]
+        ns_a23 = row.get("A23", 0) or 0
+        ns_a24 = row.get("A24", 0) or 0
+        ns_a25 = row.get("A25", 0) or 0
+        
+        # A24 Growth % (YoY from A23)
+        a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
+        
+        # A25 Growth % (YoY from A24)
+        a25_growth = ((ns_a25 - ns_a24) / ns_a24 * 100) if ns_a24 != 0 else 0
+        
+        # 2-Year CAGR (A23 to A25)
+        cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
+        
+        growth_rates[family] = {
+            "A23": None,
+            "A24": round(a24_growth, 1),
+            "A25": round(a25_growth, 1)
+        }
+        cagr_values[family] = round(cagr_2yr, 1)
+    
+    # Add growth rate text
+    chart_data["Growth Text"] = chart_data.apply(
+        lambda r: f"{growth_rates[r['Brand Family']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+        axis=1
+    )
+    
+    # Sort families by total NS
+    family_totals = chart_data.groupby("Brand Family")["NS M INR"].sum().reset_index()
+    family_totals.columns = ["Brand Family", "Total"]
+    family_totals = family_totals.sort_values("Total", ascending=False)
+    family_order = family_totals["Brand Family"].tolist()
+    
+    # Green color scheme
+    color_map = {
+        "A23": "#90EE90",
+        "A24": "#4CAF50",
+        "A25": "#1B5E20"
+    }
+    
+    # Create multi-bar chart
+    fig = px.bar(
+        chart_data,
+        x="Brand Family",
+        y="NS M INR",
+        color="PRI Year",
+        barmode="group",
+        text="Growth Text",
+        height=500,
+        color_discrete_map=color_map,
+        category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand Family": family_order}
+    )
+    
+    # Format growth rate text on top of bars
+    fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+    
+    # Get max Y value for positioning CAGR boxes
+    max_y = chart_data["NS M INR"].max()
+    
+    # Add CAGR boxes above each brand family
+    annotations = []
+    for family in family_order:
+        cagr = cagr_values[family]
+        
+        annotations.append(dict(
+            x=family,
+            y=max_y * 1.15,
+            text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
+            showarrow=False,
+            font=dict(size=10, color="white", family="Arial"),
+            bgcolor="#607D8B",
+            bordercolor="#FFFFFF",
+            borderwidth=1,
+            borderpad=6,
+            xanchor='center',
+            yanchor='bottom',
+            opacity=0.95
+        ))
+    
+    fig.update_layout(
+        xaxis_title="Brand Family",
+        yaxis_title="NS M INR",
+        legend_title="PRI Year",
+        annotations=annotations,
+        yaxis=dict(range=[0, max_y * 1.25])
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Show comment below the chart
+    comment = chart_row["comment"] if chart_row["comment"] else ""
+    if comment:
+        st.markdown(f"<div class='comment-box'>{format_comment(comment)}</div>", unsafe_allow_html=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Brand Family Chart", key=f"del_family_chart_{chart_row['id']}"):
+            delete_chart(chart_row["id"])
+            st.success("Brand Family chart removed")
             if hasattr(st, "rerun"):
                 st.rerun()
             else:
