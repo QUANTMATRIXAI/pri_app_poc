@@ -144,12 +144,12 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     note = f"Using latest {'global' if using_global else 'segment'} upload: **{latest['filename']}**"
     st.info(f"{note} | Total rows: {len(df)} | Segment rows: {len(df_filtered)} | Filter: {filter_column} = '{excel_name}'")
 
-    # Data preview
-    st.markdown("### Segment Data Preview")
-    if df_filtered.empty:
-        st.warning(f"No rows found for segment '{segment['name']}' (Excel: '{excel_name}', Column: '{filter_column}') in the uploaded data.")
-    else:
-        st.dataframe(df_filtered.head(200), use_container_width=True)
+    # Data preview in expander (closed by default)
+    with st.expander("📊 Segment Data Preview", expanded=False):
+        if df_filtered.empty:
+            st.warning(f"No rows found for segment '{segment['name']}' (Excel: '{excel_name}', Column: '{filter_column}') in the uploaded data.")
+        else:
+            st.dataframe(df_filtered.head(200), use_container_width=True)
 
     # Section tabs for configuration
     st.markdown("---")
@@ -577,8 +577,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=120
     )
     
-    show_formatting_tips()
-    
     if st.button("Save Brand Chart to Dashboard", key=f"save_ns_chart_{segment['id']}"):
         if not selected_families or not selected_brands:
             st.error("Please select Brand Families and at least one Brand.")
@@ -785,8 +783,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=120
     )
     
-    show_formatting_tips()
-    
     if st.button("Save Brand Family Chart to Dashboard", key=f"save_family_chart_{segment['id']}"):
         if not selected_families_family or not selected_brands_family:
             st.error("Please select Brand Families and Brands.")
@@ -926,8 +922,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=120
                 )
                 
-                show_formatting_tips()
-                
                 if st.button("Save Zonal Table to Dashboard", key=f"save_ns_zonal_{segment['id']}"):
                     # Delete existing zonal table
                     delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
@@ -1027,8 +1021,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                show_formatting_tips()
-                
                 st.markdown("---")
                 
                 # Then let user select states for deep-dive - use saved states if available
@@ -1110,8 +1102,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
-                
-                show_formatting_tips()
                 
                 if st.button("Save NORTH Zone Drill-Down to Dashboard", key=f"save_ns_north_{segment['id']}"):
                     if not selected_states:
@@ -1201,8 +1191,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                show_formatting_tips()
-                
                 st.markdown("---")
                 
                 # Use saved states if available
@@ -1233,8 +1221,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
-                
-                show_formatting_tips()
                 
                 if st.button("Save WEST+CSD Zone Drill-Down to Dashboard", key=f"save_ns_west_{segment['id']}"):
                     if not selected_states_west:
@@ -1317,8 +1303,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                show_formatting_tips()
-                
                 st.markdown("---")
                 
                 # Use saved states if available
@@ -1349,8 +1333,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
-                
-                show_formatting_tips()
                 
                 if st.button("Save EAST Zone Drill-Down to Dashboard", key=f"save_ns_east_{segment['id']}"):
                     if not selected_states_east:
@@ -1433,8 +1415,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                show_formatting_tips()
-                
                 st.markdown("---")
                 
                 # Use saved states if available
@@ -1465,8 +1445,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
-                
-                show_formatting_tips()
                 
                 if st.button("Save SOUTH Zone Drill-Down to Dashboard", key=f"save_ns_south_{segment['id']}"):
                     if not selected_states_south:
@@ -1571,8 +1549,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     placeholder="Add insights about state performance metrics...",
                     height=120
                 )
-                
-                show_formatting_tips()
                 
                 if st.button("Save State Performance Table to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
                     # Delete existing table
@@ -1861,9 +1837,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             "right": right_content
         })
     
-    # Show formatting tips once for all text fields
-    show_formatting_tips()
-    
     # Preview
     if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
         st.markdown("---")
@@ -2001,6 +1974,27 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.markdown(f"**Title:** {first_image.get('title', 'N/A')}")
                 st.markdown(f"**Comment:** {first_image.get('comment', 'N/A')}")
     
+    # Get existing data if available (for pre-populating fields)
+    existing_first_title = first_image.get("title", "") if first_image else ""
+    existing_first_comment = first_image.get("comment", "") if first_image else ""
+    
+    # Title and Comment fields BEFORE image upload
+    first_image_title = st.text_input(
+        "Image Title",
+        value=existing_first_title,
+        key=f"seg_first_image_title_{segment['id']}",
+        placeholder="e.g., Segment Overview"
+    )
+    
+    first_image_comment = st.text_area(
+        "Image Comment",
+        value=existing_first_comment,
+        key=f"seg_first_image_comment_{segment['id']}",
+        placeholder="Add insights about this image...",
+        height=150
+    )
+    
+    # Image upload comes after title and comment
     uploaded_first_image = st.file_uploader(
         "Upload Opening Image",
         type=["png", "jpg", "jpeg"],
@@ -2009,32 +2003,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     )
     
     if uploaded_first_image:
-        st.markdown("**Configure Opening Image:**")
-        
-        # Get existing data if available
-        existing_first_title = first_image.get("title", "") if first_image else ""
-        existing_first_comment = first_image.get("comment", "") if first_image else ""
-        
-        col_img, col_inputs = st.columns([1, 1])
-        
-        with col_img:
-            st.image(uploaded_first_image, use_container_width=True)
-        
-        with col_inputs:
-            first_image_title = st.text_input(
-                "Image Title",
-                value=existing_first_title,
-                key=f"seg_first_image_title_{segment['id']}",
-                placeholder="e.g., Segment Overview"
-            )
-            
-            first_image_comment = st.text_area(
-                "Image Comment",
-                value=existing_first_comment,
-                key=f"seg_first_image_comment_{segment['id']}",
-                placeholder="Add insights about this image...",
-                height=150
-            )
+        st.image(uploaded_first_image, caption="Preview", use_container_width=True)
         
         # Save button for first image
         if st.button("Save Opening Image", key=f"save_first_image_{segment['id']}"):
@@ -2057,6 +2026,10 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             st.success("Opening image saved to dashboard!")
     
     st.markdown("---")
+    
+    # Section header to guide users (non-editable, only visible in Data Studio)
+    st.markdown("### Segment Profile Summary")
+    st.caption("Configure the segment profile information below")
     
     # Parse saved config
     seg_truth_config = json.loads(saved_seg_truth["filter_json"]) if saved_seg_truth and saved_seg_truth["filter_json"] else {}
@@ -2087,7 +2060,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # P3M Segment Profile CSV Upload - BEFORE PREVIEW
     st.markdown("---")
-    st.markdown("### P3M Segment Profile Data")
+    st.markdown("**P3M Segment Profile Data**")
     st.caption("Upload a CSV file with 3 columns: Metric, TBA, Premium Whisky")
     
     # Load existing P3M profile data
@@ -2335,7 +2308,6 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     carousel1_configs = []
     if uploaded_carousel1:
         st.markdown("**Configure each image for Carousel 1:**")
-        show_formatting_tips()
         
         for idx, img in enumerate(uploaded_carousel1):
             st.markdown(f"**Image {idx+1}:**")
@@ -2441,7 +2413,6 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     carousel2_configs = []
     if uploaded_carousel2:
         st.markdown("**Configure each image for Carousel 2:**")
-        show_formatting_tips()
         
         for idx, img in enumerate(uploaded_carousel2):
             st.markdown(f"**Image {idx+1}:**")
@@ -4262,9 +4233,6 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             "right": right_content
         })
     
-    # Show formatting tips once for all text fields
-    show_formatting_tips()
-    
     # Preview
     if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
         st.markdown("---")
@@ -5224,9 +5192,6 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                 else:
                     st.experimental_rerun()
     
-    # Show formatting tips once for all JTBD sections
-    show_formatting_tips()
-    
     # Preview
     if jtbd_title or any(tab["sections"] for tab in all_tabs_data if any(s["left"] or s["right"] for s in tab["sections"])):
         st.markdown("---")
@@ -5924,8 +5889,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         st.markdown("---")
         st.markdown("**Configure each carousel image:**")
         
-        show_formatting_tips()
-        
         for idx, img in enumerate(uploaded_carousel_images):
             st.markdown(f"**Carousel Image {idx+1}:**")
             
@@ -6023,8 +5986,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # Get existing standalone images
     brand_standalone_images = [m for m in existing_media if m.get("section") == "Brand Truths" and m.get("name") == "Standalone Images"]
     brand_standalone_images = sorted(brand_standalone_images, key=lambda x: x.get("id", 0))
-    
-    show_formatting_tips()
     
     # Image 1
     st.markdown("**Image 1:**")
@@ -6421,9 +6382,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             key=f"brand_vuln_content_{segment['id']}"
         )
     
-    # Show formatting tips once for S&V fields
-    show_formatting_tips()
-    
     # Preview S&V section
     if sv_main_title or strength_content or vuln_content:
         st.markdown("---")
@@ -6587,9 +6545,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             key=f"brand_swot_t_{segment['id']}"
         )
         
-    # Show formatting tips
-    show_formatting_tips()
-    
     # Preview SWOT
     if swot_main_title or swot_s_content or swot_w_content or swot_o_content or swot_t_content:
         st.markdown("---")
@@ -7125,6 +7080,8 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     st.markdown("### Configure 3 Battleground Tabs")
     st.caption("Note: Each state can only be assigned to one tab. Brands can be reused across tabs.")
     
+    show_formatting_tips()
+    
     tabs_config = []
     # Track which states have been selected in previous tabs
     used_states = []
@@ -7278,8 +7235,6 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             height=100
         )
         
-        show_formatting_tips()
-        
         # State-specific additional columns configuration
         st.markdown("**Additional Analysis Columns (Per State):**")
         st.caption("Configure column headings and content for each selected state")
@@ -7377,9 +7332,6 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             st.info("Select both states and brands to see calculation preview")
         
         st.markdown("---")
-        
-        # Show formatting tips
-        show_formatting_tips()
         
         # IMAGE 2 (BOTTOM)
         st.markdown("**Image 2 (Bottom):**")
