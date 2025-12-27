@@ -526,6 +526,12 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
             with tabs[idx]:
                 render_zone_drilldown_dashboard(table_row, segment, is_editor, zone_name)
     
+    # Render State Performance Analysis Table
+    state_perf_table = next((t for t in ns_tables if t["name"] == "State Performance Analysis"), None)
+    if state_perf_table:
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        render_state_performance_dashboard(state_perf_table, segment, is_editor)
+    
     # Render Placeholder Images
     from app_core.media import get_media_for_segment
     existing_media = get_media_for_segment(segment["id"])
@@ -1981,6 +1987,87 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
             else:
                 st.experimental_rerun()
     
+
+
+def render_state_performance_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
+    """Render state performance analysis table with 12 columns"""
+    from app_ui.data_studio import calculate_state_performance_table, display_state_performance_table
+    
+    # Get custom title from config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    custom_title = filter_config.get("title", "State Performance Analysis")
+    selected_states = filter_config.get("states", [])
+    selected_family = filter_config.get("brand_family", "")
+    
+    st.markdown(f"### {custom_title}")
+    if selected_states:
+        states_str = ", ".join(selected_states)
+        st.caption(f"Analysis for **{states_str}** - **{selected_family}**")
+    
+    # Load data and apply filters
+    df = load_dataset(table_row["dataset_id"])
+    if df is None or df.empty:
+        st.warning("Dataset not found.")
+        return
+    
+    # Keep a copy of full data for All Spirits calculation
+    df_full = df.copy()
+    
+    # Filter by segment
+    df = filter_df_by_segment(df, segment)
+    
+    # Apply exclusions if any
+    excluded_states = filter_config.get("excluded_states", [])
+    if excluded_states:
+        df = df[~df["State"].isin(excluded_states)]
+    
+    if df.empty:
+        st.warning("No data available for selected filters.")
+        return
+    
+    # Calculate the table - pass both filtered and full data
+    state_perf_df = calculate_state_performance_table(df, df_full, selected_states, selected_family, segment)
+    
+    if state_perf_df is not None and not state_perf_df.empty:
+        # Display using Streamlit native components - full width
+        display_state_performance_table(state_perf_df)
+    else:
+        st.info("No data available for selected states and brand family.")
+    
+    # Show comment below the table if exists
+    comment = table_row["comment"] if table_row["comment"] else ""
+    if comment:
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style='
+                background: #F8F9FA;
+                border-left: 4px solid #f5b400;
+                padding: 1.5rem;
+                margin: 1rem 0;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            '>
+                <div style='
+                    font-size: 0.95rem;
+                    line-height: 1.7;
+                    color: #2C2C2C;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                '>
+                    {format_comment(comment)}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete State Performance Table", key=f"del_state_perf_{segment['id']}"):
+            from app_core.tables import delete_tables_for_section
+            delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+            st.success("State Performance Analysis table removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
 
 
 def render_custom_trends_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:

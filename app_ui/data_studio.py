@@ -1499,8 +1499,112 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
-    # 5. Placeholder Images (5 images)
-    st.markdown("### 5. Placeholder Images")
+    # 5. State Performance Analysis Table
+    st.markdown("### 5. State Performance Analysis Table")
+    st.caption("Select a state and brand family to view detailed performance metrics")
+    
+    # Load existing saved configuration
+    saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
+    state_perf_config = json.loads(saved_state_perf["filter_json"]) if saved_state_perf and saved_state_perf["filter_json"] else {}
+    saved_state_perf_title = state_perf_config.get("title", "State Performance Analysis")
+    saved_state_perf_state = state_perf_config.get("state", "")
+    saved_state_perf_family = state_perf_config.get("brand_family", "")
+    saved_state_perf_comment = saved_state_perf["comment"] if saved_state_perf else ""
+    
+    # Editable title
+    state_perf_title = st.text_input(
+        "Table Title (editable)",
+        value=saved_state_perf_title,
+        key=f"ns_state_perf_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    if selected_families and selected_brands:
+        # Check required columns
+        if "State" not in df_filtered.columns or "Brand Family" not in df_filtered.columns:
+            st.warning("State and Brand Family columns required for this analysis.")
+        else:
+            # Get available states and brand families
+            all_states = sorted(df_filtered["State"].dropna().unique().tolist())
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Multiselect for states
+                saved_states = state_perf_config.get("states", [])
+                selected_states_perf = st.multiselect(
+                    "Select States",
+                    options=all_states,
+                    default=saved_states if saved_states else all_states[:5],  # Default to first 5 states
+                    key=f"ns_state_perf_states_{segment['id']}"
+                )
+            
+            with col2:
+                selected_family = st.selectbox(
+                    "Select Brand Family",
+                    options=selected_families,
+                    index=selected_families.index(saved_state_perf_family) if saved_state_perf_family in selected_families else 0,
+                    key=f"ns_state_perf_family_{segment['id']}"
+                )
+            
+            if selected_states_perf and selected_family:
+                # Calculate the table - need to pass original df for All Spirits calculation
+                # Load the full dataset (unfiltered by segment)
+                from app_core.uploads import load_dataset
+                df_full = load_dataset(dataset_id)
+                
+                state_perf_df = calculate_state_performance_table(df_filtered, df_full, selected_states_perf, selected_family, segment)
+                
+                if state_perf_df is not None and not state_perf_df.empty:
+                    st.markdown("**Preview:**")
+                    
+                    # Display the styled table using Streamlit dataframe with custom styling
+                    display_state_performance_table(state_perf_df)
+                else:
+                    st.info("No data available for selected states and brand family.")
+                
+                # Comment box
+                state_perf_comment = st.text_area(
+                    "Add comment for state performance table (optional)",
+                    value=saved_state_perf_comment,
+                    key=f"ns_state_perf_comment_{segment['id']}",
+                    placeholder="Add insights about state performance metrics...",
+                    height=120
+                )
+                
+                show_formatting_tips()
+                
+                if st.button("Save State Performance Table to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
+                    # Delete existing table
+                    delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+                    
+                    # Save configuration
+                    filter_config = json.dumps({
+                        "states": selected_states_perf,
+                        "brand_family": selected_family,
+                        "brand_families": selected_families,
+                        "brands": selected_brands,
+                        "excluded_states": excluded_states,
+                        "title": state_perf_title
+                    })
+                    save_table(
+                        name="State Performance Analysis",
+                        dataset_id=dataset_id,
+                        columns=["State", "Brand Family", "Metrics"],
+                        created_by=current_user["username"],
+                        segment_id=segment["id"],
+                        section="NS Landscape",
+                        filter_json=filter_config,
+                        comment=state_perf_comment
+                    )
+                    st.success("State Performance Analysis Table saved to dashboard!")
+    else:
+        st.info("Configure Brand Families and Brands in section 2 first.")
+    
+    st.markdown("---")
+    
+    # 6. Placeholder Images (5 images)
+    st.markdown("### 6. Placeholder Images")
     
     with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
         st.caption("Upload up to 5 images with titles and comments")
@@ -1681,8 +1785,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
-    # 6. Custom Trends View Builder
-    st.markdown("### 6. Custom Trends View Builder")
+    # 7. Custom Trends View Builder
+    st.markdown("### 7. Custom Trends View Builder")
     st.caption("Create a custom view with title, description, and numbered sections")
     
     # Load existing saved configuration
@@ -2751,6 +2855,346 @@ def render_state_drilldown_preview(preview_data: Dict, selected_states: List[str
                 display_df = state_df.drop(columns=['Type'])
                 styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+
+
+def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.DataFrame, selected_states: List[str], selected_family: str, segment: Dict) -> pd.DataFrame | None:
+    """Calculate state performance analysis table with 12 columns for selected states and brand family
+    
+    Args:
+        df_segment: DataFrame filtered by current segment
+        df_full: Full unfiltered DataFrame (all segments) for All Spirits calculation
+        selected_states: List of states to include
+        selected_family: Brand family to analyze
+        segment: Segment dictionary
+    """
+    
+    if df_segment.empty:
+        return None
+    
+    # Filter for A24 and A25 data
+    df_calc = df_segment[df_segment["PRI Year"].isin(["A24", "A25"])].copy()
+    df_full_calc = df_full[df_full["PRI Year"].isin(["A24", "A25"])].copy() if df_full is not None and not df_full.empty else df_calc
+    
+    if df_calc.empty:
+        return None
+    
+    # Get segment name
+    segment_name = segment.get("name", "")
+    
+    # Calculate All Spirits (all segments, unfiltered) for salience calculation
+    ai_all_spirits_a24 = df_full_calc[df_full_calc["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_all_spirits_a25 = df_full_calc[df_full_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    
+    # Calculate All India (AI) segment values (current segment only)
+    ai_segment_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_segment_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    
+    ai_family_a24 = df_calc[(df_calc["PRI Year"] == "A24") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
+    ai_family_a25 = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
+    
+    # AI Growth rates
+    ai_segment_gr = ((ai_segment_a25 - ai_segment_a24) / ai_segment_a24 * 100) if ai_segment_a24 > 0 else 0
+    ai_family_gr = ((ai_family_a25 - ai_family_a24) / ai_family_a24 * 100) if ai_family_a24 > 0 else 0
+    
+    # Calculate metrics for each selected state
+    rows = []
+    
+    for state in selected_states:
+        df_state = df_calc[df_calc["State"] == state].copy()
+        df_state_full = df_full_calc[df_full_calc["State"] == state].copy() if df_full is not None and not df_full.empty else df_state
+        
+        if df_state.empty:
+            continue
+        
+        # State-level segment values (current segment only)
+        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
+        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
+        
+        # State-level brand family values
+        state_family_a24 = df_state[(df_state["PRI Year"] == "A24") & (df_state["Brand Family"] == selected_family)]["NS M INR"].sum()
+        state_family_a25 = df_state[(df_state["PRI Year"] == "A25") & (df_state["Brand Family"] == selected_family)]["NS M INR"].sum()
+        
+        # State all spirits (all segments in this state from unfiltered data)
+        state_all_spirits_a25 = df_state_full[df_state_full["PRI Year"] == "A25"]["NS M INR"].sum()
+        
+        # 1. BP FAM A25 MS (State Level) - Brand Family Market Share within Segment
+        bp_fam_ms = (state_family_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
+        
+        # 2. Segment Salience to All Spirits A25 - Segment NS / All Spirits NS
+        segment_salience = (state_segment_a25 / state_all_spirits_a25 * 100) if state_all_spirits_a25 > 0 else 0
+        
+        # 3. State Contribution to AI A25 - State Segment NS / AI Segment NS
+        state_contribution = (state_segment_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0
+        
+        # 4. PW A25 NS Gr - Segment Growth Rate (Delta in PW Consumption)
+        pw_gr = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
+        
+        # 5. BP FAM A25 NS Gr - Brand Family Growth Rate (Delta in BP Consumption)
+        bp_fam_gr = ((state_family_a25 - state_family_a24) / state_family_a24 * 100) if state_family_a24 > 0 else 0
+        
+        # 6. BP FAM BTM View - Beat the Market (BP Growth - PW Growth)
+        btm = bp_fam_gr - pw_gr
+        
+        # 7. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
+        pw_gr_index = (pw_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0
+        
+        # 8. BP FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
+        bp_fam_gr_index = (bp_fam_gr / ai_family_gr * 100) if ai_family_gr != 0 else 0
+        
+        # 9. BP FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
+        bp_fam_efficiency = (bp_fam_gr / pw_gr * 100) if pw_gr != 0 else 0
+        
+        rows.append({
+            "State": state,
+            "BP FAM\nA25 MS": bp_fam_ms,
+            "Segment\nSalience to\nAll Spirits": segment_salience,
+            "State\nContribution\nto AI": state_contribution,
+            "PW A25\nNS Gr": pw_gr,
+            "BP FAM\nA25 NS Gr": bp_fam_gr,
+            "BP FAM\nBTM view": btm,
+            "PW Gr\nIndexed\nto AI": pw_gr_index,
+            "BP Gr\nIndexed\nto AI": bp_fam_gr_index,
+            "BP Gr\nIndexed to\nAI BP Gr": bp_fam_efficiency,
+            "MS\nRANK": 0,
+            "Salience\nRANK": 0,
+            "Contribution\nRANK": 0
+        })
+    
+    if not rows:
+        return None
+    
+    # Create DataFrame
+    result_df = pd.DataFrame(rows)
+    
+    # Add ranking columns
+    result_df["MS\nRANK"] = result_df["BP FAM\nA25 MS"].rank(ascending=False, method='min').astype(int)
+    result_df["Salience\nRANK"] = result_df["Segment\nSalience to\nAll Spirits"].rank(ascending=False, method='min').astype(int)
+    result_df["Contribution\nRANK"] = result_df["State\nContribution\nto AI"].rank(ascending=False, method='min').astype(int)
+    
+    # Add AI row at the TOP
+    ai_row = {
+        "State": "All India",
+        "BP FAM\nA25 MS": (ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0,
+        "Segment\nSalience to\nAll Spirits": (ai_segment_a25 / ai_all_spirits_a25 * 100) if ai_all_spirits_a25 > 0 else 0,
+        "State\nContribution\nto AI": 100.0,
+        "PW A25\nNS Gr": ai_segment_gr,
+        "BP FAM\nA25 NS Gr": ai_family_gr,
+        "BP FAM\nBTM view": ai_family_gr - ai_segment_gr,
+        "PW Gr\nIndexed\nto AI": 100.0,
+        "BP Gr\nIndexed\nto AI": 100.0,
+        "BP Gr\nIndexed to\nAI BP Gr": (ai_family_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0,
+        "MS\nRANK": "",
+        "Salience\nRANK": "",
+        "Contribution\nRANK": ""
+    }
+    
+    # Insert AI row at the beginning (index 0)
+    result_df = pd.concat([pd.DataFrame([ai_row]), result_df], ignore_index=True)
+    
+    return result_df
+
+
+def render_state_performance_table_html(df: pd.DataFrame) -> str:
+    """Render state performance table with colored column groups"""
+    
+    if df.empty:
+        return ""
+    
+    # Define column groups with colors
+    column_groups = [
+        {
+            "name": "State",
+            "columns": ["State"],
+            "color": "#E8F5E9",  # Light Green
+            "text_color": "#1B5E20"
+        },
+        {
+            "name": "Market Share & Salience",
+            "columns": ["BP FAM A25 MS", "Segment Salience", "State Contribution"],
+            "color": "#E3F2FD",  # Light Blue
+            "text_color": "#0D47A1"
+        },
+        {
+            "name": "Growth Metrics",
+            "columns": ["PW A25 NS Gr", "BP FAM A25 NS Gr", "BP FAM BTM"],
+            "color": "#FFF3E0",  # Light Orange
+            "text_color": "#E65100"
+        },
+        {
+            "name": "Index Values",
+            "columns": ["PW Gr Index (AI)", "BP Gr Index (AI)", "BP Efficiency"],
+            "color": "#F3E5F5",  # Light Purple
+            "text_color": "#4A148C"
+        },
+        {
+            "name": "Rankings",
+            "columns": ["MS Rank", "Salience Rank", "Contribution Rank"],
+            "color": "#FCE4EC",  # Light Pink
+            "text_color": "#880E4F"
+        }
+    ]
+    
+    # Build HTML table
+    html = """
+    <div style='overflow-x: auto; margin: 1rem 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'>
+        <table style='width: 100%; border-collapse: collapse; font-size: 0.9rem; background: white;'>
+            <thead>
+    """
+    
+    # Header row with column group names
+    html += "<tr>"
+    for group in column_groups:
+        colspan = len(group["columns"])
+        html += f"""
+            <th colspan='{colspan}' style='
+                background: {group["color"]};
+                color: {group["text_color"]};
+                padding: 1rem 0.5rem;
+                text-align: center;
+                font-weight: 700;
+                font-size: 1rem;
+                border: 2px solid white;
+            '>{group["name"]}</th>
+        """
+    html += "</tr>"
+    
+    # Column names row
+    html += "<tr>"
+    for group in column_groups:
+        for col in group["columns"]:
+            # Shorten column names for display
+            display_name = col.replace("BP FAM ", "").replace(" (AI)", "").replace("A25 ", "")
+            html += f"""
+                <th style='
+                    background: {group["color"]};
+                    color: {group["text_color"]};
+                    padding: 0.7rem 0.5rem;
+                    text-align: center;
+                    font-weight: 600;
+                    font-size: 0.85rem;
+                    border: 2px solid white;
+                    white-space: nowrap;
+                '>{display_name}</th>
+            """
+    html += "</tr></thead><tbody>"
+    
+    # Data rows
+    for idx, row in df.iterrows():
+        is_ai_row = row["State"] == "All India"
+        row_bg = "#FFFDE7" if is_ai_row else ("white" if idx % 2 == 0 else "#FAFAFA")
+        
+        html += "<tr>"
+        
+        for group in column_groups:
+            for col in group["columns"]:
+                value = row[col]
+                
+                # Format values
+                if col == "State":
+                    display_value = value
+                    align = "left"
+                    text_style = "font-weight: 600;" if is_ai_row else ""
+                elif col in ["MS Rank", "Salience Rank", "Contribution Rank"]:
+                    display_value = str(int(value)) if value != "" and value != "-" else "-"
+                    align = "center"
+                    text_style = "font-weight: 600;" if is_ai_row else ""
+                elif isinstance(value, (int, float)):
+                    if col in ["BP FAM A25 MS", "Segment Salience", "State Contribution"]:
+                        display_value = f"{value:.1f}%"
+                        align = "center"
+                        text_style = "font-weight: 600;" if is_ai_row else ""
+                    elif col in ["PW A25 NS Gr", "BP FAM A25 NS Gr", "BP FAM BTM"]:
+                        display_value = f"{value:+.1f}%"
+                        align = "center"
+                        # Color negative values red, positive green
+                        if value < 0:
+                            text_style = "color: #D32F2F; font-weight: 700;"
+                        elif value > 0:
+                            text_style = "color: #2E7D32; font-weight: 600;"
+                        else:
+                            text_style = "font-weight: 600;" if is_ai_row else ""
+                    elif col in ["PW Gr Index (AI)", "BP Gr Index (AI)", "BP Efficiency"]:
+                        display_value = f"{value:.0f}%"
+                        align = "center"
+                        text_style = "font-weight: 600;" if is_ai_row else ""
+                    else:
+                        display_value = f"{value:.1f}"
+                        align = "center"
+                        text_style = "font-weight: 600;" if is_ai_row else ""
+                else:
+                    display_value = str(value)
+                    align = "center"
+                    text_style = "font-weight: 600;" if is_ai_row else ""
+                
+                html += f"""
+                    <td style='
+                        padding: 0.7rem 0.5rem;
+                        text-align: {align};
+                        border: 1px solid #E0E0E0;
+                        background: {row_bg};
+                        font-size: 0.9rem;
+                        {text_style}
+                    '>{display_value}</td>
+                """
+        
+        html += "</tr>"
+    
+    html += "</tbody></table></div>"
+    
+    return html
+
+
+def display_state_performance_table(df: pd.DataFrame) -> None:
+    """Display state performance table with colored column groups using Streamlit components"""
+    
+    if df.empty:
+        return
+    
+    # Format the dataframe for display
+    display_df = df.copy()
+    
+    # Format numeric columns
+    for col in display_df.columns:
+        if col == "State":
+            continue
+        elif "RANK" in col:
+            display_df[col] = display_df[col].apply(lambda x: str(int(x)) if x != "" and str(x) != "" and x != 0 else "-")
+        elif "BP FAM\nA25 MS" in col:
+            display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else x)
+        elif "Salience" in col or "Contribution" in col:
+            display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else x)
+        elif "NS Gr" in col or "BTM" in col:
+            display_df[col] = display_df[col].apply(lambda x: f"{x:+.1f}%" if isinstance(x, (int, float)) else x)
+        elif "Indexed" in col or "Index" in col:
+            display_df[col] = display_df[col].apply(lambda x: f"{x:.0f}%" if isinstance(x, (int, float)) else x)
+    
+    # Apply styling to highlight All India row
+    def highlight_ai_row(row):
+        if row['State'] == 'All India':
+            return ['background-color: #E3F2FD; color: #1565C0; font-weight: 700;'] * len(row)
+        else:
+            return [''] * len(row)
+    
+    styled_df = display_df.style.apply(highlight_ai_row, axis=1)
+    
+    # Display column group headers ABOVE the table
+    st.markdown("""
+        <div style='display: flex; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; gap: 2px;'>
+            <div style='flex: 1.2; background: #E8F5E9; color: #1B5E20; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>State aggregated to AI</div>
+            <div style='flex: 3; background: #E3F2FD; color: #0D47A1; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>Salience & Contribution</div>
+            <div style='flex: 3; background: #FFF3E0; color: #E65100; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>NS Growth Data</div>
+            <div style='flex: 3; background: #F3E5F5; color: #4A148C; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>Growth Indexation</div>
+            <div style='flex: 2; background: #FCE4EC; color: #880E4F; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>Salience & Contribution RANKS</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Display the dataframe with styling - no horizontal scroll needed with shorter column names
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        hide_index=True,
+        height=min(650, (len(display_df) + 2) * 40 + 50)
+    )
 
 
 def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str], zone_name: str) -> Dict | None:
