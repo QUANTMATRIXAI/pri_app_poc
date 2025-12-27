@@ -6701,52 +6701,6 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         existing_img1 = next((m for m in tab_media if "Image 1" in m.get("comment", "")), None)
         existing_img2 = next((m for m in tab_media if "Image 2" in m.get("comment", "")), None)
         
-        # IMAGE 1 (TOP) - FIRST
-        st.markdown("**Image 1 (Top):**")
-        st.caption("This image will appear at the top of the tab")
-        
-        col_img1, col_inputs1 = st.columns([1, 1])
-        
-        with col_img1:
-            # Show existing or new upload
-            if existing_img1 and not st.session_state.get(f"replace_img1_tab{i}_{segment['id']}", False):
-                file_path = existing_img1.get("file_path")
-                if file_path and os.path.exists(file_path):
-                    if str(file_path).lower().endswith((".ppt", ".pptx")):
-                        st.caption(f"📄 Current: {os.path.basename(file_path)}")
-                    else:
-                        st.image(file_path, caption="Current Image 1", use_container_width=True)
-            
-            uploaded_image_1 = st.file_uploader(
-                f"Upload new image (replaces existing)",
-                type=["png", "jpg", "jpeg", "pptx"],
-                key=f"bg_tab{i}_img1_{segment['id']}",
-                label_visibility="collapsed"
-            )
-            if uploaded_image_1:
-                if uploaded_image_1.name.endswith(('.png', '.jpg', '.jpeg')):
-                    st.image(uploaded_image_1, caption="New Image 1", use_container_width=True)
-                else:
-                    st.info(f"📄 {uploaded_image_1.name}")
-        
-        with col_inputs1:
-            img1_title = st.text_input(
-                "Title for Image 1",
-                value=existing_img1.get("title", "") if existing_img1 else "",
-                key=f"bg_tab{i}_img1_title_{segment['id']}",
-                placeholder="Enter title for top image"
-            )
-            
-            img1_comment = st.text_area(
-                "Comment for Image 1 (optional)",
-                value=existing_img1.get("comment", "").replace(f"Tab {i+1} - Image 1", "").strip() if existing_img1 else "",
-                key=f"bg_tab{i}_img1_comment_{segment['id']}",
-                placeholder="Add insights, observations, or context...",
-                height=150
-            )
-        
-        st.markdown("---")
-        
         # Default colors for each tab
         default_colors = ["#4CAF50", "#FFC107", "#F44336"]  # Green, Yellow, Red
         
@@ -6769,25 +6723,9 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 help="Color for map and state assignments"
             )
         
-        # Section headers customization
-        st.markdown("**Customize Section Headers:**")
-        col_h1, col_h2 = st.columns(2)
-        
-        with col_h1:
-            state_perf_header = st.text_input(
-                "Left Section Header",
-                value=saved_tab.get("state_perf_header", "State Performance"),
-                key=f"bg_tab{i}_state_header_{segment['id']}",
-                placeholder="e.g., State Performance, Regional Analysis"
-            )
-        
-        with col_h2:
-            strategic_insights_header = st.text_input(
-                "Right Section Header",
-                value=saved_tab.get("strategic_insights_header", "Strategic Insights"),
-                key=f"bg_tab{i}_insights_header_{segment['id']}",
-                placeholder="e.g., Strategic Insights, Key Findings"
-            )
+        # Fixed section headers (not editable)
+        state_perf_header = "State Performance"
+        strategic_insights_header = "Strategic Insights"
         
         st.markdown("---")
         
@@ -6835,6 +6773,51 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             else:
                 selected_brands = []
                 st.info("Select Brand Families first")
+        
+        # IMAGE 1 (TOP) - MOVED HERE AFTER BRAND SELECTION, BEFORE STATE PERFORMANCE ANALYSIS
+        st.markdown("---")
+        st.markdown("**Image 1 (Top):**")
+        st.caption("This image will appear at the top of the tab")
+        
+        col_img1, col_inputs1 = st.columns([1, 1])
+        
+        with col_img1:
+            # Show existing or new upload
+            if existing_img1 and not st.session_state.get(f"replace_img1_tab{i}_{segment['id']}", False):
+                file_path = existing_img1.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    if str(file_path).lower().endswith((".ppt", ".pptx")):
+                        st.caption(f"📄 Current: {os.path.basename(file_path)}")
+                    else:
+                        st.image(file_path, caption="Current Image 1", use_container_width=True)
+            
+            uploaded_image_1 = st.file_uploader(
+                f"Upload new image (replaces existing)",
+                type=["png", "jpg", "jpeg", "pptx"],
+                key=f"bg_tab{i}_img1_{segment['id']}",
+                label_visibility="collapsed"
+            )
+            if uploaded_image_1:
+                if uploaded_image_1.name.endswith(('.png', '.jpg', '.jpeg')):
+                    st.image(uploaded_image_1, caption="New Image 1", use_container_width=True)
+                else:
+                    st.info(f"📄 {uploaded_image_1.name}")
+        
+        with col_inputs1:
+            img1_title = st.text_input(
+                "Title for Image 1",
+                value=existing_img1.get("title", "") if existing_img1 else "",
+                key=f"bg_tab{i}_img1_title_{segment['id']}",
+                placeholder="Enter title for top image"
+            )
+            
+            img1_comment = st.text_area(
+                "Comment for Image 1 (optional)",
+                value=existing_img1.get("comment", "").replace(f"Tab {i+1} - Image 1", "").strip() if existing_img1 else "",
+                key=f"bg_tab{i}_img1_comment_{segment['id']}",
+                placeholder="Add insights, observations, or context...",
+                height=150
+            )
         
         # State Performance Calculation Section
         st.markdown("---")
