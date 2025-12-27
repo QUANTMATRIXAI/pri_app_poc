@@ -1,0 +1,187 @@
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+# Create a new workbook
+wb = Workbook()
+wb.remove(wb.active)  # Remove default sheet
+
+# 1. NS LANDSCAPE SHEET
+ws_ns = wb.create_sheet("NS Landscape")
+ws_ns.append(["NS Landscape Configuration"])
+ws_ns.append([])
+ws_ns.append(["Section", "Field", "Value", "Instructions"])
+ws_ns.append(["Custom Trends View", "Number of Views (1-6)", "", "How many custom trend views to create"])
+ws_ns.append(["", "View 1 - Tab Title", "", "Tab name for View 1"])
+ws_ns.append(["", "View 1 - Title", "", "Content title for View 1"])
+ws_ns.append(["", "View 1 - Description", "", "Main description for View 1"])
+ws_ns.append(["", "View 1 - Number of Sections", "", "Number of sections (1-8)"])
+ws_ns.append(["", "View 1 - Section 1 - Left", "", "Left content for section 1"])
+ws_ns.append(["", "View 1 - Section 1 - Right", "", "Right content for section 1"])
+ws_ns.append(["", "View 2 - Tab Title", "", "Tab name for View 2"])
+ws_ns.append(["", "View 2 - Title", "", "Content title for View 2"])
+ws_ns.append([])
+ws_ns.append(["Placeholder Images", "Placeholder 1 - Title", "", "Title for placeholder image 1"])
+ws_ns.append(["", "Placeholder 1 - Comment", "", "Comment for placeholder image 1"])
+ws_ns.append(["", "Placeholder 2 - Title", "", "Title for placeholder image 2"])
+ws_ns.append(["", "Placeholder 3 - Title", "", "Title for placeholder image 3"])
+ws_ns.append(["", "Placeholder 4 - Title", "", "Title for placeholder image 4"])
+ws_ns.append(["", "Placeholder 5 - Title", "", "Title for placeholder image 5"])
+
+# 2. SEGMENT TRUTHS SHEET
+ws_seg = wb.create_sheet("Segment Truths")
+ws_seg.append(["Segment Truths Configuration"])
+ws_seg.append([])
+ws_seg.append(["Section", "Field", "Value", "Instructions"])
+ws_seg.append(["Segment Profile", "Title", "", "Title for segment profile table"])
+ws_seg.append(["", "Row 1 - Attribute", "", "First attribute name"])
+ws_seg.append(["", "Row 1 - Value", "", "First attribute value"])
+ws_seg.append(["", "Row 2 - Attribute", "", "Second attribute name"])
+ws_seg.append(["", "Row 2 - Value", "", "Second attribute value"])
+ws_seg.append([])
+ws_seg.append(["Segment Trends", "Number of Images (1-5)", "", "How many trend images"])
+ws_seg.append(["", "Image 1 - Title", "", "Title for image 1"])
+ws_seg.append(["", "Image 1 - Comment", "", "Comment for image 1"])
+
+# 3. BRAND TRUTHS SHEET
+ws_brand = wb.create_sheet("Brand Truths")
+ws_brand.append(["Brand Truths Configuration"])
+ws_brand.append([])
+ws_brand.append(["Section", "Field", "Value", "Instructions"])
+ws_brand.append(["Main", "Title", "", "Main title for Brand Truths"])
+ws_brand.append(["", "Description", "", "Main description"])
+ws_brand.append([])
+ws_brand.append(["Brand Profile Table", "Title", "", "Title for comparison table"])
+ws_brand.append([])
+ws_brand.append(["Brand Sections", "Number of Brands (1-8)", "", "How many brand sections"])
+ws_brand.append(["", "Brand 1 - Name", "", "Name of brand 1"])
+ws_brand.append(["", "Brand 1 - Content", "", "Content for brand 1"])
+ws_brand.append(["", "Brand 2 - Name", "", "Name of brand 2"])
+ws_brand.append(["", "Brand 2 - Content", "", "Content for brand 2"])
+ws_brand.append([])
+ws_brand.append(["Strengths & Vulnerabilities", "Main Title", "", "Main title for S&V section"])
+ws_brand.append(["", "Strengths Title", "", "Title for strengths box"])
+ws_brand.append(["", "Strengths Content", "", "Content for strengths"])
+ws_brand.append(["", "Vulnerabilities Title", "", "Title for vulnerabilities box"])
+ws_brand.append(["", "Vulnerabilities Content", "", "Content for vulnerabilities"])
+ws_brand.append([])
+ws_brand.append(["SWOT Analysis", "Main Title", "", "Main title for SWOT"])
+ws_brand.append(["", "Strengths", "", "SWOT strengths content"])
+ws_brand.append(["", "Weaknesses", "", "SWOT weaknesses content"])
+ws_brand.append(["", "Opportunities", "", "SWOT opportunities content"])
+ws_brand.append(["", "Threats", "", "SWOT threats content"])
+
+# 4. SEGMENT TRENDS SHEET
+ws_seg_trends = wb.create_sheet("Segment Trends")
+ws_seg_trends.append(["Segment Trends Configuration"])
+ws_seg_trends.append([])
+ws_seg_trends.append(["Section", "Field", "Value", "Instructions"])
+ws_seg_trends.append(["Trend Images", "Number of Images (1-5)", "", "How many trend images"])
+ws_seg_trends.append(["", "Image 1 - Title", "", "Title for image 1"])
+ws_seg_trends.append(["", "Image 1 - Comment", "", "Comment for image 1"])
+ws_seg_trends.append([])
+ws_seg_trends.append(["Placeholder Images", "Number of Placeholders (1-5)", "", "How many placeholders"])
+ws_seg_trends.append(["", "Placeholder 1 - Title", "", "Title for placeholder 1"])
+ws_seg_trends.append(["", "Placeholder 1 - Comment", "", "Comment for placeholder 1"])
+ws_seg_trends.append([])
+ws_seg_trends.append(["Custom Trends View", "Number of Views (1-6)", "", "How many custom views"])
+ws_seg_trends.append(["", "View 1 - Tab Title", "", "Tab name for View 1"])
+ws_seg_trends.append(["", "View 1 - Title", "", "Content title"])
+ws_seg_trends.append(["", "View 1 - Description", "", "Description"])
+ws_seg_trends.append(["", "View 1 - Section 1 - Left", "", "Left content"])
+ws_seg_trends.append(["", "View 1 - Section 1 - Right", "", "Right content"])
+
+# 5. BRAND TRENDS SHEET
+ws_brand_trends = wb.create_sheet("Brand Trends")
+ws_brand_trends.append(["Brand Trends Configuration"])
+ws_brand_trends.append([])
+ws_brand_trends.append(["Section", "Field", "Value", "Instructions"])
+ws_brand_trends.append(["Standalone Images", "Number of Images (1-5)", "", "How many standalone images"])
+ws_brand_trends.append(["", "Image 1 - Title", "", "Title for image 1"])
+ws_brand_trends.append(["", "Image 1 - Comment", "", "Comment for image 1"])
+ws_brand_trends.append([])
+ws_brand_trends.append(["Placeholder Images", "Number of Placeholders (1-5)", "", "How many placeholders"])
+ws_brand_trends.append(["", "Placeholder 1 - Title", "", "Title for placeholder 1"])
+ws_brand_trends.append(["", "Placeholder 1 - Comment", "", "Comment for placeholder 1"])
+ws_brand_trends.append([])
+ws_brand_trends.append(["Custom Trends View", "Number of Views (1-6)", "", "How many custom views"])
+ws_brand_trends.append(["", "View 1 - Tab Title", "", "Tab name for View 1"])
+ws_brand_trends.append(["", "View 1 - Title", "", "Content title"])
+ws_brand_trends.append(["", "View 1 - Description", "", "Description"])
+ws_brand_trends.append(["", "View 1 - Number of Sections", "", "Number of sections (1-8)"])
+ws_brand_trends.append(["", "View 1 - Section 1 - Left", "", "Left content"])
+ws_brand_trends.append(["", "View 1 - Section 1 - Right", "", "Right content"])
+
+# 6. BATTLEGROUNDS SHEET
+ws_bg = wb.create_sheet("Battlegrounds")
+ws_bg.append(["Battlegrounds Configuration"])
+ws_bg.append([])
+ws_bg.append(["Section", "Field", "Value", "Instructions"])
+ws_bg.append(["Tab 1", "Tab Name", "DOMINATE", "Name for tab 1"])
+ws_bg.append(["", "Tab Color", "#4CAF50", "Color code for tab 1"])
+ws_bg.append(["", "Left Section Header", "State Performance", "Left column header"])
+ws_bg.append(["", "Right Section Header", "Strategic Insights", "Right column header"])
+ws_bg.append(["", "Column 1 Heading", "SOG", "First insights column name"])
+ws_bg.append(["", "Column 2 Heading", "5Cs", "Second insights column name"])
+ws_bg.append(["", "Column 3 Heading", "Imagery", "Third insights column name"])
+ws_bg.append(["", "Assigned States", "Uttar Pradesh, Bihar", "Comma-separated state names"])
+ws_bg.append(["", "Selected Brand Families", "Premium, Deluxe", "Comma-separated families"])
+ws_bg.append(["", "Selected Brands", "Brand A, Brand B", "Comma-separated brand names"])
+ws_bg.append(["", "Calculation Comment", "", "Comment for state performance"])
+ws_bg.append(["", "State 1 - Name", "Uttar Pradesh", "First state name"])
+ws_bg.append(["", "State 1 - SOG Content", "", "SOG insights for state 1"])
+ws_bg.append(["", "State 1 - 5Cs Content", "", "5Cs insights for state 1"])
+ws_bg.append(["", "State 1 - Imagery Content", "", "Imagery insights for state 1"])
+ws_bg.append(["", "Image 1 - Title", "", "Title for top image"])
+ws_bg.append(["", "Image 1 - Comment", "", "Comment for top image"])
+ws_bg.append(["", "Image 2 - Title", "", "Title for bottom image"])
+ws_bg.append(["", "Image 2 - Comment", "", "Comment for bottom image"])
+ws_bg.append([])
+ws_bg.append(["Tab 2", "Tab Name", "DRIVE", "Name for tab 2"])
+ws_bg.append(["", "Tab Color", "#FFC107", "Color code for tab 2"])
+ws_bg.append(["", "Left Section Header", "State Performance", "Left column header"])
+ws_bg.append(["", "Right Section Header", "Strategic Insights", "Right column header"])
+ws_bg.append([])
+ws_bg.append(["Tab 3", "Tab Name", "DISRUPT", "Name for tab 3"])
+ws_bg.append(["", "Tab Color", "#F44336", "Color code for tab 3"])
+
+# 7. JTBD SHEET
+ws_jtbd = wb.create_sheet("JTBD")
+ws_jtbd.append(["Jobs To Be Done Configuration"])
+ws_jtbd.append([])
+ws_jtbd.append(["Section", "Field", "Value", "Instructions"])
+ws_jtbd.append(["Main", "Title", "", "Main title for JTBD"])
+ws_jtbd.append(["", "Number of Tabs (1-6)", "", "How many JTBD tabs"])
+ws_jtbd.append([])
+ws_jtbd.append(["Tab 1", "Tab Name", "", "Name for tab 1"])
+ws_jtbd.append(["", "Description", "", "Description for tab 1"])
+ws_jtbd.append(["", "Left Header", "What's Working & Holding Us Back?", "Left column header"])
+ws_jtbd.append(["", "Right Header", "JTBDs", "Right column header"])
+ws_jtbd.append(["", "Number of Sections (1-8)", "", "How many sections"])
+ws_jtbd.append(["", "Section 1 - Label", "", "Label for section 1"])
+ws_jtbd.append(["", "Section 1 - Left Content", "", "Left content for section 1"])
+ws_jtbd.append(["", "Section 1 - Right Content", "", "Right content for section 1"])
+
+# Style the headers
+for ws in [ws_ns, ws_seg, ws_brand, ws_seg_trends, ws_brand_trends, ws_bg, ws_jtbd]:
+    # Title row
+    ws[1][0].font = Font(bold=True, size=14)
+    ws[1][0].fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    ws[1][0].font = Font(bold=True, size=14, color="FFFFFF")
+    
+    # Header row
+    for cell in ws[3]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    
+    # Set column widths
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 35
+    ws.column_dimensions['C'].width = 40
+    ws.column_dimensions['D'].width = 50
+
+# Save the workbook
+wb.save("Dashboard_Configuration_Template.xlsx")
+print("Excel template created: Dashboard_Configuration_Template.xlsx")

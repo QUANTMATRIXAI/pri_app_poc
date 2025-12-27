@@ -290,7 +290,16 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     saved_families = chart_config.get("brand_families", [])
     saved_brands = chart_config.get("brands", [])
     saved_excluded_states = chart_config.get("excluded_states", [])
+    saved_chart_title = chart_config.get("title", "Brand Performance")
     saved_chart_comment = saved_chart["comment"] if saved_chart else ""
+    
+    # Editable title - pre-populated with saved value
+    chart_title = st.text_input(
+        "Chart Title (editable)",
+        value=saved_chart_title,
+        key=f"ns_chart_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
     
     # Filters in 3 columns
     brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
@@ -463,6 +472,101 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
             )
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Show data table with growth rates in expander (same as dashboard)
+            with st.expander("📊 View Data with Growth Rates"):
+                # Create summary table with NS values and growth rates
+                summary_df = pivot_wide.copy()
+                
+                # Calculate growth rates for each brand
+                summary_df["A24 Growth %"] = summary_df.apply(
+                    lambda r: round(((r.get("A24", 0) or 0) - (r.get("A23", 0) or 0)) / (r.get("A23", 0) or 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+                    axis=1
+                )
+                summary_df["A25 Growth %"] = summary_df.apply(
+                    lambda r: round(((r.get("A25", 0) or 0) - (r.get("A24", 0) or 0)) / (r.get("A24", 0) or 1) * 100, 1) if (r.get("A24", 0) or 0) != 0 else 0, 
+                    axis=1
+                )
+                summary_df["2-Yr CAGR %"] = summary_df.apply(
+                    lambda r: round((((r.get("A25", 0) or 0) / (r.get("A23", 0) or 1)) ** 0.5 - 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+                    axis=1
+                )
+                
+                # Calculate Brand Family totals
+                family_summary = []
+                for family in summary_df["Brand Family"].unique():
+                    family_data = summary_df[summary_df["Brand Family"] == family]
+                    
+                    # Sum NS values for the family
+                    a23_total = family_data["A23"].sum() if "A23" in family_data.columns else 0
+                    a24_total = family_data["A24"].sum() if "A24" in family_data.columns else 0
+                    a25_total = family_data["A25"].sum() if "A25" in family_data.columns else 0
+                    
+                    # Calculate family-level growth rates
+                    a24_growth = ((a24_total - a23_total) / a23_total * 100) if a23_total != 0 else 0
+                    a25_growth = ((a25_total - a24_total) / a24_total * 100) if a24_total != 0 else 0
+                    cagr_2yr = (((a25_total / a23_total) ** 0.5 - 1) * 100) if a23_total != 0 else 0
+                    
+                    family_summary.append({
+                        "Brand Family": family,
+                        "Brand": f"📊 {family} Total",
+                        "A23": a23_total,
+                        "A24": a24_total,
+                        "A25": a25_total,
+                        "A24 Growth %": round(a24_growth, 1),
+                        "A25 Growth %": round(a25_growth, 1),
+                        "2-Yr CAGR %": round(cagr_2yr, 1),
+                        "is_family_total": True
+                    })
+                
+                # Add is_family_total flag to brand rows
+                summary_df["is_family_total"] = False
+                
+                # Combine family totals with brand data
+                family_df = pd.DataFrame(family_summary)
+                combined_df = pd.concat([family_df, summary_df], ignore_index=True)
+                
+                # Sort by Brand Family, then by is_family_total (True first), then by Brand
+                combined_df = combined_df.sort_values(
+                    by=["Brand Family", "is_family_total", "Brand"],
+                    ascending=[True, False, True]
+                ).reset_index(drop=True)
+                
+                # Reorder columns
+                column_order = ["Brand Family", "Brand"]
+                if "A23" in combined_df.columns:
+                    column_order.append("A23")
+                if "A24" in combined_df.columns:
+                    column_order.append("A24")
+                if "A25" in combined_df.columns:
+                    column_order.append("A25")
+                if "A24 Growth %" in combined_df.columns:
+                    column_order.append("A24 Growth %")
+                if "A25 Growth %" in combined_df.columns:
+                    column_order.append("A25 Growth %")
+                column_order.append("2-Yr CAGR %")
+                
+                # Select and display columns
+                display_df = combined_df[column_order].copy()
+                
+                # Format NS columns with commas
+                for col in ["A23", "A24", "A25"]:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
+                
+                # Format growth columns with % symbol
+                for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %"]:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+                
+                # Apply styling to highlight family totals
+                def highlight_family_totals(row):
+                    if combined_df.loc[row.name, "is_family_total"]:
+                        return ['background-color: #E3F2FD; font-weight: bold; border-top: 2px solid #2196F3'] * len(row)
+                    return [''] * len(row)
+                
+                styled_table = display_df.style.apply(highlight_family_totals, axis=1)
+                st.dataframe(styled_table, use_container_width=True, hide_index=True, height=400)
     
     # Comment box AFTER chart preview - pre-populated with saved value
     chart_comment = st.text_area(
@@ -482,12 +586,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Delete existing chart for this section
             delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
             
-            # Save configuration
+            # Save configuration with title
             filter_config = json.dumps({
                 "brand_families": selected_families,
                 "brands": selected_brands,
                 "excluded_states": excluded_states,
-                "years": years_in_data
+                "years": years_in_data,
+                "title": chart_title
             })
             save_chart(
                 name="Brand Performance",
@@ -1876,70 +1981,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     # Show formatting tips once for both title and insights
     show_formatting_tips()
     
-    # Preview section
-    st.markdown("---")
-    st.markdown("**Preview:**")
-    
-    if segment_title:
-        st.markdown(f"### {segment_title}")
-    
-    # Comment box and table side by side
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if segment_comment:
-            st.markdown(f"""
-                <div style='
-                    background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
-                    border: 1px solid #B0D4F1;
-                    border-left: 5px solid #2196F3;
-                    padding: 1.5rem 1.8rem;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                    min-height: 500px;
-                '>
-                    <div style='
-                        font-size: 0.95rem;
-                        line-height: 1.8;
-                        color: #2C2C2C;
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                    '>
-                        {segment_comment.replace(chr(10), '<br>')}
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Comment will appear here")
-    
-    with col2:
-        st.info("P3M Segment Profile table will appear here after uploading CSV")
-    
-    # Save button for title, comment, and profile data
-    if st.button("Save Segment Insights to Dashboard", key=f"save_seg_insights_{segment['id']}"):
-        if not segment_title:
-            st.error("Please provide a segment title.")
-        else:
-            # Save configuration as a table entry
-            delete_tables_for_section(segment["id"], "Segment Truths", "Segment Truth")
-            
-            config_data = json.dumps({
-                "title": segment_title,
-                "comment": segment_comment
-            })
-            
-            save_table(
-                name="Segment Truth",
-                dataset_id=dataset_id,
-                columns=["Config"],
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="Segment Truths",
-                filter_json=config_data,
-                comment=segment_comment
-            )
-            st.success("Segment Insights saved to dashboard!")
-    
-    # P3M Segment Profile CSV Upload - SEPARATE SECTION
+    # P3M Segment Profile CSV Upload - BEFORE PREVIEW
     st.markdown("---")
     st.markdown("### P3M Segment Profile Data")
     st.caption("Upload a CSV file with 3 columns: Metric, TBA, Premium Whisky")
@@ -1949,13 +1991,6 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     if saved_p3m_profile and saved_p3m_profile["filter_json"]:
         st.info("✅ P3M Segment Profile data already uploaded. Upload a new CSV to replace it.")
-        with st.expander("View Current Data", expanded=False):
-            try:
-                saved_profile_data = json.loads(saved_p3m_profile["filter_json"])
-                df_saved = pd.DataFrame(saved_profile_data)
-                st.dataframe(df_saved, use_container_width=True, hide_index=True)
-            except:
-                st.error("Error loading saved data")
     
     # CSV file uploader
     uploaded_csv = st.file_uploader(
@@ -1964,6 +1999,9 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         key=f"p3m_profile_csv_{segment['id']}",
         help="CSV should have 3 columns: Metric, TBA, Premium Whisky"
     )
+    
+    # Variable to hold the CSV data for preview
+    df_csv_for_preview = None
     
     if uploaded_csv:
         try:
@@ -2002,52 +2040,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 
                 # Add index column for preview (rounded to integer)
                 df_csv["_index"] = df_csv.apply(calculate_index, axis=1).round(0).astype('Int64')
-                
-                # Preview with conditional formatting
-                st.markdown("**Preview with Conditional Formatting:**")
-                
-                def color_premium_whisky_preview(row):
-                    """Apply background color to Premium Whisky column based on index"""
-                    idx_val = row["_index"]
-                    
-                    if pd.isna(idx_val):
-                        return [""] * len(row)
-                    
-                    try:
-                        if idx_val > 110:
-                            color = "background-color: #90EE90; font-weight: bold;"
-                        elif idx_val >= 105:
-                            color = "background-color: #D4EDDA; font-weight: bold;"
-                        elif idx_val < 75:
-                            color = "background-color: #FFB380; font-weight: bold;"
-                        else:
-                            color = ""
-                        
-                        # Apply color only to Premium Whisky column (index 2)
-                        return ["", "", color, ""]
-                    except:
-                        return [""] * len(row)
-                
-                styled_preview = df_csv.style.apply(color_premium_whisky_preview, axis=1)
-                
-                # Display with _index column hidden using column_order
-                display_columns = ["Metric", "TBA", "Premium Whisky", "_index"]
-                
-                st.dataframe(
-                    styled_preview,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=400,
-                    column_order=display_columns
-                )
-                
-                st.markdown("""
-                    **Color Legend:**
-                    - 🟢 Dark Green: Index > 110 (Strong over-indexing)
-                    - 🟢 Light Green: Index 105-110 (Slight over-indexing)
-                    - 🟠 Orange: Index < 75 (Under-indexing)
-                    - ⚪ White: Index 75-105 (Neutral)
-                """)
+                df_csv_for_preview = df_csv
                 
                 # Save button for P3M profile
                 if st.button("Save P3M Segment Profile", key=f"save_p3m_profile_{segment['id']}"):
@@ -2073,6 +2066,148 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         except Exception as e:
             st.error(f"Error reading CSV: {str(e)}")
             st.info("Please ensure your CSV has 3 columns: Metric, TBA, Premium Whisky")
+    elif saved_p3m_profile and saved_p3m_profile["filter_json"]:
+        # Load existing data for preview
+        try:
+            saved_profile_data = json.loads(saved_p3m_profile["filter_json"])
+            df_csv = pd.DataFrame(saved_profile_data)
+            
+            # Calculate index for existing data
+            def calculate_index(row):
+                try:
+                    tba_val = str(row["TBA"]).replace("%", "").strip()
+                    pw_val = str(row["Premium Whisky"]).replace("%", "").strip()
+                    
+                    if not tba_val or not pw_val or tba_val == "" or pw_val == "":
+                        return None
+                    
+                    tba_num = float(tba_val)
+                    pw_num = float(pw_val)
+                    
+                    if tba_num == 0:
+                        return None
+                    
+                    return (pw_num / tba_num) * 100
+                except:
+                    return None
+            
+            df_csv["_index"] = df_csv.apply(calculate_index, axis=1).round(0).astype('Int64')
+            df_csv_for_preview = df_csv
+        except:
+            pass
+    
+    # Preview section - NOW SHOWS COMMENT AND TABLE SIDE BY SIDE
+    st.markdown("---")
+    st.markdown("**Preview:**")
+    
+    if segment_title:
+        st.markdown(f"### {segment_title}")
+    
+    # Comment box and table side by side
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if segment_comment:
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
+                    border: 1px solid #B0D4F1;
+                    border-left: 5px solid #2196F3;
+                    padding: 1.5rem 1.8rem;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    min-height: 500px;
+                '>
+                    <div style='
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                        color: #2C2C2C;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    '>
+                        {segment_comment.replace(chr(10), '<br>')}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Comment will appear here")
+    
+    with col2:
+        if df_csv_for_preview is not None:
+            # Create display dataframe - convert to string and replace NaN with empty strings
+            df_display = df_csv_for_preview.copy()
+            
+            # Convert all columns to object type to allow empty strings
+            for col in df_display.columns:
+                if col != "_index":  # Keep _index as is for color calculation
+                    df_display[col] = df_display[col].astype(str).replace('nan', '').replace('None', '')
+            
+            # Show table with conditional formatting
+            def color_premium_whisky_preview(row):
+                """Apply background color to Premium Whisky column based on index"""
+                idx_val = df_csv_for_preview.loc[row.name, "_index"] if "_index" in df_csv_for_preview.columns else None
+                
+                if pd.isna(idx_val):
+                    return [""] * len(row)
+                
+                try:
+                    if idx_val > 110:
+                        color = "background-color: #90EE90; font-weight: bold;"
+                    elif idx_val >= 105:
+                        color = "background-color: #D4EDDA; font-weight: bold;"
+                    elif idx_val < 75:
+                        color = "background-color: #FFB380; font-weight: bold;"
+                    else:
+                        color = ""
+                    
+                    # Apply color only to Premium Whisky column (index 2)
+                    return ["", "", color, ""]
+                except:
+                    return [""] * len(row)
+            
+            styled_preview = df_display.style.apply(color_premium_whisky_preview, axis=1)
+            
+            # Display only the 3 main columns (hide _index)
+            st.dataframe(
+                styled_preview,
+                use_container_width=True,
+                hide_index=True,
+                height=500,
+                column_config={
+                    "_index": None  # Hide the index column
+                }
+            )
+            
+            st.caption("""
+                **Color Legend:**
+                🟢 Dark Green: Index > 110 | 🟢 Light Green: 105-110 | 🟠 Orange: < 75 | ⚪ White: 75-105
+            """)
+        else:
+            st.info("P3M Segment Profile table will appear here after uploading CSV")
+    
+    # Save button for title and comment
+    if st.button("Save Segment Insights to Dashboard", key=f"save_seg_insights_{segment['id']}"):
+        if not segment_title:
+            st.error("Please provide a segment title.")
+        else:
+            # Save configuration as a table entry
+            delete_tables_for_section(segment["id"], "Segment Truths", "Segment Truth")
+            
+            config_data = json.dumps({
+                "title": segment_title,
+                "comment": segment_comment
+            })
+            
+            save_table(
+                name="Segment Truth",
+                dataset_id=dataset_id,
+                columns=["Config"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="Segment Truths",
+                filter_json=config_data,
+                comment=segment_comment
+            )
+            st.success("Segment Insights saved to dashboard!")
     
     # CAROUSEL 1: First set of tabbed images
     st.markdown("---")
@@ -2297,24 +2432,14 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         from app_core.media import get_media_for_segment
         existing_media = get_media_for_segment(segment["id"])
         seg_truth_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
+        seg_truth_media = sorted(seg_truth_media, key=lambda x: x.get("id", 0))
         
         if seg_truth_media:
-            st.info(f"✅ {len(seg_truth_media)} image(s) already uploaded. Upload new images to replace them.")
-            with st.expander("View Current Images", expanded=False):
-                for media in seg_truth_media:
-                    file_path = media.get("file_path")
-                    title = media.get("title", "")
-                    comment = media.get("comment", "")
-                    if file_path and os.path.exists(file_path):
-                        if title:
-                            st.markdown(f"**{title}**")
-                        st.image(file_path, use_container_width=True)
-                        if comment:
-                            st.caption(comment)
-                        st.markdown("---")
+            st.info(f"✅ {len(seg_truth_media)} image(s) already uploaded.")
         
         # Image 1
         st.markdown("**Image 1:**")
+        existing_1 = seg_truth_media[0] if len(seg_truth_media) > 0 else None
         col_img1, col_meta1 = st.columns([1, 1])
         with col_img1:
             uploaded_image_1 = st.file_uploader(
@@ -2325,24 +2450,47 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             )
             if uploaded_image_1:
                 st.image(uploaded_image_1, use_container_width=True)
+            elif existing_1 and existing_1.get("file_path") and os.path.exists(existing_1["file_path"]):
+                st.image(existing_1["file_path"], caption="Current Image 1", use_container_width=True)
         
         with col_meta1:
             title_1 = st.text_input(
                 "Title for Image 1",
+                value=existing_1.get("title", "") if existing_1 else "",
                 key=f"seg_truth_title1_{segment['id']}",
                 placeholder="e.g., Consumer Profile"
             )
             comment_1 = st.text_area(
                 "Comment for Image 1",
+                value=existing_1.get("comment", "") if existing_1 else "",
                 key=f"seg_truth_comment1_{segment['id']}",
                 placeholder="Add description or insights...",
                 height=100
             )
         
+        if st.button("💾 Save Image 1", key=f"save_seg_img1_{segment['id']}"):
+            if not uploaded_image_1:
+                st.error("Please upload Image 1.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_1:
+                    delete_media(existing_1["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_image_1,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment=comment_1,
+                    title=title_1,
+                    label="Segment Truth Images"
+                )
+                st.success("Image 1 saved!")
+        
         st.markdown("---")
         
         # Image 2
         st.markdown("**Image 2:**")
+        existing_2 = seg_truth_media[1] if len(seg_truth_media) > 1 else None
         col_img2, col_meta2 = st.columns([1, 1])
         with col_img2:
             uploaded_image_2 = st.file_uploader(
@@ -2353,24 +2501,47 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             )
             if uploaded_image_2:
                 st.image(uploaded_image_2, use_container_width=True)
+            elif existing_2 and existing_2.get("file_path") and os.path.exists(existing_2["file_path"]):
+                st.image(existing_2["file_path"], caption="Current Image 2", use_container_width=True)
         
         with col_meta2:
             title_2 = st.text_input(
                 "Title for Image 2",
+                value=existing_2.get("title", "") if existing_2 else "",
                 key=f"seg_truth_title2_{segment['id']}",
                 placeholder="e.g., Market Insights"
             )
             comment_2 = st.text_area(
                 "Comment for Image 2",
+                value=existing_2.get("comment", "") if existing_2 else "",
                 key=f"seg_truth_comment2_{segment['id']}",
                 placeholder="Add description or insights...",
                 height=100
             )
         
+        if st.button("💾 Save Image 2", key=f"save_seg_img2_{segment['id']}"):
+            if not uploaded_image_2:
+                st.error("Please upload Image 2.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_2:
+                    delete_media(existing_2["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_image_2,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment=comment_2,
+                    title=title_2,
+                    label="Segment Truth Images"
+                )
+                st.success("Image 2 saved!")
+        
         st.markdown("---")
         
         # Image 3
         st.markdown("**Image 3:**")
+        existing_3 = seg_truth_media[2] if len(seg_truth_media) > 2 else None
         col_img3, col_meta3 = st.columns([1, 1])
         with col_img3:
             uploaded_image_3 = st.file_uploader(
@@ -2381,24 +2552,47 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             )
             if uploaded_image_3:
                 st.image(uploaded_image_3, use_container_width=True)
+            elif existing_3 and existing_3.get("file_path") and os.path.exists(existing_3["file_path"]):
+                st.image(existing_3["file_path"], caption="Current Image 3", use_container_width=True)
         
         with col_meta3:
             title_3 = st.text_input(
                 "Title for Image 3",
+                value=existing_3.get("title", "") if existing_3 else "",
                 key=f"seg_truth_title3_{segment['id']}",
                 placeholder="e.g., Trends Analysis"
             )
             comment_3 = st.text_area(
                 "Comment for Image 3",
+                value=existing_3.get("comment", "") if existing_3 else "",
                 key=f"seg_truth_comment3_{segment['id']}",
                 placeholder="Add description or insights...",
                 height=100
             )
         
+        if st.button("💾 Save Image 3", key=f"save_seg_img3_{segment['id']}"):
+            if not uploaded_image_3:
+                st.error("Please upload Image 3.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_3:
+                    delete_media(existing_3["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_image_3,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment=comment_3,
+                    title=title_3,
+                    label="Segment Truth Images"
+                )
+                st.success("Image 3 saved!")
+        
         st.markdown("---")
         
         # Image 4
         st.markdown("**Image 4:**")
+        existing_4 = seg_truth_media[3] if len(seg_truth_media) > 3 else None
         col_img4, col_meta4 = st.columns([1, 1])
         with col_img4:
             uploaded_image_4 = st.file_uploader(
@@ -2409,24 +2603,47 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             )
             if uploaded_image_4:
                 st.image(uploaded_image_4, use_container_width=True)
+            elif existing_4 and existing_4.get("file_path") and os.path.exists(existing_4["file_path"]):
+                st.image(existing_4["file_path"], caption="Current Image 4", use_container_width=True)
         
         with col_meta4:
             title_4 = st.text_input(
                 "Title for Image 4",
+                value=existing_4.get("title", "") if existing_4 else "",
                 key=f"seg_truth_title4_{segment['id']}",
                 placeholder="e.g., Additional Insights"
             )
             comment_4 = st.text_area(
                 "Comment for Image 4",
+                value=existing_4.get("comment", "") if existing_4 else "",
                 key=f"seg_truth_comment4_{segment['id']}",
                 placeholder="Add description or insights...",
                 height=100
             )
         
+        if st.button("💾 Save Image 4", key=f"save_seg_img4_{segment['id']}"):
+            if not uploaded_image_4:
+                st.error("Please upload Image 4.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_4:
+                    delete_media(existing_4["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_image_4,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment=comment_4,
+                    title=title_4,
+                    label="Segment Truth Images"
+                )
+                st.success("Image 4 saved!")
+        
         st.markdown("---")
         
         # Image 5
         st.markdown("**Image 5:**")
+        existing_5 = seg_truth_media[4] if len(seg_truth_media) > 4 else None
         col_img5, col_meta5 = st.columns([1, 1])
         with col_img5:
             uploaded_image_5 = st.file_uploader(
@@ -2437,86 +2654,41 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             )
             if uploaded_image_5:
                 st.image(uploaded_image_5, use_container_width=True)
+            elif existing_5 and existing_5.get("file_path") and os.path.exists(existing_5["file_path"]):
+                st.image(existing_5["file_path"], caption="Current Image 5", use_container_width=True)
         
         with col_meta5:
             title_5 = st.text_input(
                 "Title for Image 5",
+                value=existing_5.get("title", "") if existing_5 else "",
                 key=f"seg_truth_title5_{segment['id']}",
                 placeholder="e.g., Summary"
             )
             comment_5 = st.text_area(
                 "Comment for Image 5",
+                value=existing_5.get("comment", "") if existing_5 else "",
                 key=f"seg_truth_comment5_{segment['id']}",
                 placeholder="Add description or insights...",
                 height=100
             )
         
-        # Separate save button for images only
-        if st.button("Save Images to Dashboard", key=f"save_seg_images_{segment['id']}"):
-            if not (uploaded_image_1 or uploaded_image_2 or uploaded_image_3 or uploaded_image_4 or uploaded_image_5):
-                st.error("Please upload at least one image.")
+        if st.button("💾 Save Image 5", key=f"save_seg_img5_{segment['id']}"):
+            if not uploaded_image_5:
+                st.error("Please upload Image 5.")
             else:
-                from app_core.media import save_media_upload, delete_media_for_section
-                
-                # Delete existing images for this section
-                delete_media_for_section(segment["id"], "Segment Truths", "Segment Truth Images")
-                
-                if uploaded_image_1:
-                    save_media_upload(
-                        uploaded_file=uploaded_image_1,
-                        segment_id=segment["id"],
-                        section="Segment Truths",
-                        created_by=current_user["username"],
-                        comment=comment_1,
-                        title=title_1,
-                        label="Segment Truth Images"
-                    )
-                
-                if uploaded_image_2:
-                    save_media_upload(
-                        uploaded_file=uploaded_image_2,
-                        segment_id=segment["id"],
-                        section="Segment Truths",
-                        created_by=current_user["username"],
-                        comment=comment_2,
-                        title=title_2,
-                        label="Segment Truth Images"
-                    )
-                
-                if uploaded_image_3:
-                    save_media_upload(
-                        uploaded_file=uploaded_image_3,
-                        segment_id=segment["id"],
-                        section="Segment Truths",
-                        created_by=current_user["username"],
-                        comment=comment_3,
-                        title=title_3,
-                        label="Segment Truth Images"
-                    )
-                
-                if uploaded_image_4:
-                    save_media_upload(
-                        uploaded_file=uploaded_image_4,
-                        segment_id=segment["id"],
-                        section="Segment Truths",
-                        created_by=current_user["username"],
-                        comment=comment_4,
-                        title=title_4,
-                        label="Segment Truth Images"
-                    )
-                
-                if uploaded_image_5:
-                    save_media_upload(
-                        uploaded_file=uploaded_image_5,
-                        segment_id=segment["id"],
-                        section="Segment Truths",
-                        created_by=current_user["username"],
-                        comment=comment_5,
-                        title=title_5,
-                        label="Segment Truth Images"
-                    )
-                
-                st.success("Images saved to dashboard!")
+                from app_core.media import save_media_upload, delete_media
+                if existing_5:
+                    delete_media(existing_5["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_image_5,
+                    segment_id=segment["id"],
+                    section="Segment Truths",
+                    created_by=current_user["username"],
+                    comment=comment_5,
+                    title=title_5,
+                    label="Segment Truth Images"
+                )
+                st.success("Image 5 saved!")
 
 
 def style_state_summary(state_summary: pd.DataFrame) -> pd.DataFrame:
@@ -3616,20 +3788,11 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
         
         # Get saved section data if available
         saved_section = saved_trends_sections[i] if i < len(saved_trends_sections) else {}
-        saved_label = saved_section.get("number", str(i + 1))
         saved_left = saved_section.get("left", "")
         saved_right = saved_section.get("right", "")
         
-        # Option to customize section number/label - pre-populated with saved value
-        col_num, col_left, col_right = st.columns([1, 2, 2])
-        
-        with col_num:
-            section_label = st.text_input(
-                f"Label",
-                value=saved_label,
-                key=f"trends_sec{i}_label_{segment['id']}",
-                help="Default is number, but you can use any text"
-            )
+        # Two columns for left and right content (no label field)
+        col_left, col_right = st.columns(2)
         
         with col_left:
             left_content = st.text_area(
@@ -3650,7 +3813,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             )
         
         sections_data.append({
-            "number": section_label,
+            "number": str(i + 1),  # Just use the section number
             "left": left_content,
             "right": right_content
         })
@@ -4927,14 +5090,14 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # Title for the table
     if saved_brand_profile and saved_brand_profile["filter_json"]:
         saved_profile_config = json.loads(saved_brand_profile["filter_json"])
-        saved_profile_title = saved_profile_config.get("title", "")
+        saved_profile_title = saved_profile_config.get("title", "Brand-wise profile data")
     else:
-        saved_profile_title = ""
+        saved_profile_title = "Brand-wise profile data"
     
     profile_table_title = st.text_input(
         "Table Title",
         value=saved_profile_title,
-        placeholder="e.g., Brand Performance Comparison",
+        placeholder="e.g., Brand-wise profile data",
         key=f"brand_profile_title_{segment['id']}"
     )
     
@@ -5099,7 +5262,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Parse saved config
     brand_truths_config = json.loads(saved_brand_truths["filter_json"]) if saved_brand_truths and saved_brand_truths["filter_json"] else {}
-    saved_brand_title = brand_truths_config.get("title", "Brand Truths Summary - Competitor View")
+    saved_brand_title = brand_truths_config.get("title", "Brand Truth Summary")
     saved_brand_description = brand_truths_config.get("description", "")
     saved_brand_sections = brand_truths_config.get("brands", [])
     
@@ -5555,6 +5718,40 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
+    # Image 5
+    st.markdown("**Image 5:**")
+    existing_s5 = brand_standalone_images[4] if len(brand_standalone_images) > 4 else None
+    uploaded_s5 = st.file_uploader("Upload Image 5", type=["png", "jpg", "jpeg"], key=f"brand_standalone_5_{segment['id']}")
+    title_s5 = st.text_input("Title for Image 5", value=existing_s5.get("title", "") if existing_s5 else "", key=f"brand_s_title_5_{segment['id']}")
+    comment_s5 = st.text_area("Comment for Image 5", value=existing_s5.get("comment", "") if existing_s5 else "", key=f"brand_s_comment_5_{segment['id']}", height=150)
+    
+    if existing_s5 and not uploaded_s5:
+        file_path_s5 = existing_s5.get("file_path")
+        if file_path_s5 and os.path.exists(file_path_s5):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(file_path_s5, caption="Current Image 5", use_container_width=True)
+    
+    if st.button("Save Image 5", key=f"save_brand_s5_{segment['id']}"):
+        if not uploaded_s5:
+            st.error("Please upload Image 5.")
+        else:
+            from app_core.media import save_media_upload, delete_media
+            if existing_s5:
+                delete_media(existing_s5["id"])
+            save_media_upload(
+                uploaded_file=uploaded_s5,
+                segment_id=segment["id"],
+                section="Brand Truths",
+                created_by=current_user["username"],
+                comment=comment_s5,
+                title=title_s5,
+                label="Standalone Images"
+            )
+            st.success("Image 5 saved to dashboard!")
+    
+    st.markdown("---")
+    
     # Placeholder Images (in expander)
     with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
         # Get existing placeholder images
@@ -5740,8 +5937,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # Main title for S&V section
     sv_main_title = st.text_input(
         "Main Title for Strengths & Vulnerabilities",
-        value=saved_sv_data.get("main_title", "PRI Strengths & Vulnerabilities:"),
-        placeholder="e.g., PRI Strengths & Vulnerabilities:",
+        value=saved_sv_data.get("main_title", "PRI Strengths & Vulnerabilities"),
+        placeholder="e.g., PRI Strengths & Vulnerabilities",
         key=f"brand_sv_main_title_{segment['id']}"
     )
     
@@ -5855,7 +6052,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             existing_config = json.loads(saved_brand_truths_current["filter_json"])
         else:
             existing_config = {
-                "title": "Brand Truths Summary - Competitor View",
+                "title": "Brand Truth Summary",
                 "description": "",
                 "brands": []
             }
@@ -6099,7 +6296,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             existing_config = json.loads(saved_brand_truths_current["filter_json"])
         else:
             existing_config = {
-                "title": "Brand Truths Summary - Competitor View",
+                "title": "Brand Truth Summary",
                 "description": "",
                 "brands": []
             }

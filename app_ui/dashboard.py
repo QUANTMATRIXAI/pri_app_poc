@@ -716,7 +716,11 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     """Render the brand performance chart with NS M INR and growth rates"""
     import plotly.express as px
     
-    st.markdown(f"### Brand Performance")
+    # Get title from config or use default
+    filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
+    chart_title = filter_config.get("title", "Brand Performance") if isinstance(filter_config, dict) else "Brand Performance"
+    
+    st.markdown(f"### {chart_title}")
     
     # Load data and apply filters
     df = load_dataset(chart_row["dataset_id"])
@@ -728,7 +732,6 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     df = filter_df_by_segment(df, segment)
     
     # Get filters from config
-    filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
     selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
     selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
     excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
