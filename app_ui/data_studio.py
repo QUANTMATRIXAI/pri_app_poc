@@ -3181,16 +3181,13 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         # 5. BP FAM A25 NS Gr - Brand Family Growth Rate (Delta in BP Consumption)
         bp_fam_gr = ((state_family_a25 - state_family_a24) / state_family_a24 * 100) if state_family_a24 > 0 else 0
         
-        # 6. BP FAM BTM View - Beat the Market (BP Growth - PW Growth)
-        btm = bp_fam_gr - pw_gr
-        
-        # 7. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
+        # 6. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
         pw_gr_index = (pw_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0
         
-        # 8. BP FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
+        # 7. BP FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
         bp_fam_gr_index = (bp_fam_gr / ai_family_gr * 100) if ai_family_gr != 0 else 0
         
-        # 9. BP FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
+        # 8. BP FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
         bp_fam_efficiency = (bp_fam_gr / pw_gr * 100) if pw_gr != 0 else 0
         
         rows.append({
@@ -3200,7 +3197,6 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
             "State\nContribution\nto AI": state_contribution,
             "PW A25\nNS Gr": pw_gr,
             "BP FAM\nA25 NS Gr": bp_fam_gr,
-            "BP FAM\nBTM view": btm,
             "PW Gr\nIndexed\nto AI": pw_gr_index,
             "BP Gr\nIndexed\nto AI": bp_fam_gr_index,
             "BP Gr\nIndexed to\nAI BP Gr": bp_fam_efficiency,
@@ -3228,7 +3224,6 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         "State\nContribution\nto AI": 100.0,
         "PW A25\nNS Gr": ai_segment_gr,
         "BP FAM\nA25 NS Gr": ai_family_gr,
-        "BP FAM\nBTM view": ai_family_gr - ai_segment_gr,
         "PW Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed to\nAI BP Gr": (ai_family_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0,
@@ -3258,25 +3253,25 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
             "text_color": "#1B5E20"
         },
         {
-            "name": "Market Share & Salience",
+            "name": "State aggregated to AI",
             "columns": ["BP FAM A25 MS", "Segment Salience", "State Contribution"],
-            "color": "#E3F2FD",  # Light Blue
-            "text_color": "#0D47A1"
+            "color": "#E8F5E9",  # Light Green
+            "text_color": "#1B5E20"
         },
         {
-            "name": "Growth Metrics",
-            "columns": ["PW A25 NS Gr", "BP FAM A25 NS Gr", "BP FAM BTM"],
+            "name": "NS Growth Data",
+            "columns": ["PW A25 NS Gr", "BP FAM A25 NS Gr"],
             "color": "#FFF3E0",  # Light Orange
             "text_color": "#E65100"
         },
         {
-            "name": "Index Values",
+            "name": "Growth Indexation",
             "columns": ["PW Gr Index (AI)", "BP Gr Index (AI)", "BP Efficiency"],
             "color": "#F3E5F5",  # Light Purple
             "text_color": "#4A148C"
         },
         {
-            "name": "Rankings",
+            "name": "Salience & Contribution RANKS",
             "columns": ["MS Rank", "Salience Rank", "Contribution Rank"],
             "color": "#FCE4EC",  # Light Pink
             "text_color": "#880E4F"
@@ -3352,7 +3347,7 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
                         display_value = f"{value:.1f}%"
                         align = "center"
                         text_style = "font-weight: 600;" if is_ai_row else ""
-                    elif col in ["PW A25 NS Gr", "BP FAM A25 NS Gr", "BP FAM BTM"]:
+                    elif col in ["PW A25 NS Gr", "BP FAM A25 NS Gr"]:
                         display_value = f"{value:+.1f}%"
                         align = "center"
                         # Color negative values red, positive green
@@ -3394,56 +3389,165 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
 
 
 def display_state_performance_table(df: pd.DataFrame) -> None:
-    """Display state performance table with colored column groups using Streamlit components"""
+    """Display state performance table with multi-level column headers and colored groups using HTML"""
     
     if df.empty:
         return
     
-    # Format the dataframe for display
-    display_df = df.copy()
+    # Define column structure with groups
+    column_structure = [
+        {"group": "", "group_color": "#F5F5F5", "text_color": "#424242", "columns": ["State"], "colspan": 1},
+        {"group": "State aggregated to AI", "group_color": "#E8F5E9", "text_color": "#1B5E20", 
+         "columns": ["BP FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"], "colspan": 3},
+        {"group": "NS Growth Data", "group_color": "#FFF3E0", "text_color": "#E65100", 
+         "columns": ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr"], "colspan": 2},
+        {"group": "Growth Indexation", "group_color": "#F3E5F5", "text_color": "#4A148C", 
+         "columns": ["PW Gr\nIndexed\nto AI", "BP Gr\nIndexed\nto AI", "BP Gr\nIndexed to\nAI BP Gr"], "colspan": 3},
+        {"group": "Salience & Contribution RANKS", "group_color": "#FCE4EC", "text_color": "#880E4F", 
+         "columns": ["MS\nRANK", "Salience\nRANK", "Contribution\nRANK"], "colspan": 3}
+    ]
     
-    # Format numeric columns
-    for col in display_df.columns:
-        if col == "State":
-            continue
-        elif "RANK" in col:
-            display_df[col] = display_df[col].apply(lambda x: str(int(x)) if x != "" and str(x) != "" and x != 0 else "-")
-        elif "BP FAM\nA25 MS" in col:
-            display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else x)
-        elif "Salience" in col or "Contribution" in col:
-            display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else x)
-        elif "NS Gr" in col or "BTM" in col:
-            display_df[col] = display_df[col].apply(lambda x: f"{x:+.1f}%" if isinstance(x, (int, float)) else x)
-        elif "Indexed" in col or "Index" in col:
-            display_df[col] = display_df[col].apply(lambda x: f"{x:.0f}%" if isinstance(x, (int, float)) else x)
+    # Build HTML table
+    html = """
+    <div style='overflow-x: auto; margin: 1rem 0;'>
+        <table style='width: 100%; border-collapse: collapse; font-size: 0.9rem; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'>
+            <thead>
+                <tr>
+    """
     
-    # Apply styling to highlight All India row
-    def highlight_ai_row(row):
-        if row['State'] == 'All India':
-            return ['background-color: #E3F2FD; color: #1565C0; font-weight: 700;'] * len(row)
+    # First row: Group headers
+    for group_info in column_structure:
+        if group_info["group"]:  # Only show group header if not empty
+            html += f"""
+                <th colspan='{group_info["colspan"]}' style='
+                    background: {group_info["group_color"]};
+                    color: {group_info["text_color"]};
+                    padding: 0.8rem 0.5rem;
+                    text-align: center;
+                    font-weight: 700;
+                    font-size: 0.95rem;
+                    border: 2px solid white;
+                '>{group_info["group"]}</th>
+            """
         else:
-            return [''] * len(row)
+            html += f"""
+                <th colspan='{group_info["colspan"]}' style='
+                    background: {group_info["group_color"]};
+                    padding: 0.8rem 0.5rem;
+                    border: 2px solid white;
+                '></th>
+            """
     
-    styled_df = display_df.style.apply(highlight_ai_row, axis=1)
+    html += "</tr><tr>"
     
-    # Display column group headers ABOVE the table
-    st.markdown("""
-        <div style='display: flex; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; gap: 2px;'>
-            <div style='flex: 1.2; background: #E8F5E9; color: #1B5E20; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>State aggregated to AI</div>
-            <div style='flex: 3; background: #E3F2FD; color: #0D47A1; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>Salience & Contribution</div>
-            <div style='flex: 3; background: #FFF3E0; color: #E65100; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>NS Growth Data</div>
-            <div style='flex: 3; background: #F3E5F5; color: #4A148C; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>Growth Indexation</div>
-            <div style='flex: 2; background: #FCE4EC; color: #880E4F; padding: 0.6rem 0.3rem; text-align: center; border-radius: 4px;'>Salience & Contribution RANKS</div>
-        </div>
-    """, unsafe_allow_html=True)
+    # Second row: Column names
+    for group_info in column_structure:
+        for col in group_info["columns"]:
+            # Shorten column names for display
+            display_name = col.replace("\n", "<br>")
+            html += f"""
+                <th style='
+                    background: #FAFAFA;
+                    color: #424242;
+                    padding: 0.7rem 0.5rem;
+                    text-align: center;
+                    font-weight: 600;
+                    font-size: 0.85rem;
+                    border: 1px solid #E0E0E0;
+                    white-space: nowrap;
+                '>{display_name}</th>
+            """
     
-    # Display the dataframe with styling - no horizontal scroll needed with shorter column names
-    st.dataframe(
-        styled_df,
-        use_container_width=True,
-        hide_index=True,
-        height=min(650, (len(display_df) + 2) * 40 + 50)
-    )
+    html += "</tr></thead><tbody>"
+    
+    # Data rows
+    for idx, row in df.iterrows():
+        is_ai_row = row["State"] == "All India"
+        row_bg = "#FFF9C4" if is_ai_row else ("white" if idx % 2 == 0 else "#FAFAFA")
+        
+        html += "<tr>"
+        
+        # State column
+        html += f"""
+            <td style='
+                padding: 0.7rem 0.8rem;
+                text-align: left;
+                border: 1px solid #E0E0E0;
+                background: {row_bg};
+                font-weight: {"700" if is_ai_row else "500"};
+                color: {"#1565C0" if is_ai_row else "#424242"};
+            '>{row["State"]}</td>
+        """
+        
+        # State aggregated to AI columns
+        for col in ["BP FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"]:
+            value = row[col]
+            display_value = f"{value:.1f}%" if isinstance(value, (int, float)) else value
+            html += f"""
+                <td style='
+                    padding: 0.7rem 0.5rem;
+                    text-align: center;
+                    border: 1px solid #E0E0E0;
+                    background: {row_bg};
+                    font-weight: {"600" if is_ai_row else "400"};
+                '>{display_value}</td>
+            """
+        
+        # NS Growth Data columns
+        for col in ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr"]:
+            value = row[col]
+            display_value = f"{value:+.1f}%" if isinstance(value, (int, float)) else value
+            color = "#2E7D32" if isinstance(value, (int, float)) and value > 0 else ("#D32F2F" if isinstance(value, (int, float)) and value < 0 else "#424242")
+            html += f"""
+                <td style='
+                    padding: 0.7rem 0.5rem;
+                    text-align: center;
+                    border: 1px solid #E0E0E0;
+                    background: {row_bg};
+                    font-weight: 600;
+                    color: {color};
+                '>{display_value}</td>
+            """
+        
+        # Growth Indexation columns
+        for col in ["PW Gr\nIndexed\nto AI", "BP Gr\nIndexed\nto AI", "BP Gr\nIndexed to\nAI BP Gr"]:
+            value = row[col]
+            display_value = f"{value:.0f}%" if isinstance(value, (int, float)) else value
+            html += f"""
+                <td style='
+                    padding: 0.7rem 0.5rem;
+                    text-align: center;
+                    border: 1px solid #E0E0E0;
+                    background: {row_bg};
+                    font-weight: {"600" if is_ai_row else "400"};
+                '>{display_value}</td>
+            """
+        
+        # Rank columns
+        for col in ["MS\nRANK", "Salience\nRANK", "Contribution\nRANK"]:
+            value = row[col]
+            display_value = str(int(value)) if value != "" and str(value) != "" and value != 0 else "-"
+            html += f"""
+                <td style='
+                    padding: 0.7rem 0.5rem;
+                    text-align: center;
+                    border: 1px solid #E0E0E0;
+                    background: {row_bg};
+                    font-weight: {"600" if is_ai_row else "400"};
+                '>{display_value}</td>
+            """
+        
+        html += "</tr>"
+    
+    html += "</tbody></table></div>"
+    
+    # Display HTML table with components.html for better rendering
+    try:
+        import streamlit.components.v1 as components
+        components.html(html, height=min(650, (len(df) + 3) * 45), scrolling=True)
+    except:
+        # Fallback to st.markdown if components not available
+        st.markdown(html, unsafe_allow_html=True)
 
 
 def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str], zone_name: str) -> Dict | None:
