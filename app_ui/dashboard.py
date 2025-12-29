@@ -531,6 +531,12 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
     if state_perf_table:
         st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
         render_state_performance_dashboard(state_perf_table, segment, is_editor)
+        # Render bubble chart right after the table
+        render_state_performance_bubble_chart(state_perf_table, segment)
+        # Render strategic insights grid after bubble chart
+        strategic_grid = next((t for t in ns_tables if t["name"] == "Strategic Insights Grid"), None)
+        if strategic_grid:
+            render_strategic_insights_grid(strategic_grid, segment, is_editor)
     
     # Render Placeholder Images
     from app_core.media import get_media_for_segment
@@ -984,7 +990,11 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     """Render the brand family performance chart with NS M INR and growth rates"""
     import plotly.express as px
     
-    st.markdown(f"### Brand Family Performance")
+    # Get title from config or use default
+    filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
+    chart_title = filter_config.get("title", "NS Overview: Key Competitors") if isinstance(filter_config, dict) else "NS Overview: Key Competitors"
+    
+    st.markdown(f"### {chart_title}")
     
     # Load data and apply filters
     df = load_dataset(chart_row["dataset_id"])
@@ -996,7 +1006,6 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     df = filter_df_by_segment(df, segment)
     
     # Get filters from config
-    filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
     selected_brands = filter_config.get("brands", []) if isinstance(filter_config, dict) else []
     selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
     excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
@@ -2064,6 +2073,221 @@ def render_state_performance_dashboard(table_row: Dict, segment: Dict, is_editor
             from app_core.tables import delete_tables_for_section
             delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
             st.success("State Performance Analysis table removed")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+
+
+def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> None:
+    """Render bubble chart for state performance analysis"""
+    import plotly.graph_objects as go
+    from app_ui.data_studio import calculate_state_performance_table
+    
+    # Get config
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    selected_states = filter_config.get("states", [])
+    selected_family = filter_config.get("brand_family", "")
+    
+    if not selected_states or not selected_family:
+        return
+    
+    st.markdown("---")
+    st.markdown("### State Performance Bubble Chart")
+    st.caption(f"Bubble chart showing BP FAM MS vs Segment Salience for **{selected_family}**")
+    
+    # Load data
+    df = load_dataset(table_row["dataset_id"])
+    if df is None or df.empty:
+        return
+    
+    df_full = df.copy()
+    df = filter_df_by_segment(df, segment)
+    
+    # Apply exclusions
+    excluded_states = filter_config.get("excluded_states", [])
+    if excluded_states:
+        df = df[~df["State"].isin(excluded_states)]
+    
+    # Calculate the table to get the data
+    state_perf_df = calculate_state_performance_table(df, df_full, selected_states, selected_family, segment)
+    
+    if state_perf_df is None or state_perf_df.empty:
+        return
+    
+    # Extract data for bubble chart
+    # Remove "All India" row for the scatter plot (we'll use it for reference lines)
+    ai_row = state_perf_df[state_perf_df["State"] == "All India"]
+    state_rows = state_perf_df[state_perf_df["State"] != "All India"]
+    
+    if ai_row.empty or state_rows.empty:
+        return
+    
+    # Get All India values for reference lines
+    ai_ms = float(ai_row["BP FAM\nA25 MS"].iloc[0])
+    ai_salience = float(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
+    
+    # Prepare data for states
+    states = []
+    x_values = []  # BP FAM MS
+    y_values = []  # Segment Salience
+    sizes = []     # State Contribution
+    
+    for _, row in state_rows.iterrows():
+        state = row["State"]
+        ms = float(row["BP FAM\nA25 MS"])
+        salience = float(row["Segment\nSalience to\nAll Spirits"])
+        contribution = float(row["State\nContribution\nto AI"])
+        
+        states.append(state)
+        x_values.append(ms)
+        y_values.append(salience)
+        sizes.append(contribution * 10)  # Scale for visibility
+    
+    # Create bubble chart
+    fig = go.Figure()
+    
+    # Add scatter plot for states
+    fig.add_trace(go.Scatter(
+        x=x_values,
+        y=y_values,
+        mode='markers+text',
+        marker=dict(
+            size=sizes,
+            color='#4A90E2',  # Beautiful single blue color
+            opacity=0.7,
+            line=dict(width=2, color='white')
+        ),
+        text=states,  # State abbreviations
+        textposition='middle center',
+        textfont=dict(size=10, color='black', family='Arial Black'),
+        hovertemplate='<b>%{text}</b><br>' +
+                      'BP FAM MS: %{x:.1f}%<br>' +
+                      'Segment Salience: %{y:.1f}%<br>' +
+                      '<extra></extra>',
+        name='States'
+    ))
+    
+    # Add reference lines for All India
+    fig.add_hline(y=ai_salience, line_dash="dash", line_color="#9B59B6", line_width=2,
+                  annotation_text=f"A25 Seg. Sal. ({ai_salience:.1f}%) All India",
+                  annotation_position="right",
+                  annotation=dict(font=dict(size=11, color="#9B59B6")))
+    
+    fig.add_vline(x=ai_ms, line_dash="dash", line_color="#E74C3C", line_width=2,
+                  annotation_text=f"A25 BP Fam MS ({ai_ms:.1f}%) All India",
+                  annotation_position="top",
+                  annotation=dict(font=dict(size=11, color="#E74C3C")))
+    
+    # Update layout
+    fig.update_layout(
+        xaxis_title="X-Axis: State Segment Salience (BP FAM A25 MS %)",
+        yaxis_title="Y-Axis: State Segment Salience Gr (LY)",
+        height=600,
+        showlegend=False,
+        hovermode='closest',
+        plot_bgcolor='#F8F9FA',
+        paper_bgcolor='white',
+        xaxis=dict(
+            showgrid=True,
+            gridcolor='#E0E0E0',
+            gridwidth=1,
+            zeroline=False,
+            title_font=dict(size=13, color='#2C3E50')
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='#E0E0E0',
+            gridwidth=1,
+            zeroline=False,
+            title_font=dict(size=13, color='#2C3E50')
+        ),
+        font=dict(family="Arial, sans-serif", size=12, color='#2C3E50')
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_strategic_insights_grid(table_row: Dict, segment: Dict, is_editor: bool) -> None:
+    """Render strategic insights grid with 3 rows and 3 columns"""
+    filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
+    grid_title = filter_config.get("title", "Strategic Insights")
+    grid_data = filter_config.get("grid_data", {})
+    
+    if not grid_data:
+        return
+    
+    st.markdown("---")
+    st.markdown(f"### {grid_title}")
+    
+    # Display 3x3 grid with row titles as first column
+    for row_idx in range(3):
+        row_title = grid_data.get(f"row_{row_idx}_title", "")
+        
+        # 4 columns: row title + 3 content columns
+        cols = st.columns([1, 2, 2, 2])
+        
+        # Row title in first column
+        with cols[0]:
+            if row_title:
+                st.markdown(f"""
+                    <div style='
+                        background: #E3F2FD;
+                        border: 1px solid #90CAF9;
+                        padding: 1rem;
+                        margin: 0.5rem 0;
+                        border-radius: 6px;
+                        min-height: 100px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    '>
+                        <div style='
+                            font-size: 0.95rem;
+                            font-weight: 600;
+                            color: #1565C0;
+                            text-align: center;
+                        '>
+                            {row_title}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        # 3 content columns
+        for col_idx in range(3):
+            cell_value = grid_data.get(f"row_{row_idx}_col_{col_idx}", "")
+            
+            with cols[col_idx + 1]:
+                if cell_value:
+                    formatted_content = format_comment(cell_value)
+                    st.markdown(f"""
+                        <div style='
+                            background: #F8F9FA;
+                            border: 1px solid #E0E0E0;
+                            padding: 1rem;
+                            margin: 0.5rem 0;
+                            border-radius: 6px;
+                            min-height: 100px;
+                        '>
+                            <div style='
+                                font-size: 0.9rem;
+                                line-height: 1.6;
+                                color: #2C3E50;
+                            '>
+                                {formatted_content}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+        
+        if row_idx < 2:  # Don't add separator after last row
+            st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+    
+    # Delete button for editors
+    if is_editor:
+        if st.button("Delete Strategic Insights Grid", key=f"del_grid_{segment['id']}"):
+            from app_core.tables import delete_tables_for_section
+            delete_tables_for_section(segment["id"], "NS Landscape", "Strategic Insights Grid")
+            st.success("Strategic Insights Grid removed")
             if hasattr(st, "rerun"):
                 st.rerun()
             else:
@@ -4653,6 +4877,67 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                                     st.image(file_path, use_container_width=True)
                     else:
                         st.warning("Image 2 file not found")
+                
+                # Display Placeholder Slides
+                placeholder_slides = [m for m in bg_media if m.get("name") == f"Tab {idx+1} Placeholders"]
+                
+                if placeholder_slides:
+                    for p_idx, placeholder in enumerate(sorted(placeholder_slides, key=lambda x: x.get("id", 0))):
+                        st.markdown("---")
+                        
+                        file_path = placeholder.get("file_path")
+                        title = placeholder.get("title", "")
+                        # Extract actual comment (remove the "Tab X - Placeholder Y" prefix)
+                        raw_comment = placeholder.get("comment", "")
+                        comment = raw_comment.replace(f"Tab {idx+1} - Placeholder {p_idx+1}", "").strip()
+                        
+                        if file_path and os.path.exists(file_path):
+                            if str(file_path).lower().endswith((".ppt", ".pptx")):
+                                st.caption(f"📄 PPT File - Download to view")
+                                with open(file_path, "rb") as f:
+                                    st.download_button(
+                                        f"Download PPT",
+                                        data=f.read(),
+                                        file_name=os.path.basename(file_path),
+                                        key=f"dl_bg_p{p_idx+1}_{segment['id']}_{idx}",
+                                    )
+                            else:
+                                # Show title if exists
+                                if title:
+                                    st.markdown(f"### {title}")
+                                
+                                # Display image and comment side by side if comment exists
+                                if comment:
+                                    col_img, col_comment = st.columns([1, 1])
+                                    
+                                    with col_img:
+                                        st.image(file_path, use_container_width=True)
+                                    
+                                    with col_comment:
+                                        st.markdown(f"""
+                                            <div style='
+                                                background: #F8F9FA;
+                                                border-left: 4px solid #6c757d;
+                                                padding: 1.5rem;
+                                                margin: 1.5rem 0 1rem 0;
+                                                border-radius: 8px;
+                                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                            '>
+                                                <div style='
+                                                    font-size: 0.95rem;
+                                                    line-height: 1.7;
+                                                    color: #2C2C2C;
+                                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                                '>
+                                                    {format_comment(comment)}
+                                                </div>
+                                            </div>
+                                        """, unsafe_allow_html=True)
+                                else:
+                                    # No comment, center the image
+                                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                                    with col2:
+                                        st.image(file_path, use_container_width=True)
         
         # JTBD Section at the end
         st.markdown("---")

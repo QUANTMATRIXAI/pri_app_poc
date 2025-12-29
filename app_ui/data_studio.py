@@ -622,9 +622,19 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         family_config = json.loads(saved_family_chart["filter_json"])
         saved_family_families = family_config.get("brand_families", [])
         saved_family_brands = family_config.get("brands", [])
+        saved_family_title = family_config.get("title", "NS Overview: Key Competitors")
     else:
         saved_family_families = []
         saved_family_brands = []
+        saved_family_title = "NS Overview: Key Competitors"
+    
+    # Editable title - pre-populated with saved value
+    family_chart_title = st.text_input(
+        "Chart Title (editable)",
+        value=saved_family_title,
+        key=f"ns_family_chart_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
     
     # Show available options from Section 2
     if not selected_families or not selected_brands:
@@ -795,7 +805,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 "brand_families": selected_families_family,
                 "brands": selected_brands_family,
                 "excluded_states": excluded_states,  # Use Section 2 state exclusions
-                "years": years_in_data
+                "years": years_in_data,
+                "title": family_chart_title
             })
             save_chart(
                 name="Brand Family Performance",
@@ -1538,6 +1549,92 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     
                     # Display the styled table using Streamlit dataframe with custom styling
                     display_state_performance_table(state_perf_df)
+                    
+                    # Show bubble chart preview
+                    st.markdown("---")
+                    st.markdown("**Bubble Chart Preview:**")
+                    
+                    # Create bubble chart
+                    import plotly.graph_objects as go
+                    
+                    # Extract data
+                    ai_row = state_perf_df[state_perf_df["State"] == "All India"]
+                    state_rows = state_perf_df[state_perf_df["State"] != "All India"]
+                    
+                    if not ai_row.empty and not state_rows.empty:
+                        # Get All India values
+                        ai_ms = float(ai_row["BP FAM\nA25 MS"].iloc[0])
+                        ai_salience = float(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
+                        
+                        # Prepare state data
+                        states = []
+                        x_values = []
+                        y_values = []
+                        sizes = []
+                        
+                        for _, row in state_rows.iterrows():
+                            states.append(row["State"])
+                            x_values.append(float(row["BP FAM\nA25 MS"]))
+                            y_values.append(float(row["Segment\nSalience to\nAll Spirits"]))
+                            sizes.append(float(row["State\nContribution\nto AI"]) * 10)
+                        
+                        # Create figure
+                        fig = go.Figure()
+                        
+                        fig.add_trace(go.Scatter(
+                            x=x_values,
+                            y=y_values,
+                            mode='markers+text',
+                            marker=dict(
+                                size=sizes,
+                                color='#4A90E2',  # Beautiful single blue color
+                                opacity=0.7,
+                                line=dict(width=2, color='white')
+                            ),
+                            text=states,
+                            textposition='middle center',
+                            textfont=dict(size=10, color='black', family='Arial Black'),
+                            hovertemplate='<b>%{text}</b><br>BP FAM MS: %{x:.1f}%<br>Segment Salience: %{y:.1f}%<extra></extra>',
+                            name='States'
+                        ))
+                        
+                        # Add reference lines
+                        fig.add_hline(y=ai_salience, line_dash="dash", line_color="#9B59B6", line_width=2,
+                                      annotation_text=f"A25 Seg. Sal. ({ai_salience:.1f}%) All India",
+                                      annotation_position="right",
+                                      annotation=dict(font=dict(size=11, color="#9B59B6")))
+                        
+                        fig.add_vline(x=ai_ms, line_dash="dash", line_color="#E74C3C", line_width=2,
+                                      annotation_text=f"A25 BP Fam MS ({ai_ms:.1f}%) All India",
+                                      annotation_position="top",
+                                      annotation=dict(font=dict(size=11, color="#E74C3C")))
+                        
+                        fig.update_layout(
+                            xaxis_title="X-Axis: State Segment Salience (BP FAM A25 MS %)",
+                            yaxis_title="Y-Axis: State Segment Salience Gr (LY)",
+                            height=600,
+                            showlegend=False,
+                            hovermode='closest',
+                            plot_bgcolor='#F8F9FA',
+                            paper_bgcolor='white',
+                            xaxis=dict(
+                                showgrid=True, 
+                                gridcolor='#E0E0E0',
+                                gridwidth=1,
+                                zeroline=False,
+                                title_font=dict(size=13, color='#2C3E50')
+                            ),
+                            yaxis=dict(
+                                showgrid=True, 
+                                gridcolor='#E0E0E0',
+                                gridwidth=1,
+                                zeroline=False,
+                                title_font=dict(size=13, color='#2C3E50')
+                            ),
+                            font=dict(family="Arial, sans-serif", size=12, color='#2C3E50')
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.info("No data available for selected states and brand family.")
                 
@@ -1574,6 +1671,180 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         comment=state_perf_comment
                     )
                     st.success("State Performance Analysis Table saved to dashboard!")
+                
+                st.markdown("---")
+                st.markdown("### Strategic Insights Grid")
+                st.caption("Add strategic insights in a 3x3 grid format")
+                
+                # Load existing grid data
+                saved_grid = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Strategic Insights Grid"), None)
+                grid_config = json.loads(saved_grid["filter_json"]) if saved_grid and saved_grid["filter_json"] else {}
+                saved_grid_title = grid_config.get("title", "Strategic Insights")
+                saved_grid_data = grid_config.get("grid_data", {})
+                
+                # Title for the grid
+                grid_title = st.text_input(
+                    "Grid Title",
+                    value=saved_grid_title,
+                    key=f"ns_grid_title_{segment['id']}",
+                    placeholder="e.g., Strategic Insights"
+                )
+                
+                # 3 rows with titles and 3 columns
+                grid_data = {}
+                
+                for row_idx in range(3):
+                    st.markdown(f"**Row {row_idx + 1}:**")
+                    
+                    # Row title
+                    row_title = st.text_input(
+                        f"Row {row_idx + 1} Title",
+                        value=saved_grid_data.get(f"row_{row_idx}_title", ""),
+                        key=f"ns_grid_row_{row_idx}_title_{segment['id']}",
+                        placeholder=f"e.g., Category {row_idx + 1}"
+                    )
+                    grid_data[f"row_{row_idx}_title"] = row_title
+                    
+                    # 3 columns for this row
+                    cols = st.columns(3)
+                    for col_idx in range(3):
+                        with cols[col_idx]:
+                            cell_value = st.text_area(
+                                f"Column {col_idx + 1}",
+                                value=saved_grid_data.get(f"row_{row_idx}_col_{col_idx}", ""),
+                                key=f"ns_grid_r{row_idx}_c{col_idx}_{segment['id']}",
+                                placeholder="Enter content...",
+                                height=100
+                            )
+                            grid_data[f"row_{row_idx}_col_{col_idx}"] = cell_value
+                    
+                    st.markdown("---")
+                
+                # Preview the grid
+                if grid_title:
+                    st.markdown("**Preview:**")
+                    st.markdown(f"### {grid_title}")
+                    
+                    # Display 3x3 grid preview with row titles as first column
+                    for row_idx in range(3):
+                        row_title = grid_data.get(f"row_{row_idx}_title", "")
+                        
+                        # 4 columns: row title + 3 content columns
+                        cols = st.columns([1, 2, 2, 2])
+                        
+                        # Row title in first column
+                        with cols[0]:
+                            if row_title:
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #E3F2FD;
+                                        border: 1px solid #90CAF9;
+                                        padding: 1rem;
+                                        margin: 0.5rem 0;
+                                        border-radius: 6px;
+                                        min-height: 100px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                    '>
+                                        <div style='
+                                            font-size: 0.95rem;
+                                            font-weight: 600;
+                                            color: #1565C0;
+                                            text-align: center;
+                                        '>
+                                            {row_title}
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.markdown("""
+                                    <div style='
+                                        background: #FAFAFA;
+                                        border: 1px dashed #CCCCCC;
+                                        padding: 1rem;
+                                        margin: 0.5rem 0;
+                                        border-radius: 6px;
+                                        min-height: 100px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        color: #999;
+                                    '>
+                                        Row Title
+                                    </div>
+                                """, unsafe_allow_html=True)
+                        
+                        # 3 content columns
+                        for col_idx in range(3):
+                            cell_value = grid_data.get(f"row_{row_idx}_col_{col_idx}", "")
+                            
+                            with cols[col_idx + 1]:
+                                if cell_value:
+                                    formatted_content = cell_value.replace('\n', '<br>')
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F8F9FA;
+                                            border: 1px solid #E0E0E0;
+                                            padding: 1rem;
+                                            margin: 0.5rem 0;
+                                            border-radius: 6px;
+                                            min-height: 100px;
+                                        '>
+                                            <div style='
+                                                font-size: 0.9rem;
+                                                line-height: 1.6;
+                                                color: #2C3E50;
+                                            '>
+                                                {formatted_content}
+                                            </div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                                else:
+                                    st.markdown("""
+                                        <div style='
+                                            background: #FAFAFA;
+                                            border: 1px dashed #CCCCCC;
+                                            padding: 1rem;
+                                            margin: 0.5rem 0;
+                                            border-radius: 6px;
+                                            min-height: 100px;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            color: #999;
+                                        '>
+                                            Empty
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                        
+                        if row_idx < 2:
+                            st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+                
+                # Save button for grid
+                if st.button("Save Strategic Insights Grid to Dashboard", key=f"save_ns_grid_{segment['id']}"):
+                    if not grid_title:
+                        st.error("Please provide a grid title.")
+                    else:
+                        # Delete existing grid
+                        delete_tables_for_section(segment["id"], "NS Landscape", "Strategic Insights Grid")
+                        
+                        # Save configuration
+                        filter_config = json.dumps({
+                            "title": grid_title,
+                            "grid_data": grid_data
+                        })
+                        save_table(
+                            name="Strategic Insights Grid",
+                            dataset_id=dataset_id,
+                            columns=["Grid"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=""
+                        )
+                        st.success("Strategic Insights Grid saved to dashboard!")
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1951,15 +2222,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
 
 def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Segment Truths: Title, Image, Comment, and Profile Data"""
-    st.markdown("#### Segment Truths Configuration")
+    # Removed "Segment Truths Configuration" header
     
     # Load existing saved configuration
     existing_tables = get_tables_for_segment(segment["id"])
     saved_seg_truth = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "Segment Truth"), None)
     
     # SECTION 1: First Image Upload (appears before title)
-    st.markdown("### Opening Image")
-    st.caption("Upload an image that will appear at the very top of Segment Truths")
+    st.markdown("### Consumer Preference and Behavior Slide")
+    st.caption("Upload a slide that will appear at the very top of Segment Truths")
     
     # Get existing first image
     from app_core.media import get_media_for_segment
@@ -1967,8 +2238,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     first_image = next((m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "First Image"), None)
     
     if first_image:
-        st.info("✅ Opening image already uploaded. Upload a new image to replace it.")
-        with st.expander("View Current Image", expanded=False):
+        st.info("✅ Slide already uploaded. Upload a new slide to replace it.")
+        with st.expander("View Current Slide", expanded=False):
             if first_image.get("file_path") and os.path.exists(first_image["file_path"]):
                 st.image(first_image["file_path"], use_container_width=True)
                 st.markdown(f"**Title:** {first_image.get('title', 'N/A')}")
@@ -1980,14 +2251,14 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Title and Comment fields BEFORE image upload
     first_image_title = st.text_input(
-        "Image Title",
+        "Slide title",
         value=existing_first_title,
         key=f"seg_first_image_title_{segment['id']}",
         placeholder="e.g., Segment Overview"
     )
     
     first_image_comment = st.text_area(
-        "Image Comment",
+        "Slide comment",
         value=existing_first_comment,
         key=f"seg_first_image_comment_{segment['id']}",
         placeholder="Add insights about this image...",
@@ -1996,7 +2267,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Image upload comes after title and comment
     uploaded_first_image = st.file_uploader(
-        "Upload Opening Image",
+        "Upload slide",
         type=["png", "jpg", "jpeg"],
         key=f"seg_truth_first_image_{segment['id']}",
         help="This image will appear at the top before the title"
@@ -2006,7 +2277,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         st.image(uploaded_first_image, caption="Preview", use_container_width=True)
         
         # Save button for first image
-        if st.button("Save Opening Image", key=f"save_first_image_{segment['id']}"):
+        if st.button("Save slide", key=f"save_first_image_{segment['id']}"):
             from app_core.media import save_media_upload, delete_media_for_section
             
             # Delete existing first image
@@ -2038,7 +2309,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Title input - pre-populated with saved value
     segment_title = st.text_input(
-        "Segment Title (editable)",
+        "**Title**",
         value=saved_seg_title,
         placeholder="e.g., Younger (LDA-35yo); Singles & Nuclear Families...",
         key=f"seg_truth_title_{segment['id']}",
@@ -2046,7 +2317,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     )
     
     # Big comment box - pre-populated with saved value
-    st.markdown("**Segment Insights:**")
+    st.markdown("**Summary Insights:**")
     segment_comment = st.text_area(
         "Add detailed insights about the segment",
         value=saved_seg_comment,
@@ -2060,7 +2331,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # P3M Segment Profile CSV Upload - BEFORE PREVIEW
     st.markdown("---")
-    st.markdown("**P3M Segment Profile Data**")
+    st.markdown("**Segment Profile Data**")
     st.caption("Upload a CSV file with 3 columns: Metric, TBA, Premium Whisky")
     
     # Load existing P3M profile data
@@ -2259,10 +2530,10 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 🟢 Dark Green: Index > 110 | 🟢 Light Green: 105-110 | 🟠 Orange: < 75 | ⚪ White: 75-105
             """)
         else:
-            st.info("P3M Segment Profile table will appear here after uploading CSV")
+            st.info("Segment Profile table will appear here after uploading CSV")
     
     # Save button for title and comment
-    if st.button("Save Segment Insights to Dashboard", key=f"save_seg_insights_{segment['id']}"):
+    if st.button("Save Summary Insights to Dashboard", key=f"save_seg_insights_{segment['id']}"):
         if not segment_title:
             st.error("Please provide a segment title.")
         else:
@@ -2288,8 +2559,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # CAROUSEL 1: First set of tabbed images
     st.markdown("---")
-    st.markdown("### Carousel Images - Set 1")
-    st.caption("Upload multiple images that will be displayed as tabs/pages")
+    st.markdown("### Segment Fit Scores by Needs")
+    st.caption("Multiple slides will be displayed as tabs")
     
     # Get existing carousel 1 images
     carousel1_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 1"]
@@ -2299,7 +2570,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         st.info(f"✅ {len(carousel1_media)} image(s) already uploaded for Carousel 1. Upload new images to replace them.")
     
     uploaded_carousel1 = st.file_uploader(
-        "Upload Images for Carousel 1 (multiple allowed)",
+        "Upload Slides (multiple allowed)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key=f"seg_carousel1_{segment['id']}"
@@ -2348,7 +2619,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 )
                 
                 page_title = st.text_input(
-                    "Page Title (full title)",
+                    "Slide title",
                     value=existing_page_title,
                     key=f"carousel1_page_{segment['id']}_{idx}",
                     placeholder="e.g., Consumer Demographics"
@@ -2368,7 +2639,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.markdown("---")
         
         # Save button for carousel 1
-        if st.button("Save Carousel 1 Images", key=f"save_carousel1_{segment['id']}"):
+        if st.button("Save Slides", key=f"save_carousel1_{segment['id']}"):
             from app_core.media import save_media_upload, delete_media_for_section
             
             # Delete existing carousel 1 images
@@ -2393,8 +2664,8 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # CAROUSEL 2: Second set of tabbed images
     st.markdown("---")
-    st.markdown("### Carousel Images - Set 2")
-    st.caption("Upload multiple images that will be displayed as tabs/pages")
+    st.markdown("### Consumer Taste Preferences")
+    st.caption("Multiple slides will be displayed as tabs")
     
     # Get existing carousel 2 images
     carousel2_media = [m for m in existing_media if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 2"]
@@ -2498,9 +2769,9 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Image uploads section - SEPARATE
     st.markdown("---")
-    st.markdown("### Placeholder")
+    st.markdown("### Placeholder Slides")
     
-    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+    with st.expander("📸 Upload Placeholder Slides (optional))", expanded=False):
         st.caption("Upload up to 5 images with titles and comments")
         
         # Show existing images if any
@@ -2856,12 +3127,14 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     ai_all_spirits_a24 = df_full_calc[df_full_calc["PRI Year"] == "A24"]["NS M INR"].sum()
     ai_all_spirits_a25 = df_full_calc[df_full_calc["PRI Year"] == "A25"]["NS M INR"].sum()
     
-    # Calculate All India (AI) segment values (current segment only)
-    ai_segment_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
-    ai_segment_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    # Calculate All India (AI) segment values for SELECTED STATES ONLY
+    df_selected_states = df_calc[df_calc["State"].isin(selected_states)].copy()
     
-    ai_family_a24 = df_calc[(df_calc["PRI Year"] == "A24") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
-    ai_family_a25 = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
+    ai_segment_a24 = df_selected_states[df_selected_states["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_segment_a25 = df_selected_states[df_selected_states["PRI Year"] == "A25"]["NS M INR"].sum()
+    
+    ai_family_a24 = df_selected_states[(df_selected_states["PRI Year"] == "A24") & (df_selected_states["Brand Family"] == selected_family)]["NS M INR"].sum()
+    ai_family_a25 = df_selected_states[(df_selected_states["PRI Year"] == "A25") & (df_selected_states["Brand Family"] == selected_family)]["NS M INR"].sum()
     
     # AI Growth rates
     ai_segment_gr = ((ai_segment_a25 - ai_segment_a24) / ai_segment_a24 * 100) if ai_segment_a24 > 0 else 0
@@ -3781,6 +4054,11 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     # Show formatting tips
     show_formatting_tips()
     
+    # Section title for image uploads
+    st.markdown("---")
+    st.markdown("### Analysis Slides")
+    st.caption("Upload slides and add title and comment")
+    
     # Image 1
     st.markdown("**Image 1:**")
     existing_1 = trend_images[0] if len(trend_images) > 0 else None
@@ -3982,6 +4260,9 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
             st.success("Image 5 saved to dashboard!")
     
     st.markdown("---")
+    
+    # Placeholder Slides section title
+    st.markdown("### Placeholder Slides")
     
     # Placeholder Images (in expander)
     with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
@@ -4774,7 +5055,7 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         saved_title = view_config.get("title", "")
         saved_description = view_config.get("description", "")
         saved_sections = view_config.get("sections", [])
-        saved_tab_title = view_config.get("tab_title", f"View {view_num}")
+        saved_tab_title = view_config.get("tab_title", "")
         
         # Tab title (for display in tabs)
         tab_title = st.text_input(
@@ -5865,7 +6146,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Carousel Images Section (BEFORE S&V)
     st.markdown("### Carousel Images")
-    st.caption("Upload multiple images that will be displayed as tabs/pages")
+    st.caption("Multiple slides will be displayed as tabs")
     
     # Get existing carousel images
     from app_core.media import get_media_for_segment
@@ -6156,6 +6437,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             st.success("Image 5 saved to dashboard!")
     
     st.markdown("---")
+    
+    # Placeholder Slides section title
+    st.markdown("### Placeholder Slides")
     
     # Placeholder Images (in expander)
     with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
@@ -7376,6 +7660,145 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 placeholder="Add insights, observations, or context...",
                 height=150
             )
+        
+        st.markdown("---")
+        
+        # Placeholder Slides section title
+        st.markdown("### Placeholder Slides")
+        
+        # Placeholder slides (in expander)
+        with st.expander("📸 Upload Placeholder Slides (Optional)", expanded=False):
+            st.caption("Upload up to 2 placeholder slides for this tab")
+            
+            # Get existing placeholder slides for this tab
+            placeholder_slides = [m for m in existing_media if m.get("section") == "Battlegrounds" and m.get("name") == f"Tab {i+1} Placeholders"]
+            placeholder_slides = sorted(placeholder_slides, key=lambda x: x.get("id", 0))
+            
+            # Placeholder 1
+            st.markdown("**Placeholder Slide 1:**")
+            existing_p1 = placeholder_slides[0] if len(placeholder_slides) > 0 else None
+            
+            col_p1_img, col_p1_inputs = st.columns([1, 1])
+            
+            with col_p1_img:
+                if existing_p1 and not st.session_state.get(f"replace_p1_tab{i}_{segment['id']}", False):
+                    file_path_p1 = existing_p1.get("file_path")
+                    if file_path_p1 and os.path.exists(file_path_p1):
+                        if str(file_path_p1).lower().endswith((".ppt", ".pptx")):
+                            st.caption(f"📄 Current: {os.path.basename(file_path_p1)}")
+                        else:
+                            st.image(file_path_p1, caption="Current Placeholder 1", use_container_width=True)
+                
+                uploaded_p1 = st.file_uploader(
+                    "Upload Placeholder 1",
+                    type=["png", "jpg", "jpeg", "pptx"],
+                    key=f"bg_tab{i}_p1_{segment['id']}",
+                    label_visibility="collapsed"
+                )
+                if uploaded_p1:
+                    if uploaded_p1.name.endswith(('.png', '.jpg', '.jpeg')):
+                        st.image(uploaded_p1, caption="New Placeholder 1", use_container_width=True)
+                    else:
+                        st.info(f"📄 {uploaded_p1.name}")
+            
+            with col_p1_inputs:
+                p1_title = st.text_input(
+                    "Title for Placeholder 1",
+                    value=existing_p1.get("title", "") if existing_p1 else "",
+                    key=f"bg_tab{i}_p1_title_{segment['id']}",
+                    placeholder="Enter title"
+                )
+                
+                p1_comment = st.text_area(
+                    "Comment for Placeholder 1 (optional)",
+                    value=existing_p1.get("comment", "").replace(f"Tab {i+1} - Placeholder 1", "").strip() if existing_p1 else "",
+                    key=f"bg_tab{i}_p1_comment_{segment['id']}",
+                    placeholder="Add insights...",
+                    height=120
+                )
+            
+            if st.button(f"Save Placeholder 1", key=f"save_bg_p1_tab{i}_{segment['id']}"):
+                if not uploaded_p1:
+                    st.error("Please upload Placeholder 1.")
+                else:
+                    from app_core.media import save_media_upload, delete_media
+                    if existing_p1:
+                        delete_media(existing_p1["id"])
+                    save_media_upload(
+                        uploaded_file=uploaded_p1,
+                        segment_id=segment["id"],
+                        section="Battlegrounds",
+                        created_by=current_user["username"],
+                        comment=f"Tab {i+1} - Placeholder 1 {p1_comment}",
+                        label=f"Tab {i+1} Placeholders",
+                        title=p1_title
+                    )
+                    st.success("Placeholder 1 saved!")
+            
+            st.markdown("---")
+            
+            # Placeholder 2
+            st.markdown("**Placeholder Slide 2:**")
+            existing_p2 = placeholder_slides[1] if len(placeholder_slides) > 1 else None
+            
+            col_p2_img, col_p2_inputs = st.columns([1, 1])
+            
+            with col_p2_img:
+                if existing_p2 and not st.session_state.get(f"replace_p2_tab{i}_{segment['id']}", False):
+                    file_path_p2 = existing_p2.get("file_path")
+                    if file_path_p2 and os.path.exists(file_path_p2):
+                        if str(file_path_p2).lower().endswith((".ppt", ".pptx")):
+                            st.caption(f"📄 Current: {os.path.basename(file_path_p2)}")
+                        else:
+                            st.image(file_path_p2, caption="Current Placeholder 2", use_container_width=True)
+                
+                uploaded_p2 = st.file_uploader(
+                    "Upload Placeholder 2",
+                    type=["png", "jpg", "jpeg", "pptx"],
+                    key=f"bg_tab{i}_p2_{segment['id']}",
+                    label_visibility="collapsed"
+                )
+                if uploaded_p2:
+                    if uploaded_p2.name.endswith(('.png', '.jpg', '.jpeg')):
+                        st.image(uploaded_p2, caption="New Placeholder 2", use_container_width=True)
+                    else:
+                        st.info(f"📄 {uploaded_p2.name}")
+            
+            with col_p2_inputs:
+                p2_title = st.text_input(
+                    "Title for Placeholder 2",
+                    value=existing_p2.get("title", "") if existing_p2 else "",
+                    key=f"bg_tab{i}_p2_title_{segment['id']}",
+                    placeholder="Enter title"
+                )
+                
+                p2_comment = st.text_area(
+                    "Comment for Placeholder 2 (optional)",
+                    value=existing_p2.get("comment", "").replace(f"Tab {i+1} - Placeholder 2", "").strip() if existing_p2 else "",
+                    key=f"bg_tab{i}_p2_comment_{segment['id']}",
+                    placeholder="Add insights...",
+                    height=120
+                )
+            
+            if st.button(f"Save Placeholder 2", key=f"save_bg_p2_tab{i}_{segment['id']}"):
+                if not uploaded_p2:
+                    st.error("Please upload Placeholder 2.")
+                else:
+                    from app_core.media import save_media_upload, delete_media
+                    if existing_p2:
+                        delete_media(existing_p2["id"])
+                    save_media_upload(
+                        uploaded_file=uploaded_p2,
+                        segment_id=segment["id"],
+                        section="Battlegrounds",
+                        created_by=current_user["username"],
+                        comment=f"Tab {i+1} - Placeholder 2 {p2_comment}",
+                        label=f"Tab {i+1} Placeholders",
+                        title=p2_title
+                    )
+                    st.success("Placeholder 2 saved!")
+        
+        st.markdown("---")
         
         # Save button for this tab
         if st.button(f"Save {tab_name} to Dashboard", key=f"save_bg_tab{i}_{segment['id']}"):
