@@ -3202,10 +3202,13 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         # 5. BP FAM A25 NS Gr - Brand Family Growth Rate (Delta in BP Consumption)
         bp_fam_gr = ((state_family_a25 - state_family_a24) / state_family_a24 * 100) if state_family_a24 > 0 else 0
         
-        # 6. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
+        # 6. BP FAM BTM - Beat the Market (BP Growth - PW Growth)
+        btm = bp_fam_gr - pw_gr
+        
+        # 7. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
         pw_gr_index = (pw_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0
         
-        # 7. BP FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
+        # 8. BP FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
         bp_fam_gr_index = (bp_fam_gr / ai_family_gr * 100) if ai_family_gr != 0 else 0
         
         # 8. BP FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
@@ -3218,6 +3221,7 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
             "State\nContribution\nto AI": state_contribution,
             "PW A25\nNS Gr": pw_gr,
             "BP FAM\nA25 NS Gr": bp_fam_gr,
+            "BP FAM\nBTM": btm,
             "PW Gr\nIndexed\nto AI": pw_gr_index,
             "BP Gr\nIndexed\nto AI": bp_fam_gr_index,
             "BP Gr\nIndexed to\nAI BP Gr": bp_fam_efficiency,
@@ -3245,6 +3249,7 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         "State\nContribution\nto AI": 100.0,
         "PW A25\nNS Gr": ai_segment_gr,
         "BP FAM\nA25 NS Gr": ai_family_gr,
+        "BP FAM\nBTM": ai_family_gr - ai_segment_gr,
         "PW Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed to\nAI BP Gr": (ai_family_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0,
@@ -3421,7 +3426,7 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
         {"group": "State aggregated to AI", "group_color": "#E8F5E9", "text_color": "#1B5E20", 
          "columns": ["BP FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"], "colspan": 3},
         {"group": "NS Growth Data", "group_color": "#FFF3E0", "text_color": "#E65100", 
-         "columns": ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr"], "colspan": 2},
+         "columns": ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr", "BP FAM\nBTM"], "colspan": 3},
         {"group": "Growth Indexation", "group_color": "#F3E5F5", "text_color": "#4A148C", 
          "columns": ["PW Gr\nIndexed\nto AI", "BP Gr\nIndexed\nto AI", "BP Gr\nIndexed to\nAI BP Gr"], "colspan": 3},
         {"group": "Salience & Contribution RANKS", "group_color": "#FCE4EC", "text_color": "#880E4F", 
@@ -3515,7 +3520,7 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
             """
         
         # NS Growth Data columns
-        for col in ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr"]:
+        for col in ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr", "BP FAM\nBTM"]:
             value = row[col]
             display_value = f"{value:+.1f}%" if isinstance(value, (int, float)) else value
             color = "#2E7D32" if isinstance(value, (int, float)) and value > 0 else ("#D32F2F" if isinstance(value, (int, float)) and value < 0 else "#424242")
@@ -7592,7 +7597,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     
     for i in range(3):
         st.markdown(f"---")
-        st.markdown(f"### Tab {i+1} Configuration")
+        st.markdown(f"### Cluster {i+1} Configuration")
         
         # Get saved tab data
         saved_tab = saved_tabs[i] if i < len(saved_tabs) else {"name": ["Battleground Cluster 1", "Battleground Cluster 2", "Battleground Cluster 3"][i], "states": [], "families": [], "brands": []}
@@ -7614,7 +7619,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         with col_name:
             tab_name = st.text_input(
-                f"Tab {i+1} Name (editable)",
+                f"Cluster {i+1} Name",
                 value=saved_tab.get("name", ["Battleground Cluster 1", "Battleground Cluster 2", "Battleground Cluster 3"][i]),
                 key=f"bg_tab{i}_name_{segment['id']}",
                 help="This will be the tab title on the dashboard"
