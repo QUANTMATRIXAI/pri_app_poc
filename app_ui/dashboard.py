@@ -4262,12 +4262,16 @@ def normalize_state_name(state_name: str) -> str:
         "a & n islands": "Andaman & Nicobar Island",
         "andhra pradesh": "Andhra Pradesh",
         "arunachal pradesh": "Arunanchal Pradesh",
+        "arunanchal pradesh": "Arunanchal Pradesh",
         "assam": "Assam",
         "bihar": "Bihar",
         "chandigarh": "Chandigarh",
         "chhattisgarh": "Chhattisgarh",
+        "chattisgarh": "Chhattisgarh",  # Common misspelling
         "dadra & nagar haveli": "Dadara & Nagar Havelli",
+        "dadra and nagar haveli": "Dadara & Nagar Havelli",
         "daman & diu": "Daman & Diu",
+        "daman and diu": "Daman & Diu",
         "delhi": "Delhi",
         "goa": "Goa",
         "gujarat": "Gujarat",
@@ -4287,17 +4291,22 @@ def normalize_state_name(state_name: str) -> str:
         "mizoram": "Mizoram",
         "nagaland": "Nagaland",
         "odisha": "Odisha",
+        "orissa": "Odisha",  # Old name
         "puducherry": "Puducherry",
+        "pondicherry": "Puducherry",  # Old name
         "punjab": "Punjab",
         "rajasthan": "Rajasthan",
         "sikkim": "Sikkim",
         "tamil nadu": "Tamil Nadu",
+        "tamilnadu": "Tamil Nadu",  # Without space
         "telangana": "Telangana",
         "tripura": "Tripura",
         "uttar pradesh": "Uttar Pradesh",
         "uttarakhand": "Uttarakhand",
+        "uttaranchal": "Uttarakhand",  # Old name
         "west bengal": "West Bengal",
     }
+    # Normalize to lowercase and strip whitespace
     normalized = state_name.strip().lower()
     return state_mapping.get(normalized, state_name)
 
