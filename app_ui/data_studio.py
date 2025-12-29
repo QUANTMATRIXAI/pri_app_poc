@@ -7934,7 +7934,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 if not uploaded_p1:
                     st.error("Please upload Placeholder 1.")
                 else:
-                    from app_core.media import save_media_upload, delete_media
+                    from app_core.media import delete_media
                     if existing_p1:
                         delete_media(existing_p1["id"])
                     save_media_upload(
@@ -7997,7 +7997,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
                 if not uploaded_p2:
                     st.error("Please upload Placeholder 2.")
                 else:
-                    from app_core.media import save_media_upload, delete_media
+                    from app_core.media import delete_media
                     if existing_p2:
                         delete_media(existing_p2["id"])
                     save_media_upload(
