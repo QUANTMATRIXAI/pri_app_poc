@@ -3795,6 +3795,100 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                     st.experimental_rerun()
     except Exception as e:
         st.error(f"Error rendering JTBD view: {str(e)}")
+    
+    # Display JTBD Placeholder Slides
+    placeholder_view = next((t for t in tables if t["section"] == "Battlegrounds" and t["name"] == "JTBD Placeholders"), None)
+    
+    if placeholder_view:
+        try:
+            placeholder_config = json.loads(placeholder_view["filter_json"]) if placeholder_view["filter_json"] else {}
+            placeholders = placeholder_config.get("placeholders", [])
+            
+            for i, placeholder in enumerate(placeholders):
+                if placeholder.get("media_id") or placeholder.get("title") or placeholder.get("comment"):
+                    # Display title if exists
+                    if placeholder.get("title"):
+                        st.markdown(f"""
+                            <div style='
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                padding: 1rem 1.5rem;
+                                border-radius: 10px;
+                                font-size: 1.3rem;
+                                font-weight: 600;
+                                margin: 1.5rem 0 1rem 0;
+                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            '>
+                                {placeholder["title"]}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Display media if exists
+                    if placeholder.get("media_id"):
+                        media_path = get_media_path(placeholder["media_id"])
+                        if media_path:
+                            if media_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                                st.image(media_path, use_container_width=True)
+                            elif media_path.lower().endswith('.pptx'):
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #F0F0F0;
+                                        border: 2px dashed #999999;
+                                        padding: 2rem;
+                                        text-align: center;
+                                        border-radius: 8px;
+                                        margin: 1rem 0;
+                                    '>
+                                        <p style='font-size: 1.2rem; color: #666666; margin: 0;'>
+                                            📊 PowerPoint Slide
+                                        </p>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            elif media_path.lower().endswith('.pdf'):
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #F0F0F0;
+                                        border: 2px dashed #999999;
+                                        padding: 2rem;
+                                        text-align: center;
+                                        border-radius: 8px;
+                                        margin: 1rem 0;
+                                    '>
+                                        <p style='font-size: 1.2rem; color: #666666; margin: 0;'>
+                                            📄 PDF Document
+                                        </p>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                    
+                    # Display comment if exists
+                    if placeholder.get("comment"):
+                        st.markdown(f"""
+                            <div style='
+                                background: #F8F9FA;
+                                border-left: 4px solid #667eea;
+                                padding: 1rem 1.5rem;
+                                margin: 1rem 0;
+                                border-radius: 4px;
+                                font-style: italic;
+                                color: #495057;
+                            '>
+                                {placeholder["comment"]}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+            
+            # Delete button for editors
+            if is_editor and placeholders:
+                if st.button("Delete JTBD Placeholder Slides", key=f"del_jtbd_placeholders_{segment['id']}"):
+                    delete_table(placeholder_view["id"])
+                    st.success("JTBD Placeholder slides removed")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Error rendering JTBD placeholder slides: {str(e)}")
 
 
 def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:

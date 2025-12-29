@@ -3123,11 +3123,11 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     # Get segment name
     segment_name = segment.get("name", "")
     
-    # Calculate All Spirits (all segments, unfiltered) for salience calculation
-    ai_all_spirits_a24 = df_full_calc[df_full_calc["PRI Year"] == "A24"]["NS M INR"].sum()
-    ai_all_spirits_a25 = df_full_calc[df_full_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    # Calculate ACTUAL All India (AI) segment values from ALL STATES (not just selected)
+    ai_segment_a24_actual = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_segment_a25_actual = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
     
-    # Calculate All India (AI) segment values for SELECTED STATES ONLY
+    # Calculate All India (AI) segment values for SELECTED STATES ONLY (for other metrics)
     df_selected_states = df_calc[df_calc["State"].isin(selected_states)].copy()
     
     ai_segment_a24 = df_selected_states[df_selected_states["PRI Year"] == "A24"]["NS M INR"].sum()
@@ -3135,6 +3135,11 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     
     ai_family_a24 = df_selected_states[(df_selected_states["PRI Year"] == "A24") & (df_selected_states["Brand Family"] == selected_family)]["NS M INR"].sum()
     ai_family_a25 = df_selected_states[(df_selected_states["PRI Year"] == "A25") & (df_selected_states["Brand Family"] == selected_family)]["NS M INR"].sum()
+    
+    # Calculate All Spirits for SELECTED STATES ONLY (all segments in selected states from unfiltered data)
+    df_full_selected_states = df_full_calc[df_full_calc["State"].isin(selected_states)].copy() if df_full is not None and not df_full.empty else df_selected_states
+    ai_all_spirits_a24 = df_full_selected_states[df_full_selected_states["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_all_spirits_a25 = df_full_selected_states[df_full_selected_states["PRI Year"] == "A25"]["NS M INR"].sum()
     
     # AI Growth rates
     ai_segment_gr = ((ai_segment_a25 - ai_segment_a24) / ai_segment_a24 * 100) if ai_segment_a24 > 0 else 0
@@ -3167,8 +3172,8 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         # 2. Segment Salience to All Spirits A25 - Segment NS / All Spirits NS
         segment_salience = (state_segment_a25 / state_all_spirits_a25 * 100) if state_all_spirits_a25 > 0 else 0
         
-        # 3. State Contribution to AI A25 - State Segment NS / AI Segment NS
-        state_contribution = (state_segment_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0
+        # 3. State Contribution to AI A25 - State Segment NS / ACTUAL AI Segment NS (all states)
+        state_contribution = (state_segment_a25 / ai_segment_a25_actual * 100) if ai_segment_a25_actual > 0 else 0
         
         # 4. PW A25 NS Gr - Segment Growth Rate (Delta in PW Consumption)
         pw_gr = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
@@ -3220,7 +3225,7 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         "State": "All India",
         "BP FAM\nA25 MS": (ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0,
         "Segment\nSalience to\nAll Spirits": (ai_segment_a25 / ai_all_spirits_a25 * 100) if ai_all_spirits_a25 > 0 else 0,
-        "State\nContribution\nto AI": 100.0,
+        "State\nContribution\nto AI": (ai_segment_a25 / ai_segment_a25_actual * 100) if ai_segment_a25_actual > 0 else 0,
         "PW A25\nNS Gr": ai_segment_gr,
         "BP FAM\nA25 NS Gr": ai_family_gr,
         "BP FAM\nBTM view": ai_family_gr - ai_segment_gr,
@@ -5101,23 +5106,8 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             saved_left = saved_section.get("left", "")
             saved_right = saved_section.get("right", "")
             
-            # Display label (NOT editable) and content fields
-            col_label, col_left, col_right = st.columns([1, 2, 2])
-            
-            with col_label:
-                # Display section number as non-editable text
-                st.markdown(f"""
-                    <div style='
-                        padding: 0.5rem;
-                        margin-top: 0.5rem;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        color: #666666;
-                    '>
-                        Label<br>
-                        <span style='font-size: 1.2rem; color: #333333;'>{i + 1}</span>
-                    </div>
-                """, unsafe_allow_html=True)
+            # Only show left and right content fields (no label input)
+            col_left, col_right = st.columns([1, 1])
             
             with col_left:
                 left_content = st.text_area(
@@ -5761,6 +5751,113 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                     
                     # Add spacing between sections
                     st.markdown("<div style='height:2rem;'></div>", unsafe_allow_html=True)
+    
+    # PLACEHOLDER SLIDES SECTION - After JTBD
+    st.markdown("---")
+    st.markdown("#### Placeholder Slides")
+    st.caption("Add 3 placeholder slides after JTBD section")
+    
+    # Load existing placeholder slides
+    saved_placeholders = next((t for t in existing_tables if t["section"] == "Battlegrounds" and t["name"] == "JTBD Placeholders"), None)
+    
+    if saved_placeholders and saved_placeholders["filter_json"]:
+        saved_placeholder_config = json.loads(saved_placeholders["filter_json"])
+        saved_placeholder_data = saved_placeholder_config.get("placeholders", [])
+    else:
+        saved_placeholder_data = []
+    
+    with st.expander("Upload Placeholder Slides (optional)", expanded=False):
+        placeholder_slides = []
+        
+        for i in range(3):
+            st.markdown(f"**Placeholder Slide {i+1}:**")
+            
+            # Get saved data if available
+            saved_placeholder = saved_placeholder_data[i] if i < len(saved_placeholder_data) else {}
+            saved_title = saved_placeholder.get("title", "")
+            saved_comment = saved_placeholder.get("comment", "")
+            saved_media_id = saved_placeholder.get("media_id")
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                placeholder_file = st.file_uploader(
+                    f"Upload Slide {i+1}",
+                    type=["png", "jpg", "jpeg", "pptx", "pdf"],
+                    key=f"jtbd_placeholder_{i}_{segment['id']}"
+                )
+            
+            with col2:
+                placeholder_title = st.text_input(
+                    f"Slide {i+1} Title",
+                    value=saved_title,
+                    key=f"jtbd_placeholder_title_{i}_{segment['id']}"
+                )
+                
+                placeholder_comment = st.text_area(
+                    f"Slide {i+1} Comment",
+                    value=saved_comment,
+                    height=80,
+                    key=f"jtbd_placeholder_comment_{i}_{segment['id']}"
+                )
+            
+            # Use existing media_id if no new file uploaded
+            media_id = saved_media_id if not placeholder_file else None
+            
+            if placeholder_file:
+                media_id = save_media_file(placeholder_file, current_user["username"])
+            
+            placeholder_slides.append({
+                "media_id": media_id,
+                "title": placeholder_title,
+                "comment": placeholder_comment
+            })
+            
+            st.markdown("---")
+        
+        # Save button for placeholders
+        if st.button("💾 Save Placeholder Slides", key=f"save_jtbd_placeholders_{segment['id']}"):
+            # Delete existing
+            delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD Placeholders")
+            
+            # Save new configuration
+            config_json = json.dumps({
+                "placeholders": placeholder_slides
+            })
+            
+            save_table(
+                name="JTBD Placeholders",
+                section="Battlegrounds",
+                dataset_id=dataset_id,
+                segment_id=segment["id"],
+                columns=["Config"],
+                filter_json=config_json,
+                created_by=current_user["username"]
+            )
+            
+            st.success("✅ Placeholder slides saved to dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+        
+        # Preview placeholders
+        if any(p["media_id"] or p["title"] or p["comment"] for p in placeholder_slides):
+            st.markdown("**Preview:**")
+            for i, placeholder in enumerate(placeholder_slides):
+                if placeholder["media_id"] or placeholder["title"] or placeholder["comment"]:
+                    st.markdown(f"**Slide {i+1}:**")
+                    if placeholder["title"]:
+                        st.markdown(f"*{placeholder['title']}*")
+                    if placeholder["media_id"]:
+                        media_path = get_media_path(placeholder["media_id"])
+                        if media_path and media_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            st.image(media_path, use_container_width=True)
+                        else:
+                            st.info(f"📄 File uploaded: {media_path}")
+                    if placeholder["comment"]:
+                        st.caption(placeholder["comment"])
+                    st.markdown("---")
 
 
 def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -7351,9 +7448,9 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     # Parse saved config
     bg_config = json.loads(saved_battlegrounds["filter_json"]) if saved_battlegrounds and saved_battlegrounds["filter_json"] else {}
     saved_tabs = bg_config.get("tabs", [
-        {"name": "DOMINATE", "states": [], "families": [], "brands": []},
-        {"name": "DRIVE", "states": [], "families": [], "brands": []},
-        {"name": "DISRUPT", "states": [], "families": [], "brands": []}
+        {"name": "Battleground Cluster 1", "states": [], "families": [], "brands": []},
+        {"name": "Battleground Cluster 2", "states": [], "families": [], "brands": []},
+        {"name": "Battleground Cluster 3", "states": [], "families": [], "brands": []}
     ])
     
     # Get available states and brands
@@ -7375,7 +7472,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         st.markdown(f"### Tab {i+1} Configuration")
         
         # Get saved tab data
-        saved_tab = saved_tabs[i] if i < len(saved_tabs) else {"name": ["DOMINATE", "DRIVE", "DISRUPT"][i], "states": [], "families": [], "brands": []}
+        saved_tab = saved_tabs[i] if i < len(saved_tabs) else {"name": ["Battleground Cluster 1", "Battleground Cluster 2", "Battleground Cluster 3"][i], "states": [], "families": [], "brands": []}
         
         # Show existing images if any
         from app_core.media import get_media_for_segment
@@ -7395,7 +7492,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         with col_name:
             tab_name = st.text_input(
                 f"Tab {i+1} Name (editable)",
-                value=saved_tab.get("name", ["DOMINATE", "DRIVE", "DISRUPT"][i]),
+                value=saved_tab.get("name", ["Battleground Cluster 1", "Battleground Cluster 2", "Battleground Cluster 3"][i]),
                 key=f"bg_tab{i}_name_{segment['id']}",
                 help="This will be the tab title on the dashboard"
             )
@@ -7807,9 +7904,9 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             else:
                 # Load existing config to update just this tab
                 existing_config = bg_config.get("tabs", [
-                    {"name": "DOMINATE", "states": [], "families": [], "brands": []},
-                    {"name": "DRIVE", "states": [], "families": [], "brands": []},
-                    {"name": "DISRUPT", "states": [], "families": [], "brands": []}
+                    {"name": "Battleground Cluster 1", "states": [], "families": [], "brands": []},
+                    {"name": "Battleground Cluster 2", "states": [], "families": [], "brands": []},
+                    {"name": "Battleground Cluster 3", "states": [], "families": [], "brands": []}
                 ])
                 
                 # Update this tab's config
