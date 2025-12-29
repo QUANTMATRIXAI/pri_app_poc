@@ -2131,7 +2131,8 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
     states = []
     x_values = []  # BP FAM MS
     y_values = []  # Segment Salience
-    sizes = []     # State Contribution
+    sizes = []     # State Contribution (scaled for bubble size)
+    contributions = []  # State Contribution (actual values for hover)
     
     for _, row in state_rows.iterrows():
         state = row["State"]
@@ -2142,7 +2143,9 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         states.append(state)
         x_values.append(ms)
         y_values.append(salience)
-        sizes.append(contribution * 10)  # Scale for visibility
+        contributions.append(contribution)  # Actual value for hover
+        # Use square root so area is proportional to contribution, not diameter
+        sizes.append((contribution ** 0.5) * 10)  # Scale for visibility
     
     # Create bubble chart
     fig = go.Figure()
@@ -2161,9 +2164,11 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         text=states,  # State abbreviations
         textposition='middle center',
         textfont=dict(size=10, color='black', family='Arial Black'),
+        customdata=contributions,  # Pass contribution values for hover
         hovertemplate='<b>%{text}</b><br>' +
-                      'BP FAM MS: %{x:.1f}%<br>' +
-                      'Segment Salience: %{y:.1f}%<br>' +
+                      'BP FAM MS: %{x:.0f}%<br>' +
+                      'Segment Salience: %{y:.0f}%<br>' +
+                      'State Contribution: %{customdata:.0f}%<br>' +
                       '<extra></extra>',
         name='States'
     ))

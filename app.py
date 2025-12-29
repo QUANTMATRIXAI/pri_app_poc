@@ -57,16 +57,25 @@ def bootstrap() -> None:
 
 
 def render_header() -> None:
-    st.markdown(
-        """
-        <div class="info-card" style="margin-bottom: 1rem; background: white; padding: 2rem; border: 1px solid rgba(0,0,0,0.08);">
-            <div class="pill">Secure Workspace</div>
-            <h1 style="margin-bottom:0.5rem; margin-top:0.8rem; color: #1d2733; font-size: 2.5rem; font-weight: 700; letter-spacing: -0.5px;">Strategic Alignment Dashboard</h1>
-            <p style="color: #f5b400; margin-bottom:0; font-size: 1.1rem; font-weight: 600;">For Pernod Ricard India</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    col1, col2 = st.columns([0.15, 0.85])
+    
+    with col1:
+        try:
+            st.image("logo/1.jpg", use_container_width=True)
+        except:
+            pass
+    
+    with col2:
+        st.markdown(
+            """
+            <div class="info-card" style="margin-bottom: 1rem; background: white; padding: 2rem; border: 1px solid rgba(0,0,0,0.08);">
+                <div class="pill">Secure Workspace</div>
+                <h1 style="margin-bottom:0.5rem; margin-top:0.8rem; color: #1d2733; font-size: 2.5rem; font-weight: 700; letter-spacing: -0.5px;">Strategic Alignment Dashboard</h1>
+                <p style="color: #f5b400; margin-bottom:0; font-size: 1.1rem; font-weight: 600;">For Pernod Ricard India</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def main() -> None:
@@ -91,6 +100,7 @@ def main() -> None:
         "<style>[data-testid='stSidebar'] { display: block; }</style>",
         unsafe_allow_html=True,
     )
+    
     st.sidebar.success(f"Logged in as {current_user['username']} ({current_user['role']})")
     # Global upload for editors (reused across segments)
     if current_user["role"] == "editor":

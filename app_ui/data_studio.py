@@ -10,6 +10,7 @@ import streamlit as st
 
 from app_core.charts import delete_charts_for_section, get_charts_for_segment, save_chart
 from app_core.constants import SECTIONS
+from app_core.database import get_connection
 from app_core.filters import apply_filters
 from app_core.media import delete_media_for_section, save_media_upload
 from app_core.tables import delete_tables_for_section, get_tables_for_segment, save_table
@@ -21,6 +22,7 @@ from app_core.uploads import (
     get_upload_history,
     get_uploads,
     load_dataset,
+    query_segment_filtered,
     save_upload_for_segment,
 )
 
@@ -127,22 +129,41 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
         return
 
     latest = sorted(uploads, key=lambda r: r["uploaded_at"], reverse=True)[0]
-    df = load_dataset(latest["id"])
-    if df is None or df.empty:
+    
+    # Get upload path for DuckDB filtering
+    upload_path = None
+    with get_connection() as conn:
+        row = conn.execute("SELECT data_path FROM uploads WHERE id = ?", (latest["id"],)).fetchone()
+        if row:
+            upload_path = row["data_path"]
+    
+    if not upload_path:
+        st.warning("Dataset path not found.")
+        return
+    
+    # Filter data by segment using DuckDB (much faster than loading entire dataset)
+    excel_name = segment.get("excel_name", segment["name"])
+    filter_column = segment.get("filter_column", "Segment_Col_1")
+    years = ["A23", "A24", "A25"]
+    
+    df_filtered = query_segment_filtered(upload_path, excel_name, filter_column, years)
+    
+    if df_filtered is None or df_filtered.empty:
         st.warning("Selected dataset is empty.")
         return
     
-    df = normalize_dataset_year(df)
-
-    # Filter data by segment using excel_name and filter_column
-    excel_name = segment.get("excel_name", segment["name"])
-    filter_column = segment.get("filter_column", "Segment_Col_1")
+    df_filtered = normalize_dataset_year(df_filtered)
     
-    df_filtered = df[df.get(filter_column, "").astype(str).str.strip() == excel_name]
+    # Load full dataset only when needed (for All Spirits calculations)
+    df = load_dataset(latest["id"])
+    if df is None or df.empty:
+        df = df_filtered  # Fallback to filtered data
+    else:
+        df = normalize_dataset_year(df)
 
     # Show data info
     note = f"Using latest {'global' if using_global else 'segment'} upload: **{latest['filename']}**"
-    st.info(f"{note} | Total rows: {len(df)} | Segment rows: {len(df_filtered)} | Filter: {filter_column} = '{excel_name}'")
+    st.info(f"{note} | Segment rows: {len(df_filtered)} | Filter: {filter_column} = '{excel_name}' | Years: {', '.join(years)}")
 
     # Data preview in expander (closed by default)
     with st.expander("📊 Segment Data Preview", expanded=False):
@@ -1490,13 +1511,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # 5. State Performance Analysis Table
     st.markdown("### 5. State Performance Analysis Table")
-    st.caption("Select a state and brand family to view detailed performance metrics")
+    st.caption("Select states and brand family to view detailed performance metrics")
     
     # Load existing saved configuration
     saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
     state_perf_config = json.loads(saved_state_perf["filter_json"]) if saved_state_perf and saved_state_perf["filter_json"] else {}
     saved_state_perf_title = state_perf_config.get("title", "State Performance Analysis")
-    saved_state_perf_state = state_perf_config.get("state", "")
+    saved_state_perf_states = state_perf_config.get("states", [])
     saved_state_perf_family = state_perf_config.get("brand_family", "")
     saved_state_perf_comment = saved_state_perf["comment"] if saved_state_perf else ""
     
@@ -1508,35 +1529,35 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         help="This title will appear on the dashboard"
     )
     
-    if selected_families and selected_brands:
-        # Check required columns
-        if "State" not in df_filtered.columns or "Brand Family" not in df_filtered.columns:
-            st.warning("State and Brand Family columns required for this analysis.")
-        else:
-            # Get available states and brand families
-            all_states = sorted(df_filtered["State"].dropna().unique().tolist())
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Multiselect for states
-                saved_states = state_perf_config.get("states", [])
-                selected_states_perf = st.multiselect(
-                    "Select States",
-                    options=all_states,
-                    default=saved_states if saved_states else all_states[:5],  # Default to first 5 states
-                    key=f"ns_state_perf_states_{segment['id']}"
-                )
-            
-            with col2:
-                selected_family = st.selectbox(
-                    "Select Brand Family",
-                    options=selected_families,
-                    index=selected_families.index(saved_state_perf_family) if saved_state_perf_family in selected_families else 0,
-                    key=f"ns_state_perf_family_{segment['id']}"
-                )
-            
-            if selected_states_perf and selected_family:
+    # Check required columns
+    if "State" not in df_filtered.columns or "Brand Family" not in df_filtered.columns:
+        st.warning("State and Brand Family columns required for this analysis.")
+    else:
+        # Get available states and brand families (INDEPENDENT from Section 2)
+        all_states = sorted(df_filtered["State"].dropna().unique().tolist())
+        all_brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Multiselect for states
+            selected_states_perf = st.multiselect(
+                "Select States",
+                options=all_states,
+                default=saved_state_perf_states if saved_state_perf_states else all_states[:5],  # Default to first 5 states
+                key=f"ns_state_perf_states_{segment['id']}"
+            )
+        
+        with col2:
+            # Independent brand family selection
+            selected_family = st.selectbox(
+                "Select Brand Family",
+                options=all_brand_families,
+                index=all_brand_families.index(saved_state_perf_family) if saved_state_perf_family in all_brand_families else 0,
+                key=f"ns_state_perf_family_{segment['id']}"
+            )
+        
+        if selected_states_perf and selected_family:
                 # Calculate the table - need to pass original df for All Spirits calculation
                 # Load the full dataset (unfiltered by segment)
                 from app_core.uploads import load_dataset
@@ -1571,12 +1592,16 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         x_values = []
                         y_values = []
                         sizes = []
+                        contribution_values = []
                         
                         for _, row in state_rows.iterrows():
+                            contribution = float(row["State\nContribution\nto AI"])
                             states.append(row["State"])
                             x_values.append(float(row["BP FAM\nA25 MS"]))
                             y_values.append(float(row["Segment\nSalience to\nAll Spirits"]))
-                            sizes.append(float(row["State\nContribution\nto AI"]) * 10)
+                            contribution_values.append(contribution)
+                            # Use square root so area is proportional to contribution, not diameter
+                            sizes.append((contribution ** 0.5) * 10)
                         
                         # Create figure
                         fig = go.Figure()
@@ -1594,7 +1619,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             text=states,
                             textposition='middle center',
                             textfont=dict(size=10, color='black', family='Arial Black'),
-                            hovertemplate='<b>%{text}</b><br>BP FAM MS: %{x:.1f}%<br>Segment Salience: %{y:.1f}%<extra></extra>',
+                            customdata=contribution_values,
+                            hovertemplate='<b>%{text}</b><br>BP FAM MS: %{x:.0f}%<br>Segment Salience: %{y:.0f}%<br>State Contribution: %{customdata:.0f}%<extra></extra>',
                             name='States'
                         ))
                         
@@ -1651,13 +1677,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Delete existing table
                     delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
                     
-                    # Save configuration
+                    # Save configuration (independent from Section 2)
                     filter_config = json.dumps({
                         "states": selected_states_perf,
                         "brand_family": selected_family,
-                        "brand_families": selected_families,
-                        "brands": selected_brands,
-                        "excluded_states": excluded_states,
                         "title": state_perf_title
                     })
                     save_table(
@@ -1845,8 +1868,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             comment=""
                         )
                         st.success("Strategic Insights Grid saved to dashboard!")
-    else:
-        st.info("Configure Brand Families and Brands in section 2 first.")
     
     st.markdown("---")
     
