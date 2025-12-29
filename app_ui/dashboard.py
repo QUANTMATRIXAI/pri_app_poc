@@ -2562,9 +2562,8 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                 st.markdown(f"### {title}")
             
             if description:
-                # Escape HTML and preserve line breaks
-                import html
-                escaped_desc = html.escape(description).replace('\n', '<br>')
+                # Format with bold, underline, italic, headings, bullets
+                formatted_desc = format_comment(description)
                 st.markdown(f"""
                     <div style='
                         background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
@@ -2573,11 +2572,10 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                         margin: 1rem 0;
                         border-radius: 8px;
                         text-align: center;
-                        font-size: 1rem;
-                        line-height: 1.6;
-                        color: #2C2C2C;
                     '>
-                        {escaped_desc}
+                        <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                            {formatted_desc}
+                        </div>
                     </div>
                 """, unsafe_allow_html=True)
             
@@ -2608,8 +2606,7 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                     
                     with cols[1]:
                         if section.get("left"):
-                            import html
-                            escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                            formatted_left = format_comment(section.get("left", ""))
                             st.markdown(f"""
                                 <div style='
                                     background: #E3F2FD;
@@ -2618,19 +2615,16 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                                     margin: 0.5rem 0;
                                     border-radius: 8px;
                                     min-height: 100px;
-                                    font-size: 0.95rem;
-                                    line-height: 1.6;
-                                    color: #1A1A1A;
-                                    font-weight: 500;
                                 '>
-                                    {escaped_left}
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {formatted_left}
+                                    </div>
                                 </div>
                             """, unsafe_allow_html=True)
                     
                     with cols[2]:
                         if section.get("right"):
-                            import html
-                            escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                            formatted_right = format_comment(section.get("right", ""))
                             st.markdown(f"""
                                 <div style='
                                     background: #F3E5F5;
@@ -2639,12 +2633,10 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
                                     margin: 0.5rem 0;
                                     border-radius: 8px;
                                     min-height: 100px;
-                                    font-size: 0.95rem;
-                                    line-height: 1.6;
-                                    color: #1A1A1A;
-                                    font-weight: 500;
                                 '>
-                                    {escaped_right}
+                                    <div style='font-size: 0.95rem; line-height: 1.6; color: #1A1A1A; font-weight: 500;'>
+                                        {formatted_right}
+                                    </div>
                                 </div>
                             """, unsafe_allow_html=True)
             
