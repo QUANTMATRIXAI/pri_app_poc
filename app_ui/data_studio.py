@@ -1515,7 +1515,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.caption("Select states and brand family to view detailed performance metrics")
     
     # Load existing saved configuration
-    saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "BTM Detailed Analysis"), None)
+    saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
     state_perf_config = json.loads(saved_state_perf["filter_json"]) if saved_state_perf and saved_state_perf["filter_json"] else {}
     saved_state_perf_title = state_perf_config.get("title", "BTM Detailed Analysis")
     saved_state_perf_states = state_perf_config.get("states", [])
@@ -1676,7 +1676,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if st.button("Save Table and Chart to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
                     # Delete existing table
-                    delete_tables_for_section(segment["id"], "NS Landscape", "BTM Detailed Analysis")
+                    delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
                     
                     # Save configuration (independent from Section 2)
                     filter_config = json.dumps({
@@ -1685,7 +1685,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         "title": state_perf_title
                     })
                     save_table(
-                        name="BTM Detailed Analysis",
+                        name="State Performance Analysis",
                         dataset_id=dataset_id,
                         columns=["State", "Brand Family", "Metrics"],
                         created_by=current_user["username"],
@@ -1694,14 +1694,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         filter_json=filter_config,
                         comment=state_perf_comment
                     )
-                    st.success("BTM Detailed Analysis Table saved to dashboard!")
+                    st.success("State Performance Analysis saved to dashboard!")
                 
                 st.markdown("---")
                 st.markdown("### Battleground Summary Slide")
                 st.caption("Cluster states and add Battleground Summary")
                 
                 # Load existing grid data
-                saved_grid = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Battleground Summary Slide"), None)
+                saved_grid = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Strategic Insights Grid"), None)
                 grid_config = json.loads(saved_grid["filter_json"]) if saved_grid and saved_grid["filter_json"] else {}
                 saved_grid_title = grid_config.get("title", "Battleground Summary")
                 saved_grid_data = grid_config.get("grid_data", {})
@@ -1851,7 +1851,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         st.error("Please provide a Slide Title.")
                     else:
                         # Delete existing grid
-                        delete_tables_for_section(segment["id"], "NS Landscape", "Battleground Summary Slide")
+                        delete_tables_for_section(segment["id"], "NS Landscape", "Strategic Insights Grid")
                         
                         # Save configuration
                         filter_config = json.dumps({
@@ -1859,7 +1859,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             "grid_data": grid_data
                         })
                         save_table(
-                            name="Battleground Summary Slide",
+                            name="Strategic Insights Grid",
                             dataset_id=dataset_id,
                             columns=["Grid"],
                             created_by=current_user["username"],
