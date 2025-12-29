@@ -2145,7 +2145,7 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         y_values.append(salience)
         contributions.append(contribution)  # Actual value for hover
         # Use square root so area is proportional to contribution, not diameter
-        sizes.append((contribution ** 0.5) * 10)  # Scale for visibility
+        sizes.append((contribution ** 0.5) * 20)  # 2x scale for better visibility
     
     # Create bubble chart
     fig = go.Figure()

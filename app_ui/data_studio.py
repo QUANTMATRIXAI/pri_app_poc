@@ -1602,7 +1602,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             y_values.append(float(row["Segment\nSalience to\nAll Spirits"]))
                             contribution_values.append(contribution)
                             # Use square root so area is proportional to contribution, not diameter
-                            sizes.append((contribution ** 0.5) * 10)
+                            sizes.append((contribution ** 0.5) * 20)  # 2x scale for better visibility
                         
                         # Create figure
                         fig = go.Figure()
@@ -3145,25 +3145,18 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     # Get segment name
     segment_name = segment.get("name", "")
     
-    # Calculate ACTUAL All India (AI) segment values from ALL STATES (not just selected)
-    ai_segment_a24_actual = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
-    ai_segment_a25_actual = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    # Calculate ACTUAL All India (AI) values from ALL STATES (not affected by selected states)
+    ai_segment_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_segment_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
     
-    # Calculate All India (AI) segment values for SELECTED STATES ONLY (for other metrics)
-    df_selected_states = df_calc[df_calc["State"].isin(selected_states)].copy()
+    ai_family_a24 = df_calc[(df_calc["PRI Year"] == "A24") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
+    ai_family_a25 = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
     
-    ai_segment_a24 = df_selected_states[df_selected_states["PRI Year"] == "A24"]["NS M INR"].sum()
-    ai_segment_a25 = df_selected_states[df_selected_states["PRI Year"] == "A25"]["NS M INR"].sum()
+    # Calculate All Spirits from ALL STATES (all segments from unfiltered data)
+    ai_all_spirits_a24 = df_full_calc[df_full_calc["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_all_spirits_a25 = df_full_calc[df_full_calc["PRI Year"] == "A25"]["NS M INR"].sum()
     
-    ai_family_a24 = df_selected_states[(df_selected_states["PRI Year"] == "A24") & (df_selected_states["Brand Family"] == selected_family)]["NS M INR"].sum()
-    ai_family_a25 = df_selected_states[(df_selected_states["PRI Year"] == "A25") & (df_selected_states["Brand Family"] == selected_family)]["NS M INR"].sum()
-    
-    # Calculate All Spirits for SELECTED STATES ONLY (all segments in selected states from unfiltered data)
-    df_full_selected_states = df_full_calc[df_full_calc["State"].isin(selected_states)].copy() if df_full is not None and not df_full.empty else df_selected_states
-    ai_all_spirits_a24 = df_full_selected_states[df_full_selected_states["PRI Year"] == "A24"]["NS M INR"].sum()
-    ai_all_spirits_a25 = df_full_selected_states[df_full_selected_states["PRI Year"] == "A25"]["NS M INR"].sum()
-    
-    # AI Growth rates
+    # AI Growth rates (based on actual All India, not selected states)
     ai_segment_gr = ((ai_segment_a25 - ai_segment_a24) / ai_segment_a24 * 100) if ai_segment_a24 > 0 else 0
     ai_family_gr = ((ai_family_a25 - ai_family_a24) / ai_family_a24 * 100) if ai_family_a24 > 0 else 0
     
@@ -3194,8 +3187,8 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         # 2. Segment Salience to All Spirits A25 - Segment NS / All Spirits NS
         segment_salience = (state_segment_a25 / state_all_spirits_a25 * 100) if state_all_spirits_a25 > 0 else 0
         
-        # 3. State Contribution to AI A25 - State Segment NS / ACTUAL AI Segment NS (all states)
-        state_contribution = (state_segment_a25 / ai_segment_a25_actual * 100) if ai_segment_a25_actual > 0 else 0
+        # 3. State Contribution to AI A25 - State Segment NS / AI Segment NS (all states)
+        state_contribution = (state_segment_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0
         
         # 4. PW A25 NS Gr - Segment Growth Rate (Delta in PW Consumption)
         pw_gr = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
