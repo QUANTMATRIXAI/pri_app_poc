@@ -6892,6 +6892,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         
         with col_prev_str:
             if strength_title or strength_content:
+                formatted_strength = format_comment_preview(strength_content)
                 st.markdown(f"""
                     <div style='
                         background: linear-gradient(135deg, #E8F5E9 0%, #F1F8F4 100%);
@@ -6912,12 +6913,13 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             font-size: 0.95rem;
                             line-height: 1.8;
                             color: #1B5E20;
-                        '>{strength_content.replace(chr(10), '<br>')}</div>
+                        '>{formatted_strength}</div>
                     </div>
                 """, unsafe_allow_html=True)
         
         with col_prev_vul:
             if vuln_title or vuln_content:
+                formatted_vuln = format_comment_preview(vuln_content)
                 st.markdown(f"""
                     <div style='
                         background: linear-gradient(135deg, #FCE4EC 0%, #F8E8EE 100%);
@@ -6938,7 +6940,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             font-size: 0.95rem;
                             line-height: 1.8;
                             color: #880E4F;
-                        '>{vuln_content.replace(chr(10), '<br>')}</div>
+                        '>{formatted_vuln}</div>
                     </div>
                 """, unsafe_allow_html=True)
     
@@ -7056,6 +7058,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         
         with col_prev_s:
             if swot_s_content:
+                formatted_s = format_comment_preview(swot_s_content)
                 st.markdown(f"""
                     <div style='
                         background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
@@ -7081,12 +7084,13 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             overflow-y: auto;
                             flex-grow: 1;
                             padding-right: 0.5rem;
-                        '>{swot_s_content.replace(chr(10), '<br>')}</div>
+                        '>{formatted_s}</div>
                     </div>
                 """, unsafe_allow_html=True)
         
         with col_prev_w:
             if swot_w_content:
+                formatted_w = format_comment_preview(swot_w_content)
                 st.markdown(f"""
                     <div style='
                         background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
@@ -7112,7 +7116,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             overflow-y: auto;
                             flex-grow: 1;
                             padding-right: 0.5rem;
-                        '>{swot_w_content.replace(chr(10), '<br>')}</div>
+                        '>{formatted_w}</div>
                     </div>
                 """, unsafe_allow_html=True)
         
@@ -7123,6 +7127,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         
         with col_prev_o:
             if swot_o_content:
+                formatted_o = format_comment_preview(swot_o_content)
                 st.markdown(f"""
                     <div style='
                         background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
@@ -7148,12 +7153,13 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             overflow-y: auto;
                             flex-grow: 1;
                             padding-right: 0.5rem;
-                        '>{swot_o_content.replace(chr(10), '<br>')}</div>
+                        '>{formatted_o}</div>
                     </div>
                 """, unsafe_allow_html=True)
         
         with col_prev_t:
             if swot_t_content:
+                formatted_t = format_comment_preview(swot_t_content)
                 st.markdown(f"""
                     <div style='
                         background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
@@ -7179,7 +7185,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             overflow-y: auto;
                             flex-grow: 1;
                             padding-right: 0.5rem;
-                        '>{swot_t_content.replace(chr(10), '<br>')}</div>
+                        '>{formatted_t}</div>
                     </div>
                 """, unsafe_allow_html=True)
     
