@@ -4188,12 +4188,12 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     st.markdown("### Analysis Slides")
     st.caption("Upload slides and add title and comment")
     
-    # Image 1
-    st.markdown("**Image 1:**")
+    # Segment Growth Slide
+    st.markdown("**Segment Growth Slide**")
     existing_1 = trend_images[0] if len(trend_images) > 0 else None
-    uploaded_add_1 = st.file_uploader("Upload Image 1", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_1_{segment['id']}")
-    title_add_1 = st.text_input("Title for Image 1", value=existing_1.get("title", "") if existing_1 else "", key=f"seg_trends_add_title_1_{segment['id']}")
-    comment_add_1 = st.text_area("Comment for Image 1", value=existing_1.get("comment", "") if existing_1 else "", key=f"seg_trends_add_comment_1_{segment['id']}", height=150)
+    uploaded_add_1 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg", "pptx"], key=f"seg_trends_add_1_{segment['id']}")
+    title_add_1 = st.text_input("Slide Title", value=existing_1.get("title", "") if existing_1 else "", key=f"seg_trends_add_title_1_{segment['id']}")
+    comment_add_1 = st.text_area("Slide Comment", value=existing_1.get("comment", "") if existing_1 else "", key=f"seg_trends_add_comment_1_{segment['id']}", height=150)
     
     # Preview existing image 1
     if existing_1 and not uploaded_add_1:
@@ -4204,7 +4204,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.image(file_path_1, caption="Current Image 1", use_container_width=True)
     
     # Save button for Image 1
-    if st.button("Save Image 1", key=f"save_seg_trends_1_{segment['id']}"):
+    if st.button("Save Slide 1", key=f"save_seg_trends_1_{segment['id']}"):
         if not uploaded_add_1:
             st.error("Please upload Image 1.")
         else:
@@ -4228,12 +4228,12 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     st.markdown("---")
     
-    # Image 2
-    st.markdown("**Image 2:**")
+    # P3M Interactions Slide
+    st.markdown("**P3M Interactions Slide**")
     existing_2 = trend_images[1] if len(trend_images) > 1 else None
-    uploaded_add_2 = st.file_uploader("Upload Image 2", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_2_{segment['id']}")
-    title_add_2 = st.text_input("Title for Image 2", value=existing_2.get("title", "") if existing_2 else "", key=f"seg_trends_add_title_2_{segment['id']}")
-    comment_add_2 = st.text_area("Comment for Image 2", value=existing_2.get("comment", "") if existing_2 else "", key=f"seg_trends_add_comment_2_{segment['id']}", height=150)
+    uploaded_add_2 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg", "pptx"], key=f"seg_trends_add_2_{segment['id']}")
+    title_add_2 = st.text_input("Slide Title", value=existing_2.get("title", "") if existing_2 else "", key=f"seg_trends_add_title_2_{segment['id']}")
+    comment_add_2 = st.text_area("Slide Comment", value=existing_2.get("comment", "") if existing_2 else "", key=f"seg_trends_add_comment_2_{segment['id']}", height=150)
     
     # Preview existing image 2
     if existing_2 and not uploaded_add_2:
@@ -4244,7 +4244,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.image(file_path_2, caption="Current Image 2", use_container_width=True)
     
     # Save button for Image 2
-    if st.button("Save Image 2", key=f"save_seg_trends_2_{segment['id']}"):
+    if st.button("Save Slide 2", key=f"save_seg_trends_2_{segment['id']}"):
         if not uploaded_add_2:
             st.error("Please upload Image 2.")
         else:
@@ -4269,12 +4269,12 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     st.markdown("---")
     
-    # Image 3
-    st.markdown("**Image 3:**")
+    # P3M Profile Changes Slide
+    st.markdown("**P3M Profile Changes Slide**")
     existing_3 = trend_images[2] if len(trend_images) > 2 else None
-    uploaded_add_3 = st.file_uploader("Upload Image 3", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_3_{segment['id']}")
-    title_add_3 = st.text_input("Title for Image 3", value=existing_3.get("title", "") if existing_3 else "", key=f"seg_trends_add_title_3_{segment['id']}")
-    comment_add_3 = st.text_area("Comment for Image 3", value=existing_3.get("comment", "") if existing_3 else "", key=f"seg_trends_add_comment_3_{segment['id']}", height=150)
+    uploaded_add_3 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg", "pptx"], key=f"seg_trends_add_3_{segment['id']}")
+    title_add_3 = st.text_input("Slide Title", value=existing_3.get("title", "") if existing_3 else "", key=f"seg_trends_add_title_3_{segment['id']}")
+    comment_add_3 = st.text_area("Slide Comment", value=existing_3.get("comment", "") if existing_3 else "", key=f"seg_trends_add_comment_3_{segment['id']}", height=150)
     
     # Preview existing image 3
     if existing_3 and not uploaded_add_3:
@@ -4285,7 +4285,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.image(file_path_3, caption="Current Image 3", use_container_width=True)
     
     # Save button for Image 3
-    if st.button("Save Image 3", key=f"save_seg_trends_3_{segment['id']}"):
+    if st.button("Save Slide 3", key=f"save_seg_trends_3_{segment['id']}"):
         if not uploaded_add_3:
             st.error("Please upload Image 3.")
         else:
@@ -4310,12 +4310,12 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     st.markdown("---")
     
-    # Image 4
-    st.markdown("**Image 4:**")
+    # Upgrades & Downgrades Slide
+    st.markdown("**Upgrades & Downgrades Slide**")
     existing_4 = trend_images[3] if len(trend_images) > 3 else None
-    uploaded_add_4 = st.file_uploader("Upload Image 4", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_4_{segment['id']}")
-    title_add_4 = st.text_input("Title for Image 4", value=existing_4.get("title", "") if existing_4 else "", key=f"seg_trends_add_title_4_{segment['id']}")
-    comment_add_4 = st.text_area("Comment for Image 4", value=existing_4.get("comment", "") if existing_4 else "", key=f"seg_trends_add_comment_4_{segment['id']}", height=150)
+    uploaded_add_4 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg", "pptx"], key=f"seg_trends_add_4_{segment['id']}")
+    title_add_4 = st.text_input("Slide Title", value=existing_4.get("title", "") if existing_4 else "", key=f"seg_trends_add_title_4_{segment['id']}")
+    comment_add_4 = st.text_area("Slide Comment", value=existing_4.get("comment", "") if existing_4 else "", key=f"seg_trends_add_comment_4_{segment['id']}", height=150)
     
     # Preview existing image 4
     if existing_4 and not uploaded_add_4:
@@ -4326,7 +4326,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.image(file_path_4, caption="Current Image 4", use_container_width=True)
     
     # Save button for Image 4
-    if st.button("Save Image 4", key=f"save_seg_trends_4_{segment['id']}"):
+    if st.button("Save Slide 4", key=f"save_seg_trends_4_{segment['id']}"):
         if not uploaded_add_4:
             st.error("Please upload Image 4.")
         else:
@@ -4350,12 +4350,12 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     st.markdown("---")
     
-    # Image 5
-    st.markdown("**Image 5:**")
+    # KPIs Slide
+    st.markdown("**KPIs Slide**")
     existing_5 = trend_images[4] if len(trend_images) > 4 else None
-    uploaded_add_5 = st.file_uploader("Upload Image 5", type=["png", "jpg", "jpeg"], key=f"seg_trends_add_5_{segment['id']}")
-    title_add_5 = st.text_input("Title for Image 5", value=existing_5.get("title", "") if existing_5 else "", key=f"seg_trends_add_title_5_{segment['id']}")
-    comment_add_5 = st.text_area("Comment for Image 5", value=existing_5.get("comment", "") if existing_5 else "", key=f"seg_trends_add_comment_5_{segment['id']}", height=150)
+    uploaded_add_5 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg", "pptx"], key=f"seg_trends_add_5_{segment['id']}")
+    title_add_5 = st.text_input("Slide Title", value=existing_5.get("title", "") if existing_5 else "", key=f"seg_trends_add_title_5_{segment['id']}")
+    comment_add_5 = st.text_area("Slide Comment", value=existing_5.get("comment", "") if existing_5 else "", key=f"seg_trends_add_comment_5_{segment['id']}", height=150)
     
     # Preview existing image 5
     if existing_5 and not uploaded_add_5:
@@ -4366,7 +4366,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.image(file_path_5, caption="Current Image 5", use_container_width=True)
     
     # Save button for Image 5
-    if st.button("Save Image 5", key=f"save_seg_trends_5_{segment['id']}"):
+    if st.button("Save Slide 5", key=f"save_seg_trends_5_{segment['id']}"):
         if not uploaded_add_5:
             st.error("Please upload Image 5.")
         else:
