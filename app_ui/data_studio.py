@@ -5397,7 +5397,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
     
     # Title - pre-populated with saved value
     jtbd_title = st.text_input(
-        "View Title (editable)",
+        "Slide Title",
         value=saved_jtbd_title,
         placeholder="e.g., Battlegrounds JTBDs: BP to Secure & Grow",
         key=f"jtbd_title_{segment['id']}",
@@ -5985,15 +5985,16 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                     st.markdown("---")
 
 
+
 def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Brand Truths: Title, description, and brand sections with images"""
-    st.markdown("#### Brand Truths Configuration")
+
     
     # Load existing saved configuration
     existing_tables = get_tables_for_segment(segment["id"])
     
     # SECTION 1: Brand Profile Comparison Table (CSV Upload) - NEW SECTION AT TOP
-    st.markdown("### Brand Profile Comparison Table")
+    st.markdown("### Brand-Wise Profile Data Table")
     st.caption("Upload a CSV with multiple brand columns for comparison")
     
     # Load existing brand profile table
@@ -6002,14 +6003,14 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # Title for the table
     if saved_brand_profile and saved_brand_profile["filter_json"]:
         saved_profile_config = json.loads(saved_brand_profile["filter_json"])
-        saved_profile_title = saved_profile_config.get("title", "Brand-wise profile data")
+        saved_profile_title = saved_profile_config.get("title", "Brand-Wise Profile Data")
     else:
-        saved_profile_title = "Brand-wise profile data"
+        saved_profile_title = "Brand-Wise Profile Data"
     
     profile_table_title = st.text_input(
         "Table Title",
         value=saved_profile_title,
-        placeholder="e.g., Brand-wise profile data",
+        placeholder="e.g., Brand-Wise Profile Data",
         key=f"brand_profile_title_{segment['id']}"
     )
     
@@ -6167,8 +6168,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # SECTION 2: Brand Truths Configuration (Original Section)
-    st.markdown("### Brand Truths Sections")
-    st.caption("Create a brand comparison view with title, description, and brand sections")
+    st.markdown("### Brand Truths Summary")
+    st.caption("Compare profile insights for multiple brands")
     
     saved_brand_truths = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
     
@@ -6180,7 +6181,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Title and main description - pre-populated with saved values
     brand_title = st.text_input(
-        "View Title (editable)",
+        "Slide Title",
         value=saved_brand_title,
         placeholder="e.g., Double Whammy for BP – Threat on NE & Laterals",
         key=f"brand_title_{segment['id']}",
@@ -6188,7 +6189,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     )
     
     brand_description = st.text_area(
-        "Main Description",
+        "Overall Comment",
         value=saved_brand_description,
         placeholder="e.g., BP watch-outs across age groups; threat from RF & Sig on Laterals...",
         height=100,
@@ -6199,7 +6200,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Number of brand sections
     num_brands = st.number_input(
-        "Number of Brand Sections (1-8)",
+        "Number of brands (1-8)",
         min_value=1,
         max_value=8,
         value=3,
@@ -6228,7 +6229,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         
         with col_content:
             brand_content = st.text_area(
-                f"Brand insights/bullet points",
+                f"Brand insights",
                 value=saved_brand_content,
                 placeholder="Enter brand insights, trends, threats, opportunities...",
                 height=150,
@@ -6330,7 +6331,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
     
     # Save button
-    if st.button("Save Brand Truths to Dashboard", key=f"save_brand_truths_{segment['id']}"):
+    if st.button("Save Brands Summary to Dashboard", key=f"save_brand_truths_{segment['id']}"):
         if not brand_title:
             st.error("Please provide a title for the view.")
         else:
@@ -6366,8 +6367,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
-    # Carousel Images Section (BEFORE S&V)
-    st.markdown("### Carousel Images")
+    # Brand Fit Scores by Needs Section (BEFORE S&V)
+    st.markdown("### Brand Fit Scores by Needs")
     st.caption("Multiple slides will be displayed as tabs")
     
     # Get existing carousel images
@@ -6380,7 +6381,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         st.info(f"✅ {len(brand_carousel_media)} carousel image(s) already uploaded. Upload new images to replace them.")
     
     uploaded_carousel_images = st.file_uploader(
-        "Upload Carousel Images (multiple allowed)",
+        "Upload Slides (multiple allowed)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key=f"brand_carousel_images_{segment['id']}"
@@ -6432,7 +6433,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 )
                 
                 page_title = st.text_input(
-                    "Page Title (full title above image)",
+                    "Slide Title",
                     value=existing_page_title,
                     key=f"brand_carousel_page_title_{segment['id']}_{idx}",
                     placeholder="e.g., Brand Performance Overview..."
@@ -6452,7 +6453,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.markdown("---")
     
     # Save button for carousel
-    if st.button("Save Carousel Images to Dashboard", key=f"save_brand_carousel_{segment['id']}"):
+    if st.button("Save Slides to Dashboard", key=f"save_brand_carousel_{segment['id']}"):
         if not uploaded_carousel_images:
             st.error("Please upload at least one carousel image.")
         else:
@@ -6483,19 +6484,19 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # Standalone Images Section (BEFORE S&V)
-    st.markdown("### Standalone Images")
-    st.caption("Upload up to 4 standalone images with title and comment")
+    st.markdown("### Additional Analysis Slides")
+    st.caption("Upload slides and add title and comment")
     
     # Get existing standalone images
     brand_standalone_images = [m for m in existing_media if m.get("section") == "Brand Truths" and m.get("name") == "Standalone Images"]
     brand_standalone_images = sorted(brand_standalone_images, key=lambda x: x.get("id", 0))
     
     # Image 1
-    st.markdown("**Image 1:**")
+    st.markdown("**Consumer Palate Slide 1**")
     existing_s1 = brand_standalone_images[0] if len(brand_standalone_images) > 0 else None
-    uploaded_s1 = st.file_uploader("Upload Image 1", type=["png", "jpg", "jpeg"], key=f"brand_standalone_1_{segment['id']}")
-    title_s1 = st.text_input("Title for Image 1", value=existing_s1.get("title", "") if existing_s1 else "", key=f"brand_s_title_1_{segment['id']}")
-    comment_s1 = st.text_area("Comment for Image 1", value=existing_s1.get("comment", "") if existing_s1 else "", key=f"brand_s_comment_1_{segment['id']}", height=150)
+    uploaded_s1 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg"], key=f"brand_standalone_1_{segment['id']}")
+    title_s1 = st.text_input("Slide Title", value=existing_s1.get("title", "") if existing_s1 else "", key=f"brand_s_title_1_{segment['id']}")
+    comment_s1 = st.text_area("Slide Comment", value=existing_s1.get("comment", "") if existing_s1 else "", key=f"brand_s_comment_1_{segment['id']}", height=150)
     
     if existing_s1 and not uploaded_s1:
         file_path_s1 = existing_s1.get("file_path")
@@ -6504,7 +6505,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             with col2:
                 st.image(file_path_s1, caption="Current Image 1", use_container_width=True)
     
-    if st.button("Save Image 1", key=f"save_brand_s1_{segment['id']}"):
+    if st.button("Save Slide 1", key=f"save_brand_s1_{segment['id']}"):
         if not uploaded_s1:
             st.error("Please upload Image 1.")
         else:
@@ -6525,11 +6526,11 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # Image 2
-    st.markdown("**Image 2:**")
+    st.markdown("**Consumer pallete slide 2**")
     existing_s2 = brand_standalone_images[1] if len(brand_standalone_images) > 1 else None
-    uploaded_s2 = st.file_uploader("Upload Image 2", type=["png", "jpg", "jpeg"], key=f"brand_standalone_2_{segment['id']}")
-    title_s2 = st.text_input("Title for Image 2", value=existing_s2.get("title", "") if existing_s2 else "", key=f"brand_s_title_2_{segment['id']}")
-    comment_s2 = st.text_area("Comment for Image 2", value=existing_s2.get("comment", "") if existing_s2 else "", key=f"brand_s_comment_2_{segment['id']}", height=150)
+    uploaded_s2 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg"], key=f"brand_standalone_2_{segment['id']}")
+    title_s2 = st.text_input("Slide Title", value=existing_s2.get("title", "") if existing_s2 else "", key=f"brand_s_title_2_{segment['id']}")
+    comment_s2 = st.text_area("Slide Comment", value=existing_s2.get("comment", "") if existing_s2 else "", key=f"brand_s_comment_2_{segment['id']}", height=150)
     
     if existing_s2 and not uploaded_s2:
         file_path_s2 = existing_s2.get("file_path")
@@ -6538,7 +6539,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             with col2:
                 st.image(file_path_s2, caption="Current Image 2", use_container_width=True)
     
-    if st.button("Save Image 2", key=f"save_brand_s2_{segment['id']}"):
+    if st.button("Save Slide 2", key=f"save_brand_s2_{segment['id']}"):
         if not uploaded_s2:
             st.error("Please upload Image 2.")
         else:
@@ -6559,11 +6560,11 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # Image 3
-    st.markdown("**Image 3:**")
+    st.markdown("**Brand Associations Slide**")
     existing_s3 = brand_standalone_images[2] if len(brand_standalone_images) > 2 else None
-    uploaded_s3 = st.file_uploader("Upload Image 3", type=["png", "jpg", "jpeg"], key=f"brand_standalone_3_{segment['id']}")
-    title_s3 = st.text_input("Title for Image 3", value=existing_s3.get("title", "") if existing_s3 else "", key=f"brand_s_title_3_{segment['id']}")
-    comment_s3 = st.text_area("Comment for Image 3", value=existing_s3.get("comment", "") if existing_s3 else "", key=f"brand_s_comment_3_{segment['id']}", height=150)
+    uploaded_s3 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg"], key=f"brand_standalone_3_{segment['id']}")
+    title_s3 = st.text_input("Slide Title", value=existing_s3.get("title", "") if existing_s3 else "", key=f"brand_s_title_3_{segment['id']}")
+    comment_s3 = st.text_area("Slide Comment", value=existing_s3.get("comment", "") if existing_s3 else "", key=f"brand_s_comment_3_{segment['id']}", height=150)
     
     if existing_s3 and not uploaded_s3:
         file_path_s3 = existing_s3.get("file_path")
@@ -6572,7 +6573,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             with col2:
                 st.image(file_path_s3, caption="Current Image 3", use_container_width=True)
     
-    if st.button("Save Image 3", key=f"save_brand_s3_{segment['id']}"):
+    if st.button("Save Slide 3", key=f"save_brand_s3_{segment['id']}"):
         if not uploaded_s3:
             st.error("Please upload Image 3.")
         else:
@@ -6593,11 +6594,11 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # Image 4
-    st.markdown("**Image 4:**")
+    st.markdown("**Repertoire vs Core Slide**")
     existing_s4 = brand_standalone_images[3] if len(brand_standalone_images) > 3 else None
-    uploaded_s4 = st.file_uploader("Upload Image 4", type=["png", "jpg", "jpeg"], key=f"brand_standalone_4_{segment['id']}")
-    title_s4 = st.text_input("Title for Image 4", value=existing_s4.get("title", "") if existing_s4 else "", key=f"brand_s_title_4_{segment['id']}")
-    comment_s4 = st.text_area("Comment for Image 4", value=existing_s4.get("comment", "") if existing_s4 else "", key=f"brand_s_comment_4_{segment['id']}", height=150)
+    uploaded_s4 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg"], key=f"brand_standalone_4_{segment['id']}")
+    title_s4 = st.text_input("Slide Title", value=existing_s4.get("title", "") if existing_s4 else "", key=f"brand_s_title_4_{segment['id']}")
+    comment_s4 = st.text_area("Slide Comment", value=existing_s4.get("comment", "") if existing_s4 else "", key=f"brand_s_comment_4_{segment['id']}", height=150)
     
     if existing_s4 and not uploaded_s4:
         file_path_s4 = existing_s4.get("file_path")
@@ -6606,7 +6607,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             with col2:
                 st.image(file_path_s4, caption="Current Image 4", use_container_width=True)
     
-    if st.button("Save Image 4", key=f"save_brand_s4_{segment['id']}"):
+    if st.button("Save Slide 4", key=f"save_brand_s4_{segment['id']}"):
         if not uploaded_s4:
             st.error("Please upload Image 4.")
         else:
@@ -6627,11 +6628,11 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # Image 5
-    st.markdown("**Image 5:**")
+    st.markdown("**Moments of Conveniality Slide**")
     existing_s5 = brand_standalone_images[4] if len(brand_standalone_images) > 4 else None
-    uploaded_s5 = st.file_uploader("Upload Image 5", type=["png", "jpg", "jpeg"], key=f"brand_standalone_5_{segment['id']}")
-    title_s5 = st.text_input("Title for Image 5", value=existing_s5.get("title", "") if existing_s5 else "", key=f"brand_s_title_5_{segment['id']}")
-    comment_s5 = st.text_area("Comment for Image 5", value=existing_s5.get("comment", "") if existing_s5 else "", key=f"brand_s_comment_5_{segment['id']}", height=150)
+    uploaded_s5 = st.file_uploader("Upload Slide", type=["png", "jpg", "jpeg"], key=f"brand_standalone_5_{segment['id']}")
+    title_s5 = st.text_input("Slide Title", value=existing_s5.get("title", "") if existing_s5 else "", key=f"brand_s_title_5_{segment['id']}")
+    comment_s5 = st.text_area("Slide Comment", value=existing_s5.get("comment", "") if existing_s5 else "", key=f"brand_s_comment_5_{segment['id']}", height=150)
     
     if existing_s5 and not uploaded_s5:
         file_path_s5 = existing_s5.get("file_path")
@@ -6640,7 +6641,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             with col2:
                 st.image(file_path_s5, caption="Current Image 5", use_container_width=True)
     
-    if st.button("Save Image 5", key=f"save_brand_s5_{segment['id']}"):
+    if st.button("Save Slide 5", key=f"save_brand_s5_{segment['id']}"):
         if not uploaded_s5:
             st.error("Please upload Image 5.")
         else:
@@ -6664,7 +6665,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### Placeholder Slides")
     
     # Placeholder Images (in expander)
-    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+    with st.expander("📸 Upload Placeholder Slides (optional)", expanded=False):
         # Get existing placeholder images
         brand_placeholder_images = [m for m in existing_media if m.get("section") == "Brand Truths" and m.get("name") == "Placeholder Images"]
         brand_placeholder_images = sorted(brand_placeholder_images, key=lambda x: x.get("id", 0))
@@ -6839,15 +6840,15 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # S&V section - appears after carousel and standalone images
     st.markdown("---")
-    st.markdown("### Strengths & Vulnerabilities Section")
-    st.caption("Add a main title and two side-by-side boxes for strengths and vulnerabilities")
+    st.markdown("### Strengths & Vulnerabilities")
+    st.caption("Add content for the brand strengths and vulnerabilities")
     
     # Get saved S&V data
     saved_sv_data = brand_truths_config.get("strengths_vulnerabilities", {})
     
     # Main title for S&V section
     sv_main_title = st.text_input(
-        "Main Title for Strengths & Vulnerabilities",
+        "Slide Title",
         value=saved_sv_data.get("main_title", "PRI Strengths & Vulnerabilities"),
         placeholder="e.g., PRI Strengths & Vulnerabilities",
         key=f"brand_sv_main_title_{segment['id']}"
@@ -7000,7 +7001,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Main title for SWOT
     swot_main_title = st.text_input(
-        "Main Title for SWOT Analysis",
+        "Slide Title",
         value=saved_swot_data.get("main_title", "PRI Portfolio SWOT"),
         placeholder="e.g., PRI Portfolio SWOT",
         key=f"brand_swot_main_title_{segment['id']}"
@@ -7230,7 +7231,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             comment=""
         )
         st.success("SWOT Analysis saved to dashboard!")
-    
 
 
 def get_india_geojson_url():
@@ -7446,7 +7446,6 @@ def render_india_map_overview(all_states: List[str], tabs_config: List[Dict]) ->
         ])
         st.markdown(unassigned_html, unsafe_allow_html=True)
 
-
 def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, selected_states: List[str], selected_brands: List[str]) -> None:
     """Preview state performance calculations for Battlegrounds
     
@@ -7554,8 +7553,7 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
 
 def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Battlegrounds: 3 tabs with states, brands, and images"""
-    st.markdown("#### Battlegrounds Configuration")
-    st.caption("Configure 3 battleground tabs with states, brands, and images")
+
     
     if df_filtered.empty:
         st.warning("No data available for this segment.")
@@ -7583,8 +7581,8 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
     
     # Configure 3 tabs
-    st.markdown("### Configure 3 Battleground Tabs")
-    st.caption("Note: Each state can only be assigned to one tab. Brands can be reused across tabs.")
+    st.markdown("### Battlegrounds Deep Dive")
+    st.caption("Cluster states into three groups based on the brand's position and market realities")
     
     show_formatting_tips()
     
@@ -7624,7 +7622,7 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         with col_color:
             tab_color = st.color_picker(
-                "Tab Color",
+                "Select Color",
                 value=saved_tab.get("color", default_colors[i]),
                 key=f"bg_tab{i}_color_{segment['id']}",
                 help="Color for map and state assignments"
@@ -7683,8 +7681,8 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         # IMAGE 1 (TOP) - MOVED HERE AFTER BRAND SELECTION, BEFORE STATE PERFORMANCE ANALYSIS
         st.markdown("---")
-        st.markdown("**Image 1 (Top):**")
-        st.caption("This image will appear at the top of the tab")
+        st.markdown("**Sources of Growth Slide**")
+        st.caption("Upload Slide")
         
         col_img1, col_inputs1 = st.columns([1, 1])
         
@@ -7712,14 +7710,14 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         with col_inputs1:
             img1_title = st.text_input(
-                "Title for Image 1",
+                "Slide Title",
                 value=existing_img1.get("title", "") if existing_img1 else "",
                 key=f"bg_tab{i}_img1_title_{segment['id']}",
                 placeholder="Enter title for top image"
             )
             
             img1_comment = st.text_area(
-                "Comment for Image 1 (optional)",
+                "Slide Comment",
                 value=existing_img1.get("comment", "").replace(f"Tab {i+1} - Image 1", "").strip() if existing_img1 else "",
                 key=f"bg_tab{i}_img1_comment_{segment['id']}",
                 placeholder="Add insights, observations, or context...",
@@ -7728,22 +7726,18 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         # State Performance Calculation Section
         st.markdown("---")
-        st.markdown("**State Performance Analysis (Between Images):**")
-        st.caption("This section will appear between the two images on the dashboard")
+        st.caption("BTM data is autopopulated; fill comments for SOG, 5Cs, and Imagery")
         
         # Comment for calculation section
         saved_calc_comment = saved_tab.get("calc_comment", "")
         calc_comment = st.text_area(
-            "Add comment for state performance section (optional)",
+            "Cluster 1 Overall Comment",
             value=saved_calc_comment,
             key=f"bg_tab{i}_calc_comment_{segment['id']}",
             placeholder="Add insights about state performance, BTM status, brand contributions...",
             height=100
         )
         
-        # State-specific additional columns configuration
-        st.markdown("**Additional Analysis Columns (Per State):**")
-        st.caption("Configure column headings and content for each selected state")
         
         # Custom column heading names
         st.markdown("**Customize Column Headings:**")
@@ -7840,8 +7834,8 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         st.markdown("---")
         
         # IMAGE 2 (BOTTOM)
-        st.markdown("**Image 2 (Bottom):**")
-        st.caption("This image will appear at the bottom of the tab")
+        st.markdown("**Outlet Activation Slide**")
+        st.caption("Upload Slide")
         
         col_img2, col_inputs2 = st.columns([1, 1])
         
@@ -7869,14 +7863,14 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
         
         with col_inputs2:
             img2_title = st.text_input(
-                "Title for Image 2",
+                "Slide Title",
                 value=existing_img2.get("title", "") if existing_img2 else "",
                 key=f"bg_tab{i}_img2_title_{segment['id']}",
                 placeholder="Enter title for bottom image"
             )
             
             img2_comment = st.text_area(
-                "Comment for Image 2 (optional)",
+                "Slide Comment",
                 value=existing_img2.get("comment", "").replace(f"Tab {i+1} - Image 2", "").strip() if existing_img2 else "",
                 key=f"bg_tab{i}_img2_comment_{segment['id']}",
                 placeholder="Add insights, observations, or context...",
