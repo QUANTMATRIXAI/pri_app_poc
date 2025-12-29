@@ -1,0 +1,2044 @@
+
+def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
+    """Configure NS Landscape: Manufacturing Pivot Table + Brand Multi-Bar Chart"""
+
+    
+    if df_filtered.empty:
+        st.warning("No data available for this segment.")
+        return
+    
+    # Check required columns
+    required_cols = ["PRI Year", "Mfg Com", "NS M INR", "Brand Family", "Brand"]
+    missing_cols = [col for col in required_cols if col not in df_filtered.columns]
+    if missing_cols:
+        st.error(f"Missing required columns: {', '.join(missing_cols)}")
+        return
+    
+    # Load existing saved configurations
+    existing_tables = get_tables_for_segment(segment["id"])
+    existing_charts = get_charts_for_segment(segment["id"])
+    
+    # Get saved configs for each component
+    saved_pivot = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Manufacturing Pivot"), None)
+    saved_chart = next((c for c in existing_charts if c["section"] == "NS Landscape" and c["name"] == "Brand Performance"), None)
+    saved_zonal = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Zonal Pivot"), None)
+    saved_north = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "NORTH State Drill-Down"), None)
+    saved_west = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "WEST+CSD State Drill-Down"), None)
+    saved_east = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "EAST State Drill-Down"), None)
+    saved_south = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "SOUTH State Drill-Down"), None)
+    
+    # Parse saved pivot config
+    pivot_config = json.loads(saved_pivot["filter_json"]) if saved_pivot and saved_pivot["filter_json"] else {}
+    saved_pivot_title = pivot_config.get("title", "NS Overview")
+    saved_pivot_comment = saved_pivot["comment"] if saved_pivot else ""
+    
+    st.markdown("---")
+    
+    # 1. Manufacturing Pivot Table Configuration
+    st.markdown("### Manufacturing Co. View")
+    st.caption("NS YoY Growth and CAGR by Manufacturing Company")
+    
+    # Editable title - pre-populated with saved value
+    pivot_title = st.text_input(
+        "Slide Title",
+        value=saved_pivot_title,
+        key=f"ns_pivot_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    # Year filter - automatically use all available years
+    available_years = ["A23", "A24", "A25"]
+    years_in_data = [y for y in available_years if y in df_filtered["PRI Year"].unique()]
+    selected_years_pivot = years_in_data  # Use all available years by default
+    
+    # Preview pivot
+    if selected_years_pivot:
+        preview_pivot = create_manufacturing_pivot(df_filtered, selected_years_pivot)
+        if preview_pivot is not None:
+            st.markdown("**Preview:**")
+            
+            # Apply styling to highlight Segment Total row
+            def highlight_segment_total(row):
+                """Highlight the Segment Total row with golden background"""
+                mfg_com = preview_pivot.loc[row.name, 'Mfg Com']
+                if mfg_com == "Segment Total":
+                    return ['background-color: #FFF3CD; font-weight: bold; border-top: 3px solid #f5b400; border-bottom: 3px solid #f5b400; color: #856404'] * len(row)
+                return [''] * len(row)
+            
+            styled_preview = preview_pivot.style.apply(highlight_segment_total, axis=1)
+            st.dataframe(styled_preview, use_container_width=True, hide_index=True)
+    
+    # Comment box AFTER preview - pre-populated with saved value
+    pivot_comment = st.text_area(
+        "Add Comment",
+        value=saved_pivot_comment,
+        key=f"ns_pivot_comment_{segment['id']}",
+        placeholder="Add insights or notes about the manufacturing view...",
+        height=120
+    )
+    
+    show_formatting_tips()
+    
+    if st.button("Save Manufacturing Pivot to Dashboard", key=f"save_ns_pivot_{segment['id']}"):
+        if not selected_years_pivot:
+            st.error("Please select at least one year.")
+        else:
+            # Delete existing pivot for this section
+            delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
+            
+            # Save configuration with title
+            filter_config = json.dumps({
+                "years": selected_years_pivot,
+                "title": pivot_title
+            })
+            save_table(
+                name="Manufacturing Pivot",
+                dataset_id=dataset_id,
+                columns=["Mfg Com", "PRI Year", "NS M INR"],  # Will be pivoted
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="NS Landscape",
+                filter_json=filter_config,
+                comment=pivot_comment
+            )
+            st.success("Manufacturing Pivot saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # 2. Brand Multi-Bar Chart Configuration
+    st.markdown("### Brand View")
+    st.caption("NS YoY Growth and CAGR by Brands")
+    
+    # Parse saved chart config
+    chart_config = json.loads(saved_chart["filter_json"]) if saved_chart and saved_chart["filter_json"] else {}
+    saved_families = chart_config.get("brand_families", [])
+    saved_brands = chart_config.get("brands", [])
+    saved_excluded_states = chart_config.get("excluded_states", [])
+    saved_chart_title = chart_config.get("title", "Brand Performance")
+    saved_chart_comment = saved_chart["comment"] if saved_chart else ""
+    
+    # Editable title - pre-populated with saved value
+    chart_title = st.text_input(
+        "Chart Title (editable)",
+        value=saved_chart_title,
+        key=f"ns_chart_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    # Filters in 3 columns
+    brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+    
+    # Get all states for exclusion filter
+    all_states = sorted(df_filtered["State"].dropna().unique().tolist()) if "State" in df_filtered.columns else []
+    
+    # Use saved families if available, otherwise default
+    default_families = saved_families if saved_families else (brand_families[:2] if len(brand_families) > 2 else brand_families)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        selected_families = st.multiselect(
+            "Select Brand Families",
+            options=brand_families,
+            default=default_families,
+            key=f"ns_chart_families_{segment['id']}"
+        )
+    
+    with col2:
+        if selected_families:
+            brands_in_families = sorted(
+                df_filtered[df_filtered["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
+            )
+            # Use saved brands if available, otherwise auto-select all
+            default_brands = [b for b in saved_brands if b in brands_in_families] if saved_brands else brands_in_families
+            selected_brands = st.multiselect(
+                "Select Brands",
+                options=brands_in_families,
+                default=default_brands,
+                key=f"ns_chart_brands_{segment['id']}"
+            )
+        else:
+            selected_brands = []
+            st.info("Select Brand Family first")
+    
+    with col3:
+        # Filter saved excluded states to only include those still available
+        valid_excluded_states = [s for s in saved_excluded_states if s in all_states] if saved_excluded_states else []
+        excluded_states = st.multiselect(
+            "Select States to Exclude from Analysis",
+            options=all_states,
+            default=valid_excluded_states,
+            key=f"ns_excluded_states_{segment['id']}",
+            help="These states will be excluded from all sections below"
+        )
+    
+    # Apply state exclusion filter to df_filtered for all sections below
+    if excluded_states and "State" in df_filtered.columns:
+        df_filtered = df_filtered[~df_filtered["State"].isin(excluded_states)].copy()
+        st.info(f"🚫 Excluding {len(excluded_states)} state(s) from all sections: {', '.join(excluded_states)}")
+    
+    # Preview chart
+    if selected_brands:
+        df_chart = df_filtered[df_filtered["Brand"].isin(selected_brands)]
+        df_chart = df_chart[df_chart["PRI Year"].isin(years_in_data)]
+        
+        if not df_chart.empty:
+            st.markdown("**Preview:**")
+            # Create data for chart - aggregate NS by Brand and Year
+            chart_data = df_chart.groupby(["Brand", "Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+            
+            # Create pivot to calculate growth rates
+            pivot_wide = chart_data.pivot_table(
+                index=["Brand", "Brand Family"],
+                columns="PRI Year",
+                values="NS M INR",
+                aggfunc="sum"
+            ).reset_index()
+            
+            # Calculate growth rates and CAGR for each brand
+            growth_rates = {}
+            cagr_values = {}
+            for _, row in pivot_wide.iterrows():
+                brand = row["Brand"]
+                ns_a23 = row.get("A23", 0) or 0
+                ns_a24 = row.get("A24", 0) or 0
+                ns_a25 = row.get("A25", 0) or 0
+                
+                # A24 Growth % (YoY from A23)
+                a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
+                
+                # A25 Growth % (YoY from A24)
+                a25_growth = ((ns_a25 - ns_a24) / ns_a24 * 100) if ns_a24 != 0 else 0
+                
+                # 2-Year CAGR (A23 to A25)
+                cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
+                
+                growth_rates[brand] = {
+                    "A23": None,  # No growth for base year - don't show anything
+                    "A24": round(a24_growth, 1),
+                    "A25": round(a25_growth, 1)
+                }
+                cagr_values[brand] = round(cagr_2yr, 1)
+            
+            # Add growth rate text - empty for A23 (no growth rate for base year)
+            chart_data["Growth Text"] = chart_data.apply(
+                lambda r: f"{growth_rates[r['Brand']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+                axis=1
+            )
+            
+            # Sort brands by Brand Family total NS, then by brand total NS
+            brand_totals = chart_data.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
+            brand_totals.columns = ["Brand", "Brand Family", "Total"]
+            
+            family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
+            family_totals.columns = ["Brand Family", "Family Total"]
+            family_totals = family_totals.sort_values("Family Total", ascending=False)
+            
+            brand_totals = brand_totals.merge(family_totals, on="Brand Family")
+            brand_totals = brand_totals.sort_values(["Family Total", "Total"], ascending=[False, False])
+            
+            # Create ordered brand list
+            brand_order = brand_totals["Brand"].tolist()
+            
+            # Use Plotly Express with professional color scheme
+            import plotly.express as px
+            
+            # Green color scheme - light to dark
+            color_map = {
+                "A23": "#90EE90",  # Light Green
+                "A24": "#4CAF50",  # Medium Green
+                "A25": "#1B5E20"   # Dark Green
+            }
+            
+            fig = px.bar(
+                chart_data,
+                x="Brand",
+                y="NS M INR",
+                color="PRI Year",
+                barmode="group",
+                text="Growth Text",
+                height=500,
+                color_discrete_map=color_map,
+                category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand": brand_order}
+            )
+            
+            # Format growth rate text on top of bars
+            fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+            
+            # Get max Y value for positioning CAGR boxes
+            max_y = chart_data["NS M INR"].max()
+            
+            # Add CAGR boxes above each brand with neutral styling
+            annotations = []
+            for brand in brand_order:
+                cagr = cagr_values[brand]
+                
+                annotations.append(dict(
+                    x=brand,
+                    y=max_y * 1.15,  # Position above the bars
+                    text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
+                    showarrow=False,
+                    font=dict(size=10, color="white", family="Arial"),
+                    bgcolor="#607D8B",  # Neutral gray-blue color
+                    bordercolor="#FFFFFF",
+                    borderwidth=1,
+                    borderpad=6,
+                    xanchor='center',
+                    yanchor='bottom',
+                    opacity=0.95
+                ))
+            
+            fig.update_layout(
+                xaxis_title="Brand",
+                yaxis_title="NS M INR",
+                legend_title="PRI Year",
+                annotations=annotations,
+                yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Show data table with growth rates in expander (same as dashboard)
+            with st.expander("📊 View Data"):
+                # Create summary table with NS values and growth rates
+                summary_df = pivot_wide.copy()
+                
+                # Calculate growth rates for each brand
+                summary_df["A24 Growth %"] = summary_df.apply(
+                    lambda r: round(((r.get("A24", 0) or 0) - (r.get("A23", 0) or 0)) / (r.get("A23", 0) or 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+                    axis=1
+                )
+                summary_df["A25 Growth %"] = summary_df.apply(
+                    lambda r: round(((r.get("A25", 0) or 0) - (r.get("A24", 0) or 0)) / (r.get("A24", 0) or 1) * 100, 1) if (r.get("A24", 0) or 0) != 0 else 0, 
+                    axis=1
+                )
+                summary_df["2-Yr CAGR %"] = summary_df.apply(
+                    lambda r: round((((r.get("A25", 0) or 0) / (r.get("A23", 0) or 1)) ** 0.5 - 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+                    axis=1
+                )
+                
+                # Calculate Brand Family totals
+                family_summary = []
+                for family in summary_df["Brand Family"].unique():
+                    family_data = summary_df[summary_df["Brand Family"] == family]
+                    
+                    # Sum NS values for the family
+                    a23_total = family_data["A23"].sum() if "A23" in family_data.columns else 0
+                    a24_total = family_data["A24"].sum() if "A24" in family_data.columns else 0
+                    a25_total = family_data["A25"].sum() if "A25" in family_data.columns else 0
+                    
+                    # Calculate family-level growth rates
+                    a24_growth = ((a24_total - a23_total) / a23_total * 100) if a23_total != 0 else 0
+                    a25_growth = ((a25_total - a24_total) / a24_total * 100) if a24_total != 0 else 0
+                    cagr_2yr = (((a25_total / a23_total) ** 0.5 - 1) * 100) if a23_total != 0 else 0
+                    
+                    family_summary.append({
+                        "Brand Family": family,
+                        "Brand": f"📊 {family} Total",
+                        "A23": a23_total,
+                        "A24": a24_total,
+                        "A25": a25_total,
+                        "A24 Growth %": round(a24_growth, 1),
+                        "A25 Growth %": round(a25_growth, 1),
+                        "2-Yr CAGR %": round(cagr_2yr, 1),
+                        "is_family_total": True
+                    })
+                
+                # Add is_family_total flag to brand rows
+                summary_df["is_family_total"] = False
+                
+                # Combine family totals with brand data
+                family_df = pd.DataFrame(family_summary)
+                combined_df = pd.concat([family_df, summary_df], ignore_index=True)
+                
+                # Sort by Brand Family, then by is_family_total (True first), then by Brand
+                combined_df = combined_df.sort_values(
+                    by=["Brand Family", "is_family_total", "Brand"],
+                    ascending=[True, False, True]
+                ).reset_index(drop=True)
+                
+                # Reorder columns
+                column_order = ["Brand Family", "Brand"]
+                if "A23" in combined_df.columns:
+                    column_order.append("A23")
+                if "A24" in combined_df.columns:
+                    column_order.append("A24")
+                if "A25" in combined_df.columns:
+                    column_order.append("A25")
+                if "A24 Growth %" in combined_df.columns:
+                    column_order.append("A24 Growth %")
+                if "A25 Growth %" in combined_df.columns:
+                    column_order.append("A25 Growth %")
+                column_order.append("2-Yr CAGR %")
+                
+                # Select and display columns
+                display_df = combined_df[column_order].copy()
+                
+                # Format NS columns with commas
+                for col in ["A23", "A24", "A25"]:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
+                
+                # Format growth columns with % symbol
+                for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %"]:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+                
+                # Apply styling to highlight family totals
+                def highlight_family_totals(row):
+                    if combined_df.loc[row.name, "is_family_total"]:
+                        return ['background-color: #E3F2FD; font-weight: bold; border-top: 2px solid #2196F3'] * len(row)
+                    return [''] * len(row)
+                
+                styled_table = display_df.style.apply(highlight_family_totals, axis=1)
+                st.dataframe(styled_table, use_container_width=True, hide_index=True, height=400)
+    
+    # Comment box AFTER chart preview - pre-populated with saved value
+    chart_comment = st.text_area(
+        "Add Comment",
+        value=saved_chart_comment,
+        key=f"ns_chart_comment_{segment['id']}",
+        placeholder="Add insights about brand performance...",
+        height=120
+    )
+    
+    if st.button("Save Chart to Dashboard", key=f"save_ns_chart_{segment['id']}"):
+        if not selected_families or not selected_brands:
+            st.error("Please select Brand Families and at least one Brand.")
+        else:
+            # Delete existing chart for this section
+            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
+            
+            # Save configuration with title
+            filter_config = json.dumps({
+                "brand_families": selected_families,
+                "brands": selected_brands,
+                "excluded_states": excluded_states,
+                "years": years_in_data,
+                "title": chart_title
+            })
+            save_chart(
+                name="Brand Performance",
+                chart_type="bar",
+                x_col="Brand",
+                y_cols=["NS M INR"],
+                dataset_id=dataset_id,
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="NS Landscape",
+                filter_json=filter_config,
+                comment=chart_comment
+            )
+            st.success("Brand Performance Chart saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # Brand View: Key Competitors Configuration
+    st.markdown("### Brand View: Key Competitors")
+    st.caption("NS YoY Growth and CAGR for Key Competitor Brand Families")
+    
+    # Load existing saved chart
+    existing_charts = get_charts_for_segment(segment["id"])
+    saved_family_chart = next((c for c in existing_charts if c["section"] == "NS Landscape" and c["name"] == "Brand Family Performance"), None)
+    saved_family_comment = saved_family_chart["comment"] if saved_family_chart else ""
+    
+    # Parse saved config
+    if saved_family_chart and saved_family_chart["filter_json"]:
+        family_config = json.loads(saved_family_chart["filter_json"])
+        saved_family_families = family_config.get("brand_families", [])
+        saved_family_brands = family_config.get("brands", [])
+        saved_family_title = family_config.get("title", "Brand Performance: Key Competitors")
+    else:
+        saved_family_families = []
+        saved_family_brands = []
+        saved_family_title = "Brand Performance: Key Competitors"
+    
+    # Editable title - pre-populated with saved value
+    family_chart_title = st.text_input(
+        "Chart Title (editable)",
+        value=saved_family_title,
+        key=f"ns_family_chart_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    # Show available options from Section 2
+    if not selected_families or not selected_brands:
+        st.warning("⚠️ Please configure Section 2 (Brand Performance Chart) first to select Brand Families and Brands.")
+    else:
+        st.info(f"📌 Available from Section 2: {len(selected_families)} Brand Families, {len(selected_brands)} Brands")
+        
+        # Brand Family filter (only show families from Section 2)
+        st.markdown("**Select Brand Families to display:**")
+        selected_families_family = st.multiselect(
+            "Brand Families",
+            options=sorted(selected_families),
+            default=[f for f in saved_family_families if f in selected_families] if saved_family_families else selected_families,
+            key=f"family_chart_families_{segment['id']}",
+            label_visibility="collapsed"
+        )
+        
+        # Brand filter (only show brands from Section 2, filtered by selected families)
+        if selected_families_family:
+            # Filter brands that belong to selected families
+            df_temp = df_filtered[df_filtered["Brand Family"].isin(selected_families_family)]
+            available_brands_family = [b for b in selected_brands if b in df_temp["Brand"].unique()]
+            
+            st.markdown("**Select Brands to include:**")
+            selected_brands_family = st.multiselect(
+                "Brands",
+                options=sorted(available_brands_family),
+                default=[b for b in saved_family_brands if b in available_brands_family] if saved_family_brands else available_brands_family,
+                key=f"family_chart_brands_{segment['id']}",
+                label_visibility="collapsed"
+            )
+        else:
+            selected_brands_family = []
+            st.warning("Please select at least one Brand Family first.")
+    
+    # Preview chart if brands are selected
+    if selected_brands_family:
+        df_family_chart = df_filtered[df_filtered["Brand"].isin(selected_brands_family)]
+        df_family_chart = df_family_chart[df_family_chart["PRI Year"].isin(years_in_data)]
+        
+        # Apply state exclusion from Section 2
+        if excluded_states and "State" in df_family_chart.columns:
+            df_family_chart = df_family_chart[~df_family_chart["State"].isin(excluded_states)]
+            st.caption(f"🚫 Using Section 2 state exclusions: {len(excluded_states)} state(s)")
+        
+        if not df_family_chart.empty:
+            st.markdown("**Preview:**")
+            # Aggregate by Brand Family and Year
+            family_chart_data = df_family_chart.groupby(["Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+            
+            # Create pivot to calculate growth rates and CAGR
+            family_pivot = family_chart_data.pivot_table(
+                index="Brand Family",
+                columns="PRI Year",
+                values="NS M INR",
+                aggfunc="sum"
+            ).reset_index()
+            
+            # Calculate growth rates and CAGR for each family
+            family_growth_rates = {}
+            family_cagr_values = {}
+            for _, row in family_pivot.iterrows():
+                family = row["Brand Family"]
+                ns_a23 = row.get("A23", 0) or 0
+                ns_a24 = row.get("A24", 0) or 0
+                ns_a25 = row.get("A25", 0) or 0
+                
+                # A24 Growth % (YoY from A23)
+                a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
+                
+                # A25 Growth % (YoY from A24)
+                a25_growth = ((ns_a25 - ns_a24) / ns_a24 * 100) if ns_a24 != 0 else 0
+                
+                # 2-Year CAGR (A23 to A25)
+                cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
+                
+                family_growth_rates[family] = {
+                    "A23": None,
+                    "A24": round(a24_growth, 1),
+                    "A25": round(a25_growth, 1)
+                }
+                family_cagr_values[family] = round(cagr_2yr, 1)
+            
+            # Add growth rate text
+            family_chart_data["Growth Text"] = family_chart_data.apply(
+                lambda r: f"{family_growth_rates[r['Brand Family']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+                axis=1
+            )
+            
+            # Sort families by total NS
+            family_totals = family_chart_data.groupby("Brand Family")["NS M INR"].sum().reset_index()
+            family_totals.columns = ["Brand Family", "Total"]
+            family_totals = family_totals.sort_values("Total", ascending=False)
+            family_order = family_totals["Brand Family"].tolist()
+            
+            # Green color scheme
+            color_map = {
+                "A23": "#90EE90",
+                "A24": "#4CAF50",
+                "A25": "#1B5E20"
+            }
+            
+            fig = px.bar(
+                family_chart_data,
+                x="Brand Family",
+                y="NS M INR",
+                color="PRI Year",
+                barmode="group",
+                text="Growth Text",
+                height=500,
+                color_discrete_map=color_map,
+                category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand Family": family_order}
+            )
+            
+            # Format growth rate text on top of bars
+            fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+            
+            # Get max Y value for positioning CAGR boxes
+            max_y = family_chart_data["NS M INR"].max()
+            
+            # Add CAGR boxes above each brand family
+            annotations = []
+            for family in family_order:
+                cagr = family_cagr_values[family]
+                
+                annotations.append(dict(
+                    x=family,
+                    y=max_y * 1.15,
+                    text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
+                    showarrow=False,
+                    font=dict(size=10, color="white", family="Arial"),
+                    bgcolor="#607D8B",
+                    bordercolor="#FFFFFF",
+                    borderwidth=1,
+                    borderpad=6,
+                    xanchor='center',
+                    yanchor='bottom',
+                    opacity=0.95
+                ))
+            
+            fig.update_layout(
+                xaxis_title="Brand Family",
+                yaxis_title="NS M INR",
+                legend_title="PRI Year",
+                annotations=annotations,
+                yaxis=dict(range=[0, max_y * 1.25])
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # Comment box for family chart
+    family_chart_comment = st.text_area(
+        "Add comment for Brand Family chart (optional)",
+        value=saved_family_comment,
+        key=f"ns_family_chart_comment_{segment['id']}",
+        placeholder="Add insights about brand family performance...",
+        height=120
+    )
+    
+    if st.button("Save Brand Family Chart to Dashboard", key=f"save_family_chart_{segment['id']}"):
+        if not selected_families_family or not selected_brands_family:
+            st.error("Please select Brand Families and Brands.")
+        else:
+            # Delete existing chart
+            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
+            
+            # Save configuration with Section 2.5 filters (use Section 2 state exclusions)
+            filter_config = json.dumps({
+                "brand_families": selected_families_family,
+                "brands": selected_brands_family,
+                "excluded_states": excluded_states,  # Use Section 2 state exclusions
+                "years": years_in_data,
+                "title": family_chart_title
+            })
+            save_chart(
+                name="Brand Family Performance",
+                chart_type="bar",
+                x_col="Brand Family",
+                y_cols=["NS M INR"],
+                dataset_id=dataset_id,
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="NS Landscape",
+                filter_json=filter_config,
+                comment=family_chart_comment
+            )
+            st.success("Brand Family Performance Chart saved to dashboard!")
+    
+    st.markdown("---")
+    # 3. Zonal Pivot Table Configuration
+    st.markdown("### 3. Zonal Pivot Table (Brand Family x Zone)")
+    st.caption("Pivot table showing NS M INR for A25 by Brand Family, Brand, and Zone")
+    
+    # Parse saved zonal config
+    zonal_config = json.loads(saved_zonal["filter_json"]) if saved_zonal and saved_zonal["filter_json"] else {}
+    saved_zonal_title = zonal_config.get("title", "NS Zonal View")
+    saved_zonal_comment = saved_zonal["comment"] if saved_zonal else ""
+    
+    # Editable title - pre-populated with saved value
+    zonal_title = st.text_input(
+        "Table Title (editable)",
+        value=saved_zonal_title,
+        key=f"ns_zonal_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    # Use same brand families and brands from chart
+    if selected_families and selected_brands:
+        # Check if Zone column exists
+        if "Zone" not in df_filtered.columns:
+            st.warning("Zone column not found in dataset. This table requires a 'Zone' column.")
+        else:
+            # Filter data for A24 and A25 (needed for growth calculations)
+            df_zonal = df_filtered[df_filtered["PRI Year"].isin(["A24", "A25"])].copy()
+            df_zonal = df_zonal[df_zonal["Brand Family"].isin(selected_families)]
+            df_zonal = df_zonal[df_zonal["Brand"].isin(selected_brands)]
+            
+            if not df_zonal.empty:
+                # Preview zonal table
+                preview_zonal = create_zonal_pivot(df_zonal, selected_families, selected_brands)
+                if preview_zonal is not None:
+                    st.markdown("**Preview:**")
+                    
+                    # Get zones
+                    zones_unsorted = preview_zonal.attrs.get('zones', [])
+                    segment_growth = preview_zonal.attrs.get('segment_growth', {})
+                    pw_salience = preview_zonal.attrs.get('pw_salience', {})
+                    
+                    # Sort zones by salience (highest first)
+                    zones = sorted(zones_unsorted, key=lambda z: pw_salience.get(z, 0), reverse=True)
+                    
+                    # Display in 4 columns
+                    if len(zones) == 4:
+                        cols = st.columns(4)
+                    elif len(zones) >= 2:
+                        cols = st.columns(len(zones))
+                    else:
+                        cols = [st.container()]
+                    
+                    # Define colors for brand families
+                    family_colors = {
+                        0: "#E8F5E9",  # Light Green
+                        1: "#E3F2FD",  # Light Blue
+                        2: "#FFF3E0",  # Light Orange
+                        3: "#F3E5F5",  # Light Purple
+                        4: "#FCE4EC",  # Light Pink
+                    }
+                    
+                    for idx, zone in enumerate(zones):
+                        with cols[idx] if idx < len(cols) else cols[-1]:
+                            # Big centered zone header
+                            st.markdown(f"""
+                                <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                                    <h2 style='margin: 0; font-size: 1.8rem;'>{zone}</h2>
+                                    <p style='margin: 0; font-size: 1.3rem; font-weight: bold; color: #1976D2;'>
+                                        {pw_salience.get(zone, 0):.0f}% Salience
+                                    </p>
+                                    <p style='margin: 0; font-size: 1.1rem; font-weight: bold;'>
+                                        {segment_growth.get(zone, 0):+.1f}% Gr in A25
+                                    </p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Filter rows for this zone
+                            zone_df = preview_zonal[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_BTM"]].copy()
+                            
+                            # Apply styling to highlight brand families
+                            def highlight_families(row):
+                                row_type = zone_df.loc[row.name, 'Type']
+                                if row_type == 'family':
+                                    family_idx = len([i for i in zone_df.index[:row.name+1] if zone_df.loc[i, 'Type'] == 'family']) - 1
+                                    color = family_colors[family_idx % len(family_colors)]
+                                    return [f'background-color: {color}; font-weight: bold'] * len(row)
+                                return [''] * len(row)
+                            
+                            def color_negatives(val):
+                                """Color negative numbers red"""
+                                if isinstance(val, str):
+                                    # Check if string contains negative number
+                                    if '-' in val or val.startswith('−'):
+                                        return 'color: #D32F2F; font-weight: bold'
+                                return ''
+                            
+                            # Drop Type column and rename
+                            display_df = zone_df.drop(columns=['Type'])
+                            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "BTM"]
+                            
+                            styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
+                            st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
+                
+                # Comment box AFTER zonal preview - pre-populated with saved value
+                zonal_comment = st.text_area(
+                    "Add comment for zonal table (optional)",
+                    value=saved_zonal_comment,
+                    key=f"ns_zonal_comment_{segment['id']}",
+                    placeholder="Add insights about zonal performance...",
+                    height=120
+                )
+                
+                if st.button("Save Zonal Table to Dashboard", key=f"save_ns_zonal_{segment['id']}"):
+                    # Delete existing zonal table
+                    delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
+                    
+                    # Save configuration with title
+                    filter_config = json.dumps({
+                        "brand_families": selected_families,
+                        "brands": selected_brands,
+                        "excluded_states": excluded_states,
+                        "year": "A25",
+                        "title": zonal_title
+                    })
+                    save_table(
+                        name="Zonal Pivot",
+                        dataset_id=dataset_id,
+                        columns=["Brand Family", "Brand", "Zone", "NS M INR"],
+                        created_by=current_user["username"],
+                        segment_id=segment["id"],
+                        section="NS Landscape",
+                        filter_json=filter_config,
+                        comment=zonal_comment
+                    )
+                    st.success("Zonal Pivot Table saved to dashboard!")
+            else:
+                st.info("No data available for A25 with selected brands.")
+    else:
+        st.info("Configure Brand Families and Brands in section 2 first.")
+    
+    st.markdown("---")
+    
+    # 4. NORTH Zone State Drill-Down
+    st.markdown("### 4. NORTH Zone - State Drill-Down")
+    st.caption("State-level performance within NORTH zone with brand deep-dive")
+    
+    # Parse saved NORTH config
+    north_config = json.loads(saved_north["filter_json"]) if saved_north and saved_north["filter_json"] else {}
+    saved_north_title = north_config.get("title", "Battleground in North")
+    saved_north_states = north_config.get("states", [])
+    saved_north_comments = json.loads(saved_north["comment"]) if saved_north and saved_north["comment"] else {}
+    saved_north_comment_top = saved_north_comments.get("top", "") if isinstance(saved_north_comments, dict) else ""
+    saved_north_comment_bottom = saved_north_comments.get("bottom", "") if isinstance(saved_north_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
+    north_title = st.text_input(
+        "Table Title (editable)",
+        value=saved_north_title,
+        key=f"ns_north_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    if selected_families and selected_brands:
+        # Check if State column exists
+        if "State" not in df_filtered.columns:
+            st.warning("State column not found in dataset. This feature requires a 'State' column.")
+        else:
+            # Filter data for NORTH zone only
+            df_north = df_filtered[df_filtered["Zone"] == "North Zone"].copy()
+            
+            if df_north.empty:
+                st.info("No data available for NORTH zone.")
+            else:
+                # Get all states in NORTH zone
+                states_in_north = sorted(df_north["State"].dropna().unique().tolist())
+                
+                # First show state summary for ALL states in North Zone
+                st.markdown("**State Summary - All States in North Zone:**")
+                preview_all_states = create_north_state_drilldown(df_filtered, selected_families, selected_brands, states_in_north)
+                
+                if preview_all_states:
+                    # Define colors for styling
+                    def highlight_zone_row(row):
+                        """Highlight the NORTH zone row"""
+                        state_val = preview_all_states['state_summary'].loc[row.name, 'State']
+                        if state_val == 'NORTH':
+                            return ['background-color: #E3F2FD; font-weight: bold'] * len(row)
+                        return [''] * len(row)
+                    
+                    def color_negatives_summary(val):
+                        """Color negative numbers red"""
+                        if isinstance(val, str):
+                            if '-' in val or val.startswith('−'):
+                                return 'color: #D32F2F; font-weight: bold'
+                        return ''
+                    
+                    summary_styled = preview_all_states['state_summary'].style.apply(highlight_zone_row, axis=1).applymap(color_negatives_summary)
+                    st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding NORTH zone row)
+                    sorted_states = preview_all_states['state_summary'][preview_all_states['state_summary']['State'] != 'NORTH']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
+                north_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    value=saved_north_comment_top,
+                    key=f"ns_north_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
+                
+                st.markdown("---")
+                
+                # Then let user select states for deep-dive - use saved states if available
+                available_states = sorted_states if preview_all_states else states_in_north
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_states = [s for s in saved_north_states if s in available_states] if saved_north_states else []
+                default_north_states = valid_saved_states if valid_saved_states else (available_states[:4] if len(available_states) > 4 else available_states)
+                selected_states = st.multiselect(
+                    "Select States for Brand Deep-Dive",
+                    options=available_states,
+                    default=default_north_states,
+                    key=f"ns_north_states_{segment['id']}"
+                )
+                
+                if selected_states:
+                    # Preview deep-dive
+                    st.markdown("**Preview - State Deep-Dive:**")
+                    preview_north = create_north_state_drilldown(df_filtered, selected_families, selected_brands, selected_states)
+                    
+                    if preview_north and preview_north['state_details']:
+                        # Define colors for brand families
+                        family_colors = {
+                            0: "#E8F5E9",  # Light Green
+                            1: "#E3F2FD",  # Light Blue
+                            2: "#FFF3E0",  # Light Orange
+                            3: "#F3E5F5",  # Light Purple
+                            4: "#FCE4EC",  # Light Pink
+                        }
+                        
+                        # Display states in rows of 4
+                        states_per_row = 4
+                        for row_start in range(0, len(selected_states), states_per_row):
+                            row_states = selected_states[row_start:row_start + states_per_row]
+                            # Always create 4 columns for consistent alignment
+                            cols = st.columns(states_per_row)
+                            
+                            for idx, state in enumerate(row_states):
+                                with cols[idx]:
+                                    if state in preview_north['state_details']:
+                                        state_df = preview_north['state_details'][state]
+                                        
+                                        # State header
+                                        st.markdown(f"""
+                                            <div style='text-align: center; padding: 0.5rem; background-color: #f0f2f6; border-radius: 0.5rem; margin-bottom: 0.5rem;'>
+                                                <h3 style='margin: 0; font-size: 1.4rem;'>{state}</h3>
+                                            </div>
+                                        """, unsafe_allow_html=True)
+                                        
+                                        # Apply styling
+                                        def highlight_families(row):
+                                            row_type = state_df.loc[row.name, 'Type']
+                                            if row_type == 'family':
+                                                family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
+                                                color = family_colors[family_idx % len(family_colors)]
+                                                return [f'background-color: {color}; font-weight: bold'] * len(row)
+                                            return [''] * len(row)
+                                        
+                                        def color_negatives(val):
+                                            if isinstance(val, str):
+                                                if '-' in val or val.startswith('−'):
+                                                    return 'color: #D32F2F; font-weight: bold'
+                                            return ''
+                                        
+                                        # Drop Type column for display
+                                        display_df = state_df.drop(columns=['Type'])
+                                        styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
+                                        st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+                            
+                            # Add spacing between rows if there are more states
+                            if row_start + states_per_row < len(selected_states):
+                                st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+                
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
+                st.markdown("---")
+                north_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    value=saved_north_comment_bottom,
+                    key=f"ns_north_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
+                
+                if st.button("Save NORTH Zone Drill-Down to Dashboard", key=f"save_ns_north_{segment['id']}"):
+                    if not selected_states:
+                        st.error("Please select at least one state for deep-dive.")
+                    else:
+                        # Delete existing
+                        delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
+                        
+                        # Combine both comments into a JSON structure
+                        comments_json = json.dumps({
+                            "top": north_comment_top,
+                            "bottom": north_comment_bottom
+                        })
+                        
+                        # Save configuration with title
+                        filter_config = json.dumps({
+                            "brand_families": selected_families,
+                            "brands": selected_brands,
+                            "excluded_states": excluded_states,
+                            "states": selected_states,
+                            "zone": "North Zone",
+                            "title": north_title
+                        })
+                        save_table(
+                            name="NORTH State Drill-Down",
+                            dataset_id=dataset_id,
+                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=comments_json
+                        )
+                        st.success("NORTH Zone Drill-Down saved to dashboard!")
+    else:
+        st.info("Configure Brand Families and Brands in section 2 first.")
+    
+    st.markdown("---")
+    
+    # 5. WEST+CSD Zone State Drill-Down
+    st.markdown("### 5. WEST+CSD Zone - State Drill-Down")
+    st.caption("State-level performance within WEST+CSD zone with brand deep-dive")
+    
+    # Parse saved WEST config
+    west_config = json.loads(saved_west["filter_json"]) if saved_west and saved_west["filter_json"] else {}
+    saved_west_title = west_config.get("title", "Battleground in West+CSD")
+    saved_west_states = west_config.get("states", [])
+    saved_west_comments = json.loads(saved_west["comment"]) if saved_west and saved_west["comment"] else {}
+    saved_west_comment_top = saved_west_comments.get("top", "") if isinstance(saved_west_comments, dict) else ""
+    saved_west_comment_bottom = saved_west_comments.get("bottom", "") if isinstance(saved_west_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
+    west_title = st.text_input(
+        "Table Title (editable)",
+        value=saved_west_title,
+        key=f"ns_west_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    if selected_families and selected_brands:
+        if "State" not in df_filtered.columns:
+            st.warning("State column not found in dataset.")
+        else:
+            df_west = df_filtered[df_filtered["Zone"] == "West+CSD Zone"].copy()
+            
+            if df_west.empty:
+                st.info("No data available for WEST+CSD zone.")
+            else:
+                states_in_west = sorted(df_west["State"].dropna().unique().tolist())
+                
+                st.markdown("**State Summary - All States in West+CSD Zone:**")
+                preview_all_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_west, "West+CSD Zone")
+                
+                if preview_all_west:
+                    summary_styled = style_state_summary(preview_all_west['state_summary'])
+                    st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding zone row)
+                    sorted_states_west = preview_all_west['state_summary'][preview_all_west['state_summary']['State'] != 'WEST+CSD']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
+                west_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    value=saved_west_comment_top,
+                    key=f"ns_west_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
+                
+                st.markdown("---")
+                
+                # Use saved states if available
+                available_states_west = sorted_states_west if preview_all_west else states_in_west
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_west = [s for s in saved_west_states if s in available_states_west] if saved_west_states else []
+                default_west_states = valid_saved_west if valid_saved_west else (available_states_west[:4] if len(available_states_west) > 4 else available_states_west)
+                selected_states_west = st.multiselect(
+                    "Select States for Brand Deep-Dive",
+                    options=available_states_west,
+                    default=default_west_states,
+                    key=f"ns_west_states_{segment['id']}"
+                )
+                
+                if selected_states_west:
+                    st.markdown("**Preview - State Deep-Dive:**")
+                    preview_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_west, "West+CSD Zone")
+                    
+                    if preview_west and preview_west['state_details']:
+                        render_state_drilldown_preview(preview_west, selected_states_west)
+                
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
+                st.markdown("---")
+                west_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    value=saved_west_comment_bottom,
+                    key=f"ns_west_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
+                
+                if st.button("Save WEST+CSD Zone Drill-Down to Dashboard", key=f"save_ns_west_{segment['id']}"):
+                    if not selected_states_west:
+                        st.error("Please select at least one state for deep-dive.")
+                    else:
+                        delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
+                        
+                        comments_json = json.dumps({"top": west_comment_top, "bottom": west_comment_bottom})
+                        filter_config = json.dumps({
+                            "brand_families": selected_families,
+                            "brands": selected_brands,
+                            "excluded_states": excluded_states,
+                            "states": selected_states_west,
+                            "zone": "West+CSD Zone",
+                            "title": west_title
+                        })
+                        save_table(
+                            name="WEST+CSD State Drill-Down",
+                            dataset_id=dataset_id,
+                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=comments_json
+                        )
+                        st.success("WEST+CSD Zone Drill-Down saved to dashboard!")
+    else:
+        st.info("Configure Brand Families and Brands in section 2 first.")
+    
+    st.markdown("---")
+    
+    # 6. EAST Zone State Drill-Down
+    st.markdown("### 6. EAST Zone - State Drill-Down")
+    st.caption("State-level performance within EAST zone with brand deep-dive")
+    
+    # Parse saved EAST config
+    east_config = json.loads(saved_east["filter_json"]) if saved_east and saved_east["filter_json"] else {}
+    saved_east_title = east_config.get("title", "Battleground in East")
+    saved_east_states = east_config.get("states", [])
+    saved_east_comments = json.loads(saved_east["comment"]) if saved_east and saved_east["comment"] else {}
+    saved_east_comment_top = saved_east_comments.get("top", "") if isinstance(saved_east_comments, dict) else ""
+    saved_east_comment_bottom = saved_east_comments.get("bottom", "") if isinstance(saved_east_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
+    east_title = st.text_input(
+        "Table Title (editable)",
+        value=saved_east_title,
+        key=f"ns_east_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    if selected_families and selected_brands:
+        if "State" not in df_filtered.columns:
+            st.warning("State column not found in dataset.")
+        else:
+            df_east = df_filtered[df_filtered["Zone"] == "East Zone"].copy()
+            
+            if df_east.empty:
+                st.info("No data available for EAST zone.")
+            else:
+                states_in_east = sorted(df_east["State"].dropna().unique().tolist())
+                
+                st.markdown("**State Summary - All States in East Zone:**")
+                preview_all_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_east, "East Zone")
+                
+                if preview_all_east:
+                    summary_styled = style_state_summary(preview_all_east['state_summary'])
+                    st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding zone row)
+                    sorted_states_east = preview_all_east['state_summary'][preview_all_east['state_summary']['State'] != 'EAST']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
+                east_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    value=saved_east_comment_top,
+                    key=f"ns_east_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
+                
+                st.markdown("---")
+                
+                # Use saved states if available
+                available_states_east = sorted_states_east if preview_all_east else states_in_east
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_east = [s for s in saved_east_states if s in available_states_east] if saved_east_states else []
+                default_east_states = valid_saved_east if valid_saved_east else (available_states_east[:4] if len(available_states_east) > 4 else available_states_east)
+                selected_states_east = st.multiselect(
+                    "Select States for Brand Deep-Dive",
+                    options=available_states_east,
+                    default=default_east_states,
+                    key=f"ns_east_states_{segment['id']}"
+                )
+                
+                if selected_states_east:
+                    st.markdown("**Preview - State Deep-Dive:**")
+                    preview_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_east, "East Zone")
+                    
+                    if preview_east and preview_east['state_details']:
+                        render_state_drilldown_preview(preview_east, selected_states_east)
+                
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
+                st.markdown("---")
+                east_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    value=saved_east_comment_bottom,
+                    key=f"ns_east_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
+                
+                if st.button("Save EAST Zone Drill-Down to Dashboard", key=f"save_ns_east_{segment['id']}"):
+                    if not selected_states_east:
+                        st.error("Please select at least one state for deep-dive.")
+                    else:
+                        delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
+                        
+                        comments_json = json.dumps({"top": east_comment_top, "bottom": east_comment_bottom})
+                        filter_config = json.dumps({
+                            "brand_families": selected_families,
+                            "brands": selected_brands,
+                            "excluded_states": excluded_states,
+                            "states": selected_states_east,
+                            "zone": "East Zone",
+                            "title": east_title
+                        })
+                        save_table(
+                            name="EAST State Drill-Down",
+                            dataset_id=dataset_id,
+                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=comments_json
+                        )
+                        st.success("EAST Zone Drill-Down saved to dashboard!")
+    else:
+        st.info("Configure Brand Families and Brands in section 2 first.")
+    
+    st.markdown("---")
+    
+    # 7. SOUTH Zone State Drill-Down
+    st.markdown("### 7. SOUTH Zone - State Drill-Down")
+    st.caption("State-level performance within SOUTH zone with brand deep-dive")
+    
+    # Parse saved SOUTH config
+    south_config = json.loads(saved_south["filter_json"]) if saved_south and saved_south["filter_json"] else {}
+    saved_south_title = south_config.get("title", "Battleground in South")
+    saved_south_states = south_config.get("states", [])
+    saved_south_comments = json.loads(saved_south["comment"]) if saved_south and saved_south["comment"] else {}
+    saved_south_comment_top = saved_south_comments.get("top", "") if isinstance(saved_south_comments, dict) else ""
+    saved_south_comment_bottom = saved_south_comments.get("bottom", "") if isinstance(saved_south_comments, dict) else ""
+    
+    # Editable title - pre-populated with saved value
+    south_title = st.text_input(
+        "Table Title (editable)",
+        value=saved_south_title,
+        key=f"ns_south_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    if selected_families and selected_brands:
+        if "State" not in df_filtered.columns:
+            st.warning("State column not found in dataset.")
+        else:
+            df_south = df_filtered[df_filtered["Zone"] == "South Zone"].copy()
+            
+            if df_south.empty:
+                st.info("No data available for SOUTH zone.")
+            else:
+                states_in_south = sorted(df_south["State"].dropna().unique().tolist())
+                
+                st.markdown("**State Summary - All States in South Zone:**")
+                preview_all_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_south, "South Zone")
+                
+                if preview_all_south:
+                    summary_styled = style_state_summary(preview_all_south['state_summary'])
+                    st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Get sorted states from summary (excluding zone row)
+                    sorted_states_south = preview_all_south['state_summary'][preview_all_south['state_summary']['State'] != 'SOUTH']['State'].tolist()
+                
+                # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
+                south_comment_top = st.text_area(
+                    "Comment for State Summary Table (optional)",
+                    value=saved_south_comment_top,
+                    key=f"ns_south_comment_top_{segment['id']}",
+                    placeholder="Add insights about state-level performance...",
+                    height=100
+                )
+                
+                st.markdown("---")
+                
+                # Use saved states if available
+                available_states_south = sorted_states_south if preview_all_south else states_in_south
+                # Filter saved states to only include those still available (after exclusion)
+                valid_saved_south = [s for s in saved_south_states if s in available_states_south] if saved_south_states else []
+                default_south_states = valid_saved_south if valid_saved_south else (available_states_south[:4] if len(available_states_south) > 4 else available_states_south)
+                selected_states_south = st.multiselect(
+                    "Select States for Brand Deep-Dive",
+                    options=available_states_south,
+                    default=default_south_states,
+                    key=f"ns_south_states_{segment['id']}"
+                )
+                
+                if selected_states_south:
+                    st.markdown("**Preview - State Deep-Dive:**")
+                    preview_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_south, "South Zone")
+                    
+                    if preview_south and preview_south['state_details']:
+                        render_state_drilldown_preview(preview_south, selected_states_south)
+                
+                # Comment for brand deep-dive AFTER preview - pre-populated with saved value
+                st.markdown("---")
+                south_comment_bottom = st.text_area(
+                    "Comment for Brand Deep-Dive (optional)",
+                    value=saved_south_comment_bottom,
+                    key=f"ns_south_comment_bottom_{segment['id']}",
+                    placeholder="Add insights about brand performance by state...",
+                    height=100
+                )
+                
+                if st.button("Save SOUTH Zone Drill-Down to Dashboard", key=f"save_ns_south_{segment['id']}"):
+                    if not selected_states_south:
+                        st.error("Please select at least one state for deep-dive.")
+                    else:
+                        delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
+                        
+                        comments_json = json.dumps({"top": south_comment_top, "bottom": south_comment_bottom})
+                        filter_config = json.dumps({
+                            "brand_families": selected_families,
+                            "brands": selected_brands,
+                            "excluded_states": excluded_states,
+                            "states": selected_states_south,
+                            "zone": "South Zone",
+                            "title": south_title
+                        })
+                        save_table(
+                            name="SOUTH State Drill-Down",
+                            dataset_id=dataset_id,
+                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=comments_json
+                        )
+                        st.success("SOUTH Zone Drill-Down saved to dashboard!")
+    else:
+        st.info("Configure Brand Families and Brands in section 2 first.")
+    
+    st.markdown("---")
+    
+    # 5. State Performance Analysis Table
+    st.markdown("### 5. State Performance Analysis Table")
+    st.caption("Select states and brand family to view detailed performance metrics")
+    
+    # Load existing saved configuration
+    saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
+    state_perf_config = json.loads(saved_state_perf["filter_json"]) if saved_state_perf and saved_state_perf["filter_json"] else {}
+    saved_state_perf_title = state_perf_config.get("title", "State Performance Analysis")
+    saved_state_perf_states = state_perf_config.get("states", [])
+    saved_state_perf_family = state_perf_config.get("brand_family", "")
+    saved_state_perf_comment = saved_state_perf["comment"] if saved_state_perf else ""
+    
+    # Editable title
+    state_perf_title = st.text_input(
+        "Table Title (editable)",
+        value=saved_state_perf_title,
+        key=f"ns_state_perf_title_{segment['id']}",
+        help="This title will appear on the dashboard"
+    )
+    
+    # Check required columns
+    if "State" not in df_filtered.columns or "Brand Family" not in df_filtered.columns:
+        st.warning("State and Brand Family columns required for this analysis.")
+    else:
+        # Get available states and brand families (INDEPENDENT from Section 2)
+        all_states = sorted(df_filtered["State"].dropna().unique().tolist())
+        all_brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Multiselect for states
+            selected_states_perf = st.multiselect(
+                "Select States",
+                options=all_states,
+                default=saved_state_perf_states if saved_state_perf_states else all_states[:5],  # Default to first 5 states
+                key=f"ns_state_perf_states_{segment['id']}"
+            )
+        
+        with col2:
+            # Independent brand family selection
+            selected_family = st.selectbox(
+                "Select Brand Family",
+                options=all_brand_families,
+                index=all_brand_families.index(saved_state_perf_family) if saved_state_perf_family in all_brand_families else 0,
+                key=f"ns_state_perf_family_{segment['id']}"
+            )
+        
+        if selected_states_perf and selected_family:
+                # Calculate the table - need to pass original df for All Spirits calculation
+                # Load the full dataset (unfiltered by segment)
+                from app_core.uploads import load_dataset
+                df_full = load_dataset(dataset_id)
+                
+                state_perf_df = calculate_state_performance_table(df_filtered, df_full, selected_states_perf, selected_family, segment)
+                
+                if state_perf_df is not None and not state_perf_df.empty:
+                    st.markdown("**Preview:**")
+                    
+                    # Display the styled table using Streamlit dataframe with custom styling
+                    display_state_performance_table(state_perf_df)
+                    
+                    # Show bubble chart preview
+                    st.markdown("---")
+                    st.markdown("**Bubble Chart Preview:**")
+                    
+                    # Create bubble chart
+                    import plotly.graph_objects as go
+                    
+                    # Extract data
+                    ai_row = state_perf_df[state_perf_df["State"] == "All India"]
+                    state_rows = state_perf_df[state_perf_df["State"] != "All India"]
+                    
+                    if not ai_row.empty and not state_rows.empty:
+                        # Get All India values
+                        ai_ms = float(ai_row["BP FAM\nA25 MS"].iloc[0])
+                        ai_salience = float(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
+                        
+                        # Prepare state data
+                        states = []
+                        x_values = []
+                        y_values = []
+                        sizes = []
+                        contribution_values = []
+                        
+                        for _, row in state_rows.iterrows():
+                            contribution = float(row["State\nContribution\nto AI"])
+                            states.append(row["State"])
+                            x_values.append(float(row["BP FAM\nA25 MS"]))
+                            y_values.append(float(row["Segment\nSalience to\nAll Spirits"]))
+                            contribution_values.append(contribution)
+                            # Use square root so area is proportional to contribution, not diameter
+                            sizes.append((contribution ** 0.5) * 10)
+                        
+                        # Create figure
+                        fig = go.Figure()
+                        
+                        fig.add_trace(go.Scatter(
+                            x=x_values,
+                            y=y_values,
+                            mode='markers+text',
+                            marker=dict(
+                                size=sizes,
+                                color='#4A90E2',  # Beautiful single blue color
+                                opacity=0.7,
+                                line=dict(width=2, color='white')
+                            ),
+                            text=states,
+                            textposition='middle center',
+                            textfont=dict(size=10, color='black', family='Arial Black'),
+                            customdata=contribution_values,
+                            hovertemplate='<b>%{text}</b><br>BP FAM MS: %{x:.0f}%<br>Segment Salience: %{y:.0f}%<br>State Contribution: %{customdata:.0f}%<extra></extra>',
+                            name='States'
+                        ))
+                        
+                        # Add reference lines
+                        fig.add_hline(y=ai_salience, line_dash="dash", line_color="#9B59B6", line_width=2,
+                                      annotation_text=f"A25 Seg. Sal. ({ai_salience:.1f}%) All India",
+                                      annotation_position="right",
+                                      annotation=dict(font=dict(size=11, color="#9B59B6")))
+                        
+                        fig.add_vline(x=ai_ms, line_dash="dash", line_color="#E74C3C", line_width=2,
+                                      annotation_text=f"A25 BP Fam MS ({ai_ms:.1f}%) All India",
+                                      annotation_position="top",
+                                      annotation=dict(font=dict(size=11, color="#E74C3C")))
+                        
+                        fig.update_layout(
+                            xaxis_title="X-Axis: State Segment Salience (BP FAM A25 MS %)",
+                            yaxis_title="Y-Axis: State Segment Salience Gr (LY)",
+                            height=600,
+                            showlegend=False,
+                            hovermode='closest',
+                            plot_bgcolor='#F8F9FA',
+                            paper_bgcolor='white',
+                            xaxis=dict(
+                                showgrid=True, 
+                                gridcolor='#E0E0E0',
+                                gridwidth=1,
+                                zeroline=False,
+                                title_font=dict(size=13, color='#2C3E50')
+                            ),
+                            yaxis=dict(
+                                showgrid=True, 
+                                gridcolor='#E0E0E0',
+                                gridwidth=1,
+                                zeroline=False,
+                                title_font=dict(size=13, color='#2C3E50')
+                            ),
+                            font=dict(family="Arial, sans-serif", size=12, color='#2C3E50')
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No data available for selected states and brand family.")
+                
+                # Comment box
+                state_perf_comment = st.text_area(
+                    "Add comment for state performance table (optional)",
+                    value=saved_state_perf_comment,
+                    key=f"ns_state_perf_comment_{segment['id']}",
+                    placeholder="Add insights about state performance metrics...",
+                    height=120
+                )
+                
+                if st.button("Save State Performance Table to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
+                    # Delete existing table
+                    delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+                    
+                    # Save configuration (independent from Section 2)
+                    filter_config = json.dumps({
+                        "states": selected_states_perf,
+                        "brand_family": selected_family,
+                        "title": state_perf_title
+                    })
+                    save_table(
+                        name="State Performance Analysis",
+                        dataset_id=dataset_id,
+                        columns=["State", "Brand Family", "Metrics"],
+                        created_by=current_user["username"],
+                        segment_id=segment["id"],
+                        section="NS Landscape",
+                        filter_json=filter_config,
+                        comment=state_perf_comment
+                    )
+                    st.success("State Performance Analysis Table saved to dashboard!")
+                
+                st.markdown("---")
+                st.markdown("### Strategic Insights Grid")
+                st.caption("Add strategic insights in a 3x3 grid format")
+                
+                # Load existing grid data
+                saved_grid = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Strategic Insights Grid"), None)
+                grid_config = json.loads(saved_grid["filter_json"]) if saved_grid and saved_grid["filter_json"] else {}
+                saved_grid_title = grid_config.get("title", "Strategic Insights")
+                saved_grid_data = grid_config.get("grid_data", {})
+                
+                # Title for the grid
+                grid_title = st.text_input(
+                    "Grid Title",
+                    value=saved_grid_title,
+                    key=f"ns_grid_title_{segment['id']}",
+                    placeholder="e.g., Strategic Insights"
+                )
+                
+                # 3 rows with titles and 3 columns
+                grid_data = {}
+                
+                for row_idx in range(3):
+                    st.markdown(f"**Row {row_idx + 1}:**")
+                    
+                    # Row title
+                    row_title = st.text_input(
+                        f"Row {row_idx + 1} Title",
+                        value=saved_grid_data.get(f"row_{row_idx}_title", ""),
+                        key=f"ns_grid_row_{row_idx}_title_{segment['id']}",
+                        placeholder=f"e.g., Category {row_idx + 1}"
+                    )
+                    grid_data[f"row_{row_idx}_title"] = row_title
+                    
+                    # 3 columns for this row
+                    cols = st.columns(3)
+                    for col_idx in range(3):
+                        with cols[col_idx]:
+                            cell_value = st.text_area(
+                                f"Column {col_idx + 1}",
+                                value=saved_grid_data.get(f"row_{row_idx}_col_{col_idx}", ""),
+                                key=f"ns_grid_r{row_idx}_c{col_idx}_{segment['id']}",
+                                placeholder="Enter content...",
+                                height=100
+                            )
+                            grid_data[f"row_{row_idx}_col_{col_idx}"] = cell_value
+                    
+                    st.markdown("---")
+                
+                # Preview the grid
+                if grid_title:
+                    st.markdown("**Preview:**")
+                    st.markdown(f"### {grid_title}")
+                    
+                    # Display 3x3 grid preview with row titles as first column
+                    for row_idx in range(3):
+                        row_title = grid_data.get(f"row_{row_idx}_title", "")
+                        
+                        # 4 columns: row title + 3 content columns
+                        cols = st.columns([1, 2, 2, 2])
+                        
+                        # Row title in first column
+                        with cols[0]:
+                            if row_title:
+                                st.markdown(f"""
+                                    <div style='
+                                        background: #E3F2FD;
+                                        border: 1px solid #90CAF9;
+                                        padding: 1rem;
+                                        margin: 0.5rem 0;
+                                        border-radius: 6px;
+                                        min-height: 100px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                    '>
+                                        <div style='
+                                            font-size: 0.95rem;
+                                            font-weight: 600;
+                                            color: #1565C0;
+                                            text-align: center;
+                                        '>
+                                            {row_title}
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.markdown("""
+                                    <div style='
+                                        background: #FAFAFA;
+                                        border: 1px dashed #CCCCCC;
+                                        padding: 1rem;
+                                        margin: 0.5rem 0;
+                                        border-radius: 6px;
+                                        min-height: 100px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        color: #999;
+                                    '>
+                                        Row Title
+                                    </div>
+                                """, unsafe_allow_html=True)
+                        
+                        # 3 content columns
+                        for col_idx in range(3):
+                            cell_value = grid_data.get(f"row_{row_idx}_col_{col_idx}", "")
+                            
+                            with cols[col_idx + 1]:
+                                if cell_value:
+                                    formatted_content = cell_value.replace('\n', '<br>')
+                                    st.markdown(f"""
+                                        <div style='
+                                            background: #F8F9FA;
+                                            border: 1px solid #E0E0E0;
+                                            padding: 1rem;
+                                            margin: 0.5rem 0;
+                                            border-radius: 6px;
+                                            min-height: 100px;
+                                        '>
+                                            <div style='
+                                                font-size: 0.9rem;
+                                                line-height: 1.6;
+                                                color: #2C3E50;
+                                            '>
+                                                {formatted_content}
+                                            </div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                                else:
+                                    st.markdown("""
+                                        <div style='
+                                            background: #FAFAFA;
+                                            border: 1px dashed #CCCCCC;
+                                            padding: 1rem;
+                                            margin: 0.5rem 0;
+                                            border-radius: 6px;
+                                            min-height: 100px;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            color: #999;
+                                        '>
+                                            Empty
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                        
+                        if row_idx < 2:
+                            st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+                
+                # Save button for grid
+                if st.button("Save Strategic Insights Grid to Dashboard", key=f"save_ns_grid_{segment['id']}"):
+                    if not grid_title:
+                        st.error("Please provide a grid title.")
+                    else:
+                        # Delete existing grid
+                        delete_tables_for_section(segment["id"], "NS Landscape", "Strategic Insights Grid")
+                        
+                        # Save configuration
+                        filter_config = json.dumps({
+                            "title": grid_title,
+                            "grid_data": grid_data
+                        })
+                        save_table(
+                            name="Strategic Insights Grid",
+                            dataset_id=dataset_id,
+                            columns=["Grid"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=""
+                        )
+                        st.success("Strategic Insights Grid saved to dashboard!")
+    
+    st.markdown("---")
+    
+    # 6. Placeholder Images (5 images)
+    st.markdown("### 6. Placeholder Images")
+    
+    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+        st.caption("Upload up to 5 images with titles and comments")
+        
+        # Load existing placeholder images
+        from app_core.media import get_media_for_segment
+        existing_media = get_media_for_segment(segment["id"])
+        placeholder_images = [m for m in existing_media if m.get("section") == "NS Landscape" and m.get("name") == "Placeholder Images"]
+        placeholder_images = sorted(placeholder_images, key=lambda x: x.get("id", 0))
+        
+        # Placeholder Image 1
+        st.markdown("**Placeholder Image 1:**")
+        existing_p1 = placeholder_images[0] if len(placeholder_images) > 0 else None
+        uploaded_p1 = st.file_uploader("Upload Placeholder Image 1", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_1_{segment['id']}")
+        title_p1 = st.text_input("Title for Placeholder 1", value=existing_p1.get("title", "") if existing_p1 else "", key=f"ns_p_title_1_{segment['id']}")
+        comment_p1 = st.text_area("Comment for Placeholder 1", value=existing_p1.get("comment", "") if existing_p1 else "", key=f"ns_p_comment_1_{segment['id']}", height=150)
+        
+        if existing_p1 and not uploaded_p1:
+            file_path_p1 = existing_p1.get("file_path")
+            if file_path_p1 and os.path.exists(file_path_p1):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p1, caption="Current Placeholder 1", use_container_width=True)
+        
+        if st.button("Save Placeholder 1", key=f"save_ns_p1_{segment['id']}"):
+            if not uploaded_p1:
+                st.error("Please upload Placeholder Image 1.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p1:
+                    delete_media(existing_p1["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p1,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p1,
+                    title=title_p1,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 1 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 2
+        st.markdown("**Placeholder Image 2:**")
+        existing_p2 = placeholder_images[1] if len(placeholder_images) > 1 else None
+        uploaded_p2 = st.file_uploader("Upload Placeholder Image 2", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_2_{segment['id']}")
+        title_p2 = st.text_input("Title for Placeholder 2", value=existing_p2.get("title", "") if existing_p2 else "", key=f"ns_p_title_2_{segment['id']}")
+        comment_p2 = st.text_area("Comment for Placeholder 2", value=existing_p2.get("comment", "") if existing_p2 else "", key=f"ns_p_comment_2_{segment['id']}", height=150)
+        
+        if existing_p2 and not uploaded_p2:
+            file_path_p2 = existing_p2.get("file_path")
+            if file_path_p2 and os.path.exists(file_path_p2):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p2, caption="Current Placeholder 2", use_container_width=True)
+        
+        if st.button("Save Placeholder 2", key=f"save_ns_p2_{segment['id']}"):
+            if not uploaded_p2:
+                st.error("Please upload Placeholder Image 2.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p2:
+                    delete_media(existing_p2["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p2,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p2,
+                    title=title_p2,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 2 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 3
+        st.markdown("**Placeholder Image 3:**")
+        existing_p3 = placeholder_images[2] if len(placeholder_images) > 2 else None
+        uploaded_p3 = st.file_uploader("Upload Placeholder Image 3", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_3_{segment['id']}")
+        title_p3 = st.text_input("Title for Placeholder 3", value=existing_p3.get("title", "") if existing_p3 else "", key=f"ns_p_title_3_{segment['id']}")
+        comment_p3 = st.text_area("Comment for Placeholder 3", value=existing_p3.get("comment", "") if existing_p3 else "", key=f"ns_p_comment_3_{segment['id']}", height=150)
+        
+        if existing_p3 and not uploaded_p3:
+            file_path_p3 = existing_p3.get("file_path")
+            if file_path_p3 and os.path.exists(file_path_p3):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p3, caption="Current Placeholder 3", use_container_width=True)
+        
+        if st.button("Save Placeholder 3", key=f"save_ns_p3_{segment['id']}"):
+            if not uploaded_p3:
+                st.error("Please upload Placeholder Image 3.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p3:
+                    delete_media(existing_p3["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p3,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p3,
+                    title=title_p3,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 3 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 4
+        st.markdown("**Placeholder Image 4:**")
+        existing_p4 = placeholder_images[3] if len(placeholder_images) > 3 else None
+        uploaded_p4 = st.file_uploader("Upload Placeholder Image 4", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_4_{segment['id']}")
+        title_p4 = st.text_input("Title for Placeholder 4", value=existing_p4.get("title", "") if existing_p4 else "", key=f"ns_p_title_4_{segment['id']}")
+        comment_p4 = st.text_area("Comment for Placeholder 4", value=existing_p4.get("comment", "") if existing_p4 else "", key=f"ns_p_comment_4_{segment['id']}", height=150)
+        
+        if existing_p4 and not uploaded_p4:
+            file_path_p4 = existing_p4.get("file_path")
+            if file_path_p4 and os.path.exists(file_path_p4):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p4, caption="Current Placeholder 4", use_container_width=True)
+        
+        if st.button("Save Placeholder 4", key=f"save_ns_p4_{segment['id']}"):
+            if not uploaded_p4:
+                st.error("Please upload Placeholder Image 4.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p4:
+                    delete_media(existing_p4["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p4,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p4,
+                    title=title_p4,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 4 saved!")
+        
+        st.markdown("---")
+        
+        # Placeholder Image 5
+        st.markdown("**Placeholder Image 5:**")
+        existing_p5 = placeholder_images[4] if len(placeholder_images) > 4 else None
+        uploaded_p5 = st.file_uploader("Upload Placeholder Image 5", type=["png", "jpg", "jpeg"], key=f"ns_placeholder_5_{segment['id']}")
+        title_p5 = st.text_input("Title for Placeholder 5", value=existing_p5.get("title", "") if existing_p5 else "", key=f"ns_p_title_5_{segment['id']}")
+        comment_p5 = st.text_area("Comment for Placeholder 5", value=existing_p5.get("comment", "") if existing_p5 else "", key=f"ns_p_comment_5_{segment['id']}", height=150)
+        
+        if existing_p5 and not uploaded_p5:
+            file_path_p5 = existing_p5.get("file_path")
+            if file_path_p5 and os.path.exists(file_path_p5):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.image(file_path_p5, caption="Current Placeholder 5", use_container_width=True)
+        
+        if st.button("Save Placeholder 5", key=f"save_ns_p5_{segment['id']}"):
+            if not uploaded_p5:
+                st.error("Please upload Placeholder Image 5.")
+            else:
+                from app_core.media import save_media_upload, delete_media
+                if existing_p5:
+                    delete_media(existing_p5["id"])
+                save_media_upload(
+                    uploaded_file=uploaded_p5,
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    created_by=current_user["username"],
+                    comment=comment_p5,
+                    title=title_p5,
+                    label="Placeholder Images"
+                )
+                st.success("Placeholder 5 saved!")
+    
+    st.markdown("---")
+    
+    # 7. Custom Trends View Builder
+    st.markdown("### 7. Custom Trends View Builder")
+    st.caption("Create a custom view with title, description, and numbered sections")
+    
+    # Load existing saved configuration
+    existing_tables = get_tables_for_segment(segment["id"])
+    saved_custom_trends = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Custom Trends View"), None)
+    
+    # Parse saved config
+    custom_trends_config = json.loads(saved_custom_trends["filter_json"]) if saved_custom_trends and saved_custom_trends["filter_json"] else {}
+    saved_trends_title = custom_trends_config.get("title", "")
+    saved_trends_description = custom_trends_config.get("description", "")
+    saved_trends_sections = custom_trends_config.get("sections", [])
+    
+    # Title and main description - pre-populated with saved values
+    trends_title = st.text_input(
+        "View Title",
+        value=saved_trends_title,
+        placeholder="e.g., NS Landscape Key Insights",
+        key=f"ns_trends_title_{segment['id']}"
+    )
+    
+    trends_description = st.text_area(
+        "Main Description",
+        value=saved_trends_description,
+        placeholder="e.g., Key insights from NS performance analysis...",
+        height=100,
+        key=f"ns_trends_desc_{segment['id']}"
+    )
+    
+    # Number of sections
+    num_sections = st.number_input(
+        "Number of Sections (1-8)",
+        min_value=1,
+        max_value=8,
+        value=4,
+        key=f"ns_trends_num_sections_{segment['id']}"
+    )
+    
+    # Section inputs
+    sections_data = []
+    for i in range(num_sections):
+        st.markdown(f"**Section {i+1}:**")
+        
+        # Get saved section data if available
+        saved_section = saved_trends_sections[i] if i < len(saved_trends_sections) else {}
+        saved_left = saved_section.get("left", "")
+        saved_right = saved_section.get("right", "")
+        
+        # Two columns for left and right content (no label field)
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            left_content = st.text_area(
+                f"Left content",
+                value=saved_left,
+                placeholder="Enter content for left side...",
+                height=100,
+                key=f"ns_trends_sec{i}_left_{segment['id']}"
+            )
+        
+        with col_right:
+            right_content = st.text_area(
+                f"Right content",
+                value=saved_right,
+                placeholder="Enter content for right side...",
+                height=100,
+                key=f"ns_trends_sec{i}_right_{segment['id']}"
+            )
+        
+        sections_data.append({
+            "number": str(i + 1),  # Just use the section number
+            "left": left_content,
+            "right": right_content
+        })
+    
+    # Preview
+    if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
+        st.markdown("---")
+        st.markdown("**Preview:**")
+        
+        if trends_title:
+            st.markdown(f"### {trends_title}")
+        
+        if trends_description:
+            # Format with bold, underline, etc.
+            formatted_desc = format_comment_preview(trends_description)
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(to right, #F5F5F5 0%, #EEEEEE 100%);
+                    border: 1px solid #CCCCCC;
+                    padding: 1rem 1.5rem;
+                    margin: 1rem 0;
+                    border-radius: 8px;
+                    text-align: center;
+                '>
+                    <div style='font-size: 1rem; line-height: 1.6; color: #2C2C2C;'>
+                        {formatted_desc}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Display sections
+        for section in sections_data:
+            if section["left"] or section["right"]:
+                cols = st.columns([0.3, 3, 3])
+                
+                with cols[0]:
+                    st.markdown(f"""
+                        <div style='
+                            width: 60px;
+                            height: 60px;
+                            border-radius: 50%;
+                            background-color: #FFFFFF;
+                            border: 3px solid #666666;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 1.5rem;
+                            font-weight: bold;
+                            color: #666666;
+                            margin-top: 1rem;
+                        '>
+                            {section["number"]}
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                with cols[1]:
+                    if section["left"]:
+                        formatted_left = format_comment_preview(section["left"])
+                        st.markdown(f"""
+                            <div style='
+                                background: #E3F2FD;
+                                border: 1px solid #90CAF9;
+                                padding: 1rem;
+                                margin: 0.5rem 0;
+                                border-radius: 8px;
+                            '>
+                                <div style='font-size: 0.95rem; line-height: 1.6; color: #1565C0;'>
+                                    {formatted_left}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                with cols[2]:
+                    if section["right"]:
+                        formatted_right = format_comment_preview(section["right"])
+                        st.markdown(f"""
+                            <div style='
+                                background: #FFF3E0;
+                                border: 1px solid #FFB74D;
+                                padding: 1rem;
+                                margin: 0.5rem 0;
+                                border-radius: 8px;
+                            '>
+                                <div style='font-size: 0.95rem; line-height: 1.6; color: #E65100;'>
+                                    {formatted_right}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+    
+    # Save button
+    if st.button("Save Custom Trends View to Dashboard", key=f"save_ns_trends_{segment['id']}"):
+        if not trends_title:
+            st.error("Please provide a title for the custom trends view.")
+        else:
+            # Delete existing custom trends view
+            delete_tables_for_section(segment["id"], "NS Landscape", "Custom Trends View")
+            
+            # Save configuration
+            filter_config = json.dumps({
+                "title": trends_title,
+                "description": trends_description,
+                "sections": sections_data
+            })
+            save_table(
+                name="Custom Trends View",
+                dataset_id=dataset_id,
+                columns=["Custom"],
+                created_by=current_user["username"],
+                segment_id=segment["id"],
+                section="NS Landscape",
+                filter_json=filter_config,
+                comment=""
+            )
+            st.success("Custom Trends View saved to dashboard!")
