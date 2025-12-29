@@ -3225,7 +3225,7 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         "State": "All India",
         "BP FAM\nA25 MS": (ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0,
         "Segment\nSalience to\nAll Spirits": (ai_segment_a25 / ai_all_spirits_a25 * 100) if ai_all_spirits_a25 > 0 else 0,
-        "State\nContribution\nto AI": (ai_segment_a25 / ai_segment_a25_actual * 100) if ai_segment_a25_actual > 0 else 0,
+        "State\nContribution\nto AI": 100.0,
         "PW A25\nNS Gr": ai_segment_gr,
         "BP FAM\nA25 NS Gr": ai_family_gr,
         "BP FAM\nBTM view": ai_family_gr - ai_segment_gr,
