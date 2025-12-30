@@ -3539,7 +3539,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                         text-align: center;
                                         letter-spacing: 0.5px;
                                         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                                        height: 100%;
+                                        min-height: 250px;
                                         min-width: 50px;
                                     '>
                                         {section.get("label", "")}
@@ -3575,7 +3575,9 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 120px;
+                                            min-height: 250px;
+                                            max-height: 400px;
+                                            overflow-y: auto;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
@@ -3617,7 +3619,9 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 120px;
+                                            min-height: 250px;
+                                            max-height: 400px;
+                                            overflow-y: auto;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
@@ -3682,7 +3686,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                 text-align: center;
                                 letter-spacing: 0.5px;
                                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                                min-height: 120px;
+                                min-height: 250px;
                                 margin-right: 0.5rem;
                             '>
                                 {section.get("label", "")}
@@ -3717,7 +3721,9 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_top};
-                                    min-height: 120px;
+                                    min-height: 250px;
+                                    max-height: 400px;
+                                    overflow-y: auto;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;
@@ -3755,7 +3761,9 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_top};
-                                    min-height: 120px;
+                                    min-height: 250px;
+                                    max-height: 400px;
+                                    overflow-y: auto;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;

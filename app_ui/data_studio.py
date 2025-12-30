@@ -5643,7 +5643,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                         text-align: center;
                                         letter-spacing: 0.5px;
                                         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                                        min-height: 120px;
+                                        min-height: 250px;
                                         min-width: 50px;
                                     '>
                                         {section["label"]}
@@ -5679,7 +5679,9 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 120px;
+                                            min-height: 250px;
+                                            max-height: 400px;
+                                            overflow-y: auto;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
@@ -5718,7 +5720,9 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 120px;
+                                            min-height: 250px;
+                                            max-height: 400px;
+                                            overflow-y: auto;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
@@ -5816,7 +5820,9 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_radius};
-                                    min-height: 120px;
+                                    min-height: 250px;
+                                    max-height: 400px;
+                                    overflow-y: auto;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;
@@ -5855,7 +5861,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_radius};
-                                    min-height: 120px;
+                                    min-height: 200px;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;
