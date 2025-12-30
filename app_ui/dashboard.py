@@ -2093,7 +2093,6 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         return
     
     st.markdown("---")
-    st.markdown("### State Performance Bubble Chart")
     st.caption(f"Bubble chart showing BP FAM MS vs Segment Salience for **{selected_family}**")
     
     # Load data
@@ -3498,8 +3497,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                     
                     # Show tab description if exists
                     if tab.get("description"):
-                        import html
-                        escaped_desc = html.escape(tab["description"]).replace('\n', '<br>')
+                        formatted_desc = format_comment(tab["description"])
                         st.markdown(f"""
                             <div style='
                                 background: #F5F5F5;
@@ -3511,7 +3509,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                 line-height: 1.6;
                                 color: #2C2C2C;
                             '>
-                                {escaped_desc}
+                                {formatted_desc}
                             </div>
                         """, unsafe_allow_html=True)
                     
@@ -3575,8 +3573,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                     """
                                 
                                 if section.get("left"):
-                                    import html
-                                    escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                                    formatted_left = format_comment(section.get("left", ""))
                                     border_radius = "0 0 8px 8px" if left_header else "8px"
                                     content_html += f"""
                                         <div style='
@@ -3584,13 +3581,13 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 280px;
+                                            min-height: 120px;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
                                             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
-                                            {escaped_left}
+                                            {formatted_left}
                                         </div>
                                     """
                                 
@@ -3618,8 +3615,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                     """
                                 
                                 if section.get("right"):
-                                    import html
-                                    escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                                    formatted_right = format_comment(section.get("right", ""))
                                     border_radius = "0 0 8px 8px" if right_header else "8px"
                                     content_html += f"""
                                         <div style='
@@ -3627,13 +3623,13 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 280px;
+                                            min-height: 120px;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
                                             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
-                                            {escaped_right}
+                                            {formatted_right}
                                         </div>
                                     """
                                 
@@ -3647,8 +3643,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
             
             # Show tab description if exists
             if tab.get("description"):
-                import html
-                escaped_desc = html.escape(tab["description"]).replace('\n', '<br>')
+                formatted_desc = format_comment(tab["description"])
                 st.markdown(f"""
                     <div style='
                         background: #F5F5F5;
@@ -3660,7 +3655,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                         line-height: 1.6;
                         color: #2C2C2C;
                     '>
-                        {escaped_desc}
+                        {formatted_desc}
                     </div>
                 """, unsafe_allow_html=True)
             
@@ -3693,7 +3688,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                 text-align: center;
                                 letter-spacing: 0.5px;
                                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                                min-height: 320px;
+                                min-height: 120px;
                                 margin-right: 0.5rem;
                             '>
                                 {section.get("label", "")}
@@ -3720,8 +3715,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                             """, unsafe_allow_html=True)
                         
                         if section.get("left"):
-                            import html
-                            escaped_left = html.escape(section.get("left", "")).replace('\n', '<br>')
+                            formatted_left = format_comment(section.get("left", ""))
                             border_top = "0 0 8px 8px" if left_header else "8px"
                             st.markdown(f"""
                                 <div style='
@@ -3729,13 +3723,13 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_top};
-                                    min-height: 280px;
+                                    min-height: 120px;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;
                                     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
-                                    {escaped_left}
+                                    {formatted_left}
                                 </div>
                             """, unsafe_allow_html=True)
                     
@@ -3759,8 +3753,7 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                             """, unsafe_allow_html=True)
                         
                         if section.get("right"):
-                            import html
-                            escaped_right = html.escape(section.get("right", "")).replace('\n', '<br>')
+                            formatted_right = format_comment(section.get("right", ""))
                             border_top = "0 0 8px 8px" if right_header else "8px"
                             st.markdown(f"""
                                 <div style='
@@ -3768,13 +3761,13 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_top};
-                                    min-height: 280px;
+                                    min-height: 120px;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;
                                     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
-                                    {escaped_right}
+                                    {formatted_right}
                                 </div>
                             """, unsafe_allow_html=True)
                     
@@ -4469,17 +4462,25 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                 with col_sog:
                     st.markdown(f"**{col1_heading}**")
                     sog_content = state_data.get("SOG", "")
-                    edited_sog = st.text_area(
-                        f"{col1_heading} content",
-                        value=sog_content,
-                        placeholder=f"{col1_heading} insights for {state}...",
-                        height=150,
-                        key=f"edit_sog_{state}_{state_idx}_{tab_idx}_{segment['id']}",
-                        label_visibility="collapsed"
-                    )
+                    
+                    if is_editor:
+                        edited_sog = st.text_area(
+                            f"{col1_heading} content",
+                            value=sog_content,
+                            placeholder=f"{col1_heading} insights for {state}...",
+                            height=150,
+                            key=f"edit_sog_{state}_{state_idx}_{tab_idx}_{segment['id']}",
+                            label_visibility="collapsed"
+                        )
+                    else:
+                        # Display formatted content for viewers
+                        if sog_content:
+                            st.markdown(f"<div class='comment-box'>{format_comment(sog_content)}</div>", unsafe_allow_html=True)
+                        else:
+                            st.caption(f"No {col1_heading} insights")
                     
                     # Update button for SOG
-                    if edited_sog != sog_content and is_editor:
+                    if is_editor and edited_sog != sog_content:
                         if st.button(f"Update {col1_heading}", key=f"update_sog_{state}_{state_idx}_{tab_idx}_{segment['id']}"):
                             # Get the full config
                             from app_core.tables import get_tables_for_segment
@@ -4520,17 +4521,25 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                 with col_5cs:
                     st.markdown(f"**{col2_heading}**")
                     fivecs_content = state_data.get("5Cs", "")
-                    edited_5cs = st.text_area(
-                        f"{col2_heading} content",
-                        value=fivecs_content,
-                        placeholder=f"{col2_heading} insights for {state}...",
-                        height=150,
-                        key=f"edit_5cs_{state}_{state_idx}_{tab_idx}_{segment['id']}",
-                        label_visibility="collapsed"
-                    )
+                    
+                    if is_editor:
+                        edited_5cs = st.text_area(
+                            f"{col2_heading} content",
+                            value=fivecs_content,
+                            placeholder=f"{col2_heading} insights for {state}...",
+                            height=150,
+                            key=f"edit_5cs_{state}_{state_idx}_{tab_idx}_{segment['id']}",
+                            label_visibility="collapsed"
+                        )
+                    else:
+                        # Display formatted content for viewers
+                        if fivecs_content:
+                            st.markdown(f"<div class='comment-box'>{format_comment(fivecs_content)}</div>", unsafe_allow_html=True)
+                        else:
+                            st.caption(f"No {col2_heading} insights")
                     
                     # Update button for 5Cs
-                    if edited_5cs != fivecs_content and is_editor:
+                    if is_editor and edited_5cs != fivecs_content:
                         if st.button(f"Update {col2_heading}", key=f"update_5cs_{state}_{state_idx}_{tab_idx}_{segment['id']}"):
                             from app_core.tables import get_tables_for_segment
                             existing_tables = get_tables_for_segment(segment["id"])
@@ -4567,17 +4576,25 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                 with col_imagery:
                     st.markdown(f"**{col3_heading}**")
                     imagery_content = state_data.get("Imagery", "")
-                    edited_imagery = st.text_area(
-                        f"{col3_heading} content",
-                        value=imagery_content,
-                        placeholder=f"{col3_heading} insights for {state}...",
-                        height=150,
-                        key=f"edit_imagery_{state}_{state_idx}_{tab_idx}_{segment['id']}",
-                        label_visibility="collapsed"
-                    )
+                    
+                    if is_editor:
+                        edited_imagery = st.text_area(
+                            f"{col3_heading} content",
+                            value=imagery_content,
+                            placeholder=f"{col3_heading} insights for {state}...",
+                            height=150,
+                            key=f"edit_imagery_{state}_{state_idx}_{tab_idx}_{segment['id']}",
+                            label_visibility="collapsed"
+                        )
+                    else:
+                        # Display formatted content for viewers
+                        if imagery_content:
+                            st.markdown(f"<div class='comment-box'>{format_comment(imagery_content)}</div>", unsafe_allow_html=True)
+                        else:
+                            st.caption(f"No {col3_heading} insights")
                     
                     # Update button for Imagery
-                    if edited_imagery != imagery_content and is_editor:
+                    if is_editor and edited_imagery != imagery_content:
                         if st.button(f"Update {col3_heading}", key=f"update_imagery_{state}_{state_idx}_{tab_idx}_{segment['id']}"):
                             from app_core.tables import get_tables_for_segment
                             existing_tables = get_tables_for_segment(segment["id"])
@@ -4915,7 +4932,7 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                 st.markdown("---")
                 
                 # STATE PERFORMANCE CALCULATIONS (Between Images)
-                st.markdown("### 📊 State Performance Analysis")
+                st.markdown("### 📊 Battleground Analysis")
                 render_battlegrounds_calculations(segment, tab_config, segment["id"], idx, is_editor)
                 
                 st.markdown("---")

@@ -5599,8 +5599,8 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                     
                     # Show tab description if exists
                     if tab_data.get("description"):
-                        import html
-                        escaped_desc = html.escape(tab_data["description"]).replace('\n', '<br>')
+                        from app_ui.dashboard import format_comment
+                        formatted_desc = format_comment(tab_data["description"])
                         st.markdown(f"""
                             <div style='
                                 background: #F5F5F5;
@@ -5612,7 +5612,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                 line-height: 1.6;
                                 color: #2C2C2C;
                             '>
-                                {escaped_desc}
+                                {formatted_desc}
                             </div>
                         """, unsafe_allow_html=True)
                     
@@ -5632,7 +5632,6 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                         border: 2px solid #999999;
                                         padding: 1rem 0.5rem;
                                         border-radius: 8px;
-                                        min-height: 300px;
                                         display: flex;
                                         align-items: center;
                                         justify-content: center;
@@ -5644,6 +5643,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                         text-align: center;
                                         letter-spacing: 0.5px;
                                         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                        min-height: 120px;
                                         min-width: 50px;
                                     '>
                                         {section["label"]}
@@ -5670,8 +5670,8 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                     """, unsafe_allow_html=True)
                                 
                                 if section["left"]:
-                                    import html
-                                    escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                                    from app_ui.dashboard import format_comment
+                                    formatted_left = format_comment(section["left"])
                                     border_radius = "0 0 8px 8px" if tab_left_header else "8px"
                                     st.markdown(f"""
                                         <div style='
@@ -5679,13 +5679,13 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 250px;
+                                            min-height: 120px;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
                                             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
-                                            {escaped_left}
+                                            {formatted_left}
                                         </div>
                                     """, unsafe_allow_html=True)
                             
@@ -5709,8 +5709,8 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                     """, unsafe_allow_html=True)
                                 
                                 if section["right"]:
-                                    import html
-                                    escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                                    from app_ui.dashboard import format_comment
+                                    formatted_right = format_comment(section["right"])
                                     border_radius = "0 0 8px 8px" if tab_right_header else "8px"
                                     st.markdown(f"""
                                         <div style='
@@ -5718,13 +5718,13 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                             border: 1px solid #CCCCCC;
                                             padding: 1.2rem;
                                             border-radius: {border_radius};
-                                            min-height: 250px;
+                                            min-height: 120px;
                                             font-size: 0.9rem;
                                             line-height: 1.7;
                                             color: #1A1A1A;
                                             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                         '>
-                                            {escaped_right}
+                                            {formatted_right}
                                         </div>
                                     """, unsafe_allow_html=True)
                             
@@ -5736,8 +5736,8 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
             
             # Show tab description if exists
             if tab_data.get("description"):
-                import html
-                escaped_desc = html.escape(tab_data["description"]).replace('\n', '<br>')
+                from app_ui.dashboard import format_comment
+                formatted_desc = format_comment(tab_data["description"])
                 st.markdown(f"""
                     <div style='
                         background: #F5F5F5;
@@ -5749,7 +5749,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                         line-height: 1.6;
                         color: #2C2C2C;
                     '>
-                        {escaped_desc}
+                        {formatted_desc}
                     </div>
                 """, unsafe_allow_html=True)
             
@@ -5769,7 +5769,6 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                 border: 2px solid #999999;
                                 padding: 1rem 0.5rem;
                                 border-radius: 8px;
-                                min-height: 300px;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
@@ -5781,6 +5780,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                 text-align: center;
                                 letter-spacing: 0.5px;
                                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                min-height: 120px;
                                 min-width: 50px;
                             '>
                                 {section["label"]}
@@ -5807,8 +5807,8 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                             """, unsafe_allow_html=True)
                         
                         if section["left"]:
-                            import html
-                            escaped_left = html.escape(section["left"]).replace('\n', '<br>')
+                            from app_ui.dashboard import format_comment
+                            formatted_left = format_comment(section["left"])
                             border_radius = "0 0 8px 8px" if tab_left_header else "8px"
                             st.markdown(f"""
                                 <div style='
@@ -5816,13 +5816,13 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_radius};
-                                    min-height: 250px;
+                                    min-height: 120px;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;
                                     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
-                                    {escaped_left}
+                                    {formatted_left}
                                 </div>
                             """, unsafe_allow_html=True)
                     
@@ -5846,8 +5846,8 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                             """, unsafe_allow_html=True)
                         
                         if section["right"]:
-                            import html
-                            escaped_right = html.escape(section["right"]).replace('\n', '<br>')
+                            from app_ui.dashboard import format_comment
+                            formatted_right = format_comment(section["right"])
                             border_radius = "0 0 8px 8px" if tab_right_header else "8px"
                             st.markdown(f"""
                                 <div style='
@@ -5855,13 +5855,13 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                                     border: 1px solid #CCCCCC;
                                     padding: 1.2rem;
                                     border-radius: {border_radius};
-                                    min-height: 250px;
+                                    min-height: 120px;
                                     font-size: 0.9rem;
                                     line-height: 1.7;
                                     color: #1A1A1A;
                                     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                 '>
-                                    {escaped_right}
+                                    {formatted_right}
                                 </div>
                             """, unsafe_allow_html=True)
                     
