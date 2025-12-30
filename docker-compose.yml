@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    container_name: pri_dashboard
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8517:8517"
+    restart: unless-stopped

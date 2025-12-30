@@ -1,0 +1,25 @@
+# Data folder - mounted as volume
+data/
+
+# Git
+.git/
+.gitignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+app_core/__pycache__/
+app_ui/__pycache__/
+
+# Dev/template files
+*.csv
+*.xlsx
+docs/
+Trinity - Data Science Democratised_files/
+create_*.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
