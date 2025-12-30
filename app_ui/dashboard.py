@@ -2808,11 +2808,12 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
                         if page_title:
                             st.markdown(f"### {page_title}")
                         
-                        if comment:
-                            col_img, col_comment = st.columns([1, 1])
-                            with col_img:
-                                st.image(file_path, use_container_width=True)
-                            with col_comment:
+                        # Always use side-by-side layout
+                        col_img, col_comment = st.columns([1, 1])
+                        with col_img:
+                            st.image(file_path, use_container_width=True)
+                        with col_comment:
+                            if comment:
                                 st.markdown(f"""
                                     <div style='
                                         background: #F8F9FA;
@@ -2835,10 +2836,6 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
                                         </div>
                                     </div>
                                 """, unsafe_allow_html=True)
-                        else:
-                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                            with col2:
-                                st.image(file_path, use_container_width=True)
         elif len(brand_carousel_images) == 1:
             # Single image
             media = brand_carousel_images[0]
@@ -2865,11 +2862,12 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
                 if page_title:
                     st.markdown(f"### {page_title}")
                 
-                if comment:
-                    col_img, col_comment = st.columns([1, 1])
-                    with col_img:
-                        st.image(file_path, use_container_width=True)
-                    with col_comment:
+                # Always use side-by-side layout
+                col_img, col_comment = st.columns([1, 1])
+                with col_img:
+                    st.image(file_path, use_container_width=True)
+                with col_comment:
+                    if comment:
                         st.markdown(f"""
                             <div style='
                                 background: #F8F9FA;
@@ -2892,10 +2890,6 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
-                else:
-                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                    with col2:
-                        st.image(file_path, use_container_width=True)
         
         # Delete button for carousel
         if is_editor:
