@@ -3141,8 +3141,6 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
                             
                             # Display brand content
                             if brand.get("content"):
-                                import html
-                                escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
                                 st.markdown(f"""
                                     <div style='
                                         background: #F5F5F5;
@@ -3154,7 +3152,7 @@ def render_brand_truths_section(brand_view: Dict, is_editor: bool, segment: Dict
                                         overflow-y: auto;
                                     '>
                                         <div style='font-size: 0.9rem; line-height: 1.6; color: #1A1A1A;'>
-                                            {escaped_content}
+                                            {format_comment(brand["content"])}
                                         </div>
                                     </div>
                                 """, unsafe_allow_html=True)

@@ -2571,45 +2571,51 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             # Create display dataframe - convert to string and replace NaN with empty strings
             df_display = df_csv_for_preview.copy()
             
-            # Convert all columns to object type to allow empty strings
+            # Get all comparison columns (columns 2 onwards, excluding _index columns)
+            comparison_cols = [col for col in df_display.columns if not col.endswith("_Index") and df_display.columns.get_loc(col) >= 2]
+            
+            # Convert all non-index columns to object type to allow empty strings
             for col in df_display.columns:
-                if col != "_index":  # Keep _index as is for color calculation
+                if not col.endswith("_Index"):
                     df_display[col] = df_display[col].astype(str).replace('nan', '').replace('None', '')
             
             # Show table with conditional formatting
-            def color_premium_whisky_preview(row):
-                """Apply background color to Premium Whisky column based on index"""
-                idx_val = df_csv_for_preview.loc[row.name, "_index"] if "_index" in df_csv_for_preview.columns else None
+            def color_comparison_columns(row):
+                """Apply background color to comparison columns based on their index values"""
+                styles = [""] * len(row)
                 
-                if pd.isna(idx_val):
-                    return [""] * len(row)
+                for col_idx, col_name in enumerate(df_display.columns):
+                    # Check if this is a comparison column (not metric name, not baseline)
+                    if col_idx >= 2 and not col_name.endswith("_Index"):
+                        # Find corresponding index column
+                        index_col_name = f"{col_name}_Index"
+                        if index_col_name in df_csv_for_preview.columns:
+                            idx_val = df_csv_for_preview.loc[row.name, index_col_name]
+                            
+                            if not pd.isna(idx_val):
+                                try:
+                                    if idx_val > 110:
+                                        styles[col_idx] = "background-color: #90EE90; font-weight: bold;"
+                                    elif idx_val >= 105:
+                                        styles[col_idx] = "background-color: #D4EDDA; font-weight: bold;"
+                                    elif idx_val < 75:
+                                        styles[col_idx] = "background-color: #FFB380; font-weight: bold;"
+                                except:
+                                    pass
                 
-                try:
-                    if idx_val > 110:
-                        color = "background-color: #90EE90; font-weight: bold;"
-                    elif idx_val >= 105:
-                        color = "background-color: #D4EDDA; font-weight: bold;"
-                    elif idx_val < 75:
-                        color = "background-color: #FFB380; font-weight: bold;"
-                    else:
-                        color = ""
-                    
-                    # Apply color only to Premium Whisky column (index 2)
-                    return ["", "", color, ""]
-                except:
-                    return [""] * len(row)
+                return styles
             
-            styled_preview = df_display.style.apply(color_premium_whisky_preview, axis=1)
+            styled_preview = df_display.style.apply(color_comparison_columns, axis=1)
             
-            # Display only the 3 main columns (hide _index)
+            # Display table (hide all _Index columns)
+            column_config = {col: None for col in df_display.columns if col.endswith("_Index")}
+            
             st.dataframe(
                 styled_preview,
                 use_container_width=True,
                 hide_index=True,
                 height=500,
-                column_config={
-                    "_index": None  # Hide the index column
-                }
+                column_config=column_config
             )
             
             st.caption("""
@@ -4890,14 +4896,14 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Title and main description - pre-populated with saved values
     trends_title = st.text_input(
-        "View Title",
+        "Slide Title",
         value=saved_trends_title,
         placeholder="e.g., Premium Whisky Trends in L1Y",
         key=f"trends_title_{segment['id']}"
     )
     
     trends_description = st.text_area(
-        "Main Description",
+        "Overall Comment",
         value=saved_trends_description,
         placeholder="e.g., Premium whisky consumption in A25 @ 45%, increasing vs LY...",
         height=100,
@@ -6711,8 +6717,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             st.markdown(f"### {brand_title}")
         
         if brand_description:
-            import html
-            escaped_desc = html.escape(brand_description).replace('\n', '<br>')
             st.markdown(f"""
                 <div style='
                     background: linear-gradient(to right, #FFF9E6 0%, #FFF3D6 100%);
@@ -6725,7 +6729,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     line-height: 1.6;
                     color: #2C2C2C;
                 '>
-                    {escaped_desc}
+                    {format_comment_preview(brand_description)}
                 </div>
             """, unsafe_allow_html=True)
         
@@ -6765,8 +6769,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         
                         # Brand content
                         if brand["content"]:
-                            import html
-                            escaped_content = html.escape(brand["content"]).replace('\n', '<br>')
                             st.markdown(f"""
                                 <div style='
                                     background: #F5F5F5;
@@ -6780,7 +6782,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                     line-height: 1.6;
                                     color: #1A1A1A;
                                 '>
-                                    {escaped_content}
+                                    {format_comment_preview(brand["content"])}
                                 </div>
                             """, unsafe_allow_html=True)
             
@@ -7039,7 +7041,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # Image 2
-    st.markdown("**Consumer pallete slide 2**")
+    st.markdown("**Consumer Palate slide 2**")
     existing_s2 = brand_standalone_images[1] if len(brand_standalone_images) > 1 else None
     
     if existing_s2:
@@ -7192,7 +7194,7 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # Image 5
-    st.markdown("**Moments of Conveniality Slide**")
+    st.markdown("**MOC Slide**")
     existing_s5 = brand_standalone_images[4] if len(brand_standalone_images) > 4 else None
     
     if existing_s5:

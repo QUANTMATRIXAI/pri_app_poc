@@ -57,36 +57,46 @@ def bootstrap() -> None:
 
 
 def render_header() -> None:
-    # Create container for the card
+    # Create a clean header with title on left and logo on right
+    import os
+    import base64
+    
+    logo_path = "static/Pernod_Ricard_logo_2019.svg.png"
+    logo_html = ""
+    
+    if os.path.exists(logo_path):
+        try:
+            with open(logo_path, "rb") as f:
+                logo_data = base64.b64encode(f.read()).decode()
+            logo_html = f'<img src="data:image/png;base64,{logo_data}" style="width: 120px; float: right;" />'
+        except:
+            logo_html = ""
+    
     st.markdown(
-        """
-        <div class="info-card" style="margin-bottom: 1rem; background: white; padding: 2rem; border: 1px solid rgba(0,0,0,0.08);">
+        f"""
+        <div style="
+            background: #ffffff;
+            padding: 1.5rem 2rem;
+            border: 3px solid #f5b400;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(245, 180, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        ">
+            <h1 style="
+                margin: 0;
+                color: #1d2733;
+                font-size: 2.2rem;
+                font-weight: 700;
+                letter-spacing: -0.5px;
+            ">Strategic Alignment Dashboard</h1>
+            {logo_html}
+        </div>
         """,
         unsafe_allow_html=True,
     )
-    
-    # Create two columns inside the card
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        st.markdown(
-            """
-            <div class="pill">Secure Workspace</div>
-            <h1 style="margin-bottom:0.5rem; margin-top:0.8rem; color: #1d2733; font-size: 2.5rem; font-weight: 700; letter-spacing: -0.5px;">Strategic Alignment Dashboard</h1>
-            <p style="color: #f5b400; margin-bottom:0; font-size: 1.1rem; font-weight: 600;">For Pernod Ricard India</p>
-            """,
-            unsafe_allow_html=True,
-        )
-    
-    with col2:
-        # Display Pernod Ricard logo
-        import os
-        logo_path = "static/Pernod_Ricard_logo_2019.svg.png"
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=200)
-    
-    # Close the card
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_footer() -> None:
