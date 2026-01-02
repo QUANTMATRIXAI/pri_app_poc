@@ -1021,7 +1021,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # First show state summary for ALL states in North Zone
 
-                preview_all_states = create_north_state_drilldown(df_filtered, selected_families, selected_brands, states_in_north)
+                preview_all_states = create_north_state_drilldown(df_filtered, selected_families, selected_brands, states_in_north, df_filtered)
                 
                 if preview_all_states:
                     # Define colors for styling
@@ -1071,7 +1071,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if selected_states:
                     # Preview deep-dive
                     st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
-                    preview_north = create_north_state_drilldown(df_filtered, selected_families, selected_brands, selected_states)
+                    preview_north = create_north_state_drilldown(df_filtered, selected_families, selected_brands, selected_states, df_filtered)
                     
                     if preview_north and preview_north['state_details']:
                         # Define colors for brand families
@@ -1206,7 +1206,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_west = sorted(df_west["State"].dropna().unique().tolist())
                 
 
-                preview_all_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_west, "West+CSD Zone")
+                preview_all_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_west, "West+CSD Zone", df_filtered)
                 
                 if preview_all_west:
                     summary_styled = style_state_summary(preview_all_west['state_summary'])
@@ -1240,7 +1240,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if selected_states_west:
                     st.markdown("**Select Key States**")
-                    preview_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_west, "West+CSD Zone")
+                    preview_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_west, "West+CSD Zone", df_filtered)
                     
                     if preview_west and preview_west['state_details']:
                         render_state_drilldown_preview(preview_west, selected_states_west)
@@ -1318,7 +1318,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_east = sorted(df_east["State"].dropna().unique().tolist())
                 
 
-                preview_all_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_east, "East Zone")
+                preview_all_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_east, "East Zone", df_filtered)
                 
                 if preview_all_east:
                     summary_styled = style_state_summary(preview_all_east['state_summary'])
@@ -1352,7 +1352,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if selected_states_east:
                     st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
-                    preview_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_east, "East Zone")
+                    preview_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_east, "East Zone", df_filtered)
                     
                     if preview_east and preview_east['state_details']:
                         render_state_drilldown_preview(preview_east, selected_states_east)
@@ -1430,7 +1430,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_south = sorted(df_south["State"].dropna().unique().tolist())
                 
 
-                preview_all_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_south, "South Zone")
+                preview_all_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_south, "South Zone", df_filtered)
                 
                 if preview_all_south:
                     summary_styled = style_state_summary(preview_all_south['state_summary'])
@@ -1464,7 +1464,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if selected_states_south:
                     st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
-                    preview_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_south, "South Zone")
+                    preview_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_south, "South Zone", df_filtered)
                     
                     if preview_south and preview_south['state_details']:
                         render_state_drilldown_preview(preview_south, selected_states_south)
@@ -1621,23 +1621,23 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             textposition='middle center',
                             textfont=dict(size=10, color='black', family='Arial Black'),
                             customdata=contribution_values,
-                            hovertemplate='<b>%{text}</b><br>BP FAM MS: %{x:.0f}%<br>Segment Salience: %{y:.0f}%<br>State Contribution: %{customdata:.0f}%<extra></extra>',
+                            hovertemplate='<b>%{text}</b><br>Brand FAM MS: %{x:.0f}%<br>Segment Salience: %{y:.0f}%<br>State Contribution: %{customdata:.0f}%<extra></extra>',
                             name='States'
                         ))
                         
                         # Add reference lines
                         fig.add_hline(y=ai_salience, line_dash="dash", line_color="#9B59B6", line_width=2,
                                       annotation_text=f"A25 Seg. Sal. ({ai_salience:.1f}%) All India",
-                                      annotation_position="right",
+                                      annotation_position="top left",
                                       annotation=dict(font=dict(size=11, color="#9B59B6")))
                         
                         fig.add_vline(x=ai_ms, line_dash="dash", line_color="#E74C3C", line_width=2,
-                                      annotation_text=f"A25 BP Fam MS ({ai_ms:.1f}%) All India",
+                                      annotation_text=f"A25 Brand Fam MS ({ai_ms:.1f}%) All India",
                                       annotation_position="top",
                                       annotation=dict(font=dict(size=11, color="#E74C3C")))
                         
                         fig.update_layout(
-                            xaxis_title="X-Axis: State Segment Salience (BP FAM A25 MS %)",
+                            xaxis_title="X-Axis: State Segment Salience (Brand FAM A25 MS %)",
                             yaxis_title="Y-Axis: State Segment Salience Gr (LY)",
                             height=600,
                             showlegend=False,
@@ -3418,11 +3418,11 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
     column_structure = [
         {"group": "", "group_color": "#F5F5F5", "text_color": "#424242", "columns": ["State"], "colspan": 1},
         {"group": "State aggregated to AI", "group_color": "#E8F5E9", "text_color": "#1B5E20", 
-         "columns": ["BP FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"], "colspan": 3},
+         "columns": ["Brand FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"], "colspan": 3},
         {"group": "NS Growth Data", "group_color": "#FFF3E0", "text_color": "#E65100", 
-         "columns": ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr", "BP FAM\nBTM"], "colspan": 3},
+         "columns": ["PW A25\nNS Gr", "Brand FAM\nA25 NS Gr", "Brand FAM\nBTM"], "colspan": 3},
         {"group": "Growth Indexation", "group_color": "#F3E5F5", "text_color": "#4A148C", 
-         "columns": ["PW Gr\nIndexed\nto AI", "BP Gr\nIndexed\nto AI", "BP Gr\nIndexed to\nAI BP Gr"], "colspan": 3},
+         "columns": ["PW Gr\nIndexed\nto AI", "Brand Gr\nIndexed\nto AI", "Brand Gr\nIndexed to\nAI Brand Gr"], "colspan": 3},
         {"group": "Salience & Contribution RANKS", "group_color": "#FCE4EC", "text_color": "#880E4F", 
          "columns": ["MS\nRANK", "Salience\nRANK", "Contribution\nRANK"], "colspan": 3}
     ]
@@ -3570,11 +3570,23 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
         st.markdown(html, unsafe_allow_html=True)
 
 
-def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str], zone_name: str) -> Dict | None:
-    """Generic function to create state drill-down for any zone"""
+def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str], zone_name: str, df_full_segment: pd.DataFrame = None) -> Dict | None:
+    """Generic function to create state drill-down for any zone
+    
+    Args:
+        df: DataFrame filtered by selected brands
+        selected_families: List of brand families to show
+        selected_brands: List of brands to show
+        selected_states: List of states to include
+        zone_name: Name of the zone (e.g., "West+CSD Zone")
+        df_full_segment: Full segment data (all brands) for MS denominator calculation
+    """
     
     if df.empty:
         return None
+    
+    # Use full segment data if provided, otherwise fall back to filtered data
+    df_for_denominator = df_full_segment if df_full_segment is not None and not df_full_segment.empty else df
     
     # Filter for specified zone and selected brands/families
     df_zone = df[df["Zone"] == zone_name].copy()
@@ -3597,6 +3609,11 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     # ===== STATE SUMMARY TABLE =====
     state_a25 = df_a25.groupby("State")["NS M INR"].sum().to_dict()
     state_a24 = df_a24.groupby("State")["NS M INR"].sum().to_dict()
+    
+    # Calculate segment totals for ALL brands in each state (for MS denominator)
+    df_segment_full = df_for_denominator[df_for_denominator["Zone"] == zone_name].copy()  # All brands in segment in this zone
+    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["NS M INR"].sum().to_dict()
+    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["NS M INR"].sum().to_dict()
     
     # Calculate zone totals
     zone_a25 = sum(state_a25.values())
@@ -3653,8 +3670,9 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     state_details = {}
     
     for state in selected_states:
-        segment_state_a25 = state_a25.get(state, 0)
-        segment_state_a24 = state_a24.get(state, 0)
+        # Get segment total for this state (ALL brands, not just selected - for MS calculation)
+        segment_state_a25 = segment_state_a25_full.get(state, 0)
+        segment_state_a24 = segment_state_a24_full.get(state, 0)
         segment_state_growth = ((segment_state_a25 / segment_state_a24) - 1) * 100 if segment_state_a24 > 0 else 0
         
         detail_rows = []
@@ -3961,20 +3979,30 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
     return pivot_display
 
 
-def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str]) -> Dict | None:
+def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str], df_full_segment: pd.DataFrame = None) -> Dict | None:
     """Create NORTH zone state drill-down with state summary and brand deep-dive
     
     Formulas:
     - A25 Sal % Contribution to AI = State A25 NS / All India A25 NS × 100
     - A25 Gr (Segment) = (State A25 Seg NS - State A24 Seg NS) / State A24 Seg NS × 100
     - BTM (State vs AI) = State Growth - All India Growth
-    - MS (in state) = Brand A25 NS in State / Segment A25 NS in State × 100
+    - MS (in state) = Brand A25 NS in State / ALL Brands in Segment in State × 100
     - A25 Gr (Brand in state) = (Brand A25 NS - Brand A24 NS) / Brand A24 NS × 100
     - BTM (Brand vs Segment in state) = Brand Growth in State - Segment Growth in State
+    
+    Args:
+        df: DataFrame filtered by selected brands
+        selected_families: List of brand families to show
+        selected_brands: List of brands to show
+        selected_states: List of states to include
+        df_full_segment: Full segment data (all brands) for MS denominator calculation
     """
     
     if df.empty:
         return None
+    
+    # Use full segment data if provided, otherwise fall back to filtered data
+    df_for_denominator = df_full_segment if df_full_segment is not None and not df_full_segment.empty else df
     
     # Filter for NORTH zone and selected brands/families
     df_north = df[df["Zone"] == "North Zone"].copy()
@@ -3995,9 +4023,14 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
     
     # ===== STATE SUMMARY TABLE =====
-    # Aggregate by state for segment totals
+    # Aggregate by state for segment totals (selected brands only for summary)
     state_a25 = df_a25.groupby("State")["NS M INR"].sum().to_dict()
     state_a24 = df_a24.groupby("State")["NS M INR"].sum().to_dict()
+    
+    # Calculate segment totals for ALL brands in each state (for MS denominator)
+    df_segment_full = df_for_denominator[df_for_denominator["Zone"] == "North Zone"].copy()  # All brands in segment in North Zone
+    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["NS M INR"].sum().to_dict()
+    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["NS M INR"].sum().to_dict()
     
     # Calculate NORTH zone totals (sum of all states in North Zone)
     north_zone_a25 = sum(state_a25.values())
@@ -4059,9 +4092,9 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     state_details = {}
     
     for state in selected_states:
-        # Get segment total for this state (for MS calculation)
-        segment_state_a25 = state_a25.get(state, 0)
-        segment_state_a24 = state_a24.get(state, 0)
+        # Get segment total for this state (ALL brands, not just selected - for MS calculation)
+        segment_state_a25 = segment_state_a25_full.get(state, 0)
+        segment_state_a24 = segment_state_a24_full.get(state, 0)
         segment_state_growth = ((segment_state_a25 / segment_state_a24) - 1) * 100 if segment_state_a24 > 0 else 0
         
         detail_rows = []
@@ -5383,19 +5416,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
     
     # Parse saved config
     jtbd_config = json.loads(saved_jtbd["filter_json"]) if saved_jtbd and saved_jtbd["filter_json"] else {}
-    saved_jtbd_title = jtbd_config.get("title", "Jobs To Be Done")
     saved_jtbd_tabs = jtbd_config.get("tabs", [])
-    
-    # Title - pre-populated with saved value
-    jtbd_title = st.text_input(
-        "Slide Title",
-        value=saved_jtbd_title,
-        placeholder="e.g., Battlegrounds JTBDs: BP to Secure & Grow",
-        key=f"jtbd_title_{segment['id']}",
-        help="This title will appear on the dashboard"
-    )
-    
-    st.markdown("---")
     
     # Number of Brands
     num_jtbd_tabs = st.number_input(
@@ -5520,72 +5541,64 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
         
         # Individual save button for this tab
         if st.button(f"💾 Save Tab {tab_idx + 1} ({tab_name or f'JTBD {tab_idx + 1}'})", key=f"save_jtbd_tab{tab_idx}_{segment['id']}"):
-            if not jtbd_title:
-                st.error("Please provide a title for the JTBD view.")
+            # Load existing config to preserve other tabs
+            existing_config = jtbd_config if jtbd_config else {}
+            existing_tabs = existing_config.get("tabs", [])
+            
+            # Update or add this specific tab
+            if tab_idx < len(existing_tabs):
+                existing_tabs[tab_idx] = {
+                    "tab_name": tab_name,
+                    "description": tab_description,
+                    "left_header": left_header,
+                    "right_header": right_header,
+                    "sections": jtbd_sections_data
+                }
             else:
-                # Load existing config to preserve other tabs
-                existing_config = jtbd_config if jtbd_config else {}
-                existing_tabs = existing_config.get("tabs", [])
-                
-                # Update or add this specific tab
-                if tab_idx < len(existing_tabs):
-                    existing_tabs[tab_idx] = {
-                        "tab_name": tab_name,
-                        "description": tab_description,
-                        "left_header": left_header,
-                        "right_header": right_header,
-                        "sections": jtbd_sections_data
-                    }
-                else:
-                    # Extend the list if needed
-                    while len(existing_tabs) < tab_idx:
-                        existing_tabs.append({
-                            "tab_name": f"JTBD {len(existing_tabs) + 1}",
-                            "description": "",
-                            "left_header": "What's Working & Holding Us Back?",
-                            "right_header": "JTBDs:",
-                            "sections": []
-                        })
+                # Extend the list if needed
+                while len(existing_tabs) < tab_idx:
                     existing_tabs.append({
-                        "tab_name": tab_name,
-                        "description": tab_description,
-                        "left_header": left_header,
-                        "right_header": right_header,
-                        "sections": jtbd_sections_data
+                        "tab_name": f"JTBD {len(existing_tabs) + 1}",
+                        "description": "",
+                        "left_header": "What's Working & Holding Us Back?",
+                        "right_header": "JTBDs:",
+                        "sections": []
                     })
-                
-                # Delete existing
-                delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
-                
-                # Save updated configuration
-                config_json = json.dumps({
-                    "title": jtbd_title,
-                    "tabs": existing_tabs
+                existing_tabs.append({
+                    "tab_name": tab_name,
+                    "description": tab_description,
+                    "left_header": left_header,
+                    "right_header": right_header,
+                    "sections": jtbd_sections_data
                 })
-                
-                save_table(
-                    name="JTBD View",
-                    section="Battlegrounds",
-                    dataset_id=dataset_id,
-                    segment_id=segment["id"],
-                    columns=["Config"],
-                    filter_json=config_json,
-                    created_by=current_user["username"]
-                )
-                
-                st.success(f"✅ Tab {tab_idx + 1} saved to dashboard!")
-                if hasattr(st, "rerun"):
-                    st.rerun()
-                else:
-                    st.experimental_rerun()
+            
+            # Delete existing
+            delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
+            
+            # Save updated configuration
+            config_json = json.dumps({
+            })
+            
+            save_table(
+                name="JTBD View",
+                section="Battlegrounds",
+                dataset_id=dataset_id,
+                segment_id=segment["id"],
+                columns=["Config"],
+                filter_json=config_json,
+                created_by=current_user["username"]
+            )
+            
+            st.success(f"✅ Tab {tab_idx + 1} saved to dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
     
     # Preview
-    if jtbd_title or any(tab["sections"] for tab in all_tabs_data if any(s["left"] or s["right"] for s in tab["sections"])):
+    if any(tab["sections"] for tab in all_tabs_data if any(s["left"] or s["right"] for s in tab["sections"])):
         st.markdown("---")
         st.markdown("**Preview:**")
-        
-        if jtbd_title:
-            st.markdown(f"### {jtbd_title}")
         
         # Display JTBD tabs preview
         if num_jtbd_tabs > 1:

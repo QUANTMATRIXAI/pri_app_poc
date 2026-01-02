@@ -19,19 +19,11 @@ This guide shows how to pull the latest code changes and redeploy the Docker con
 cd F:\pri_app
 ```
 
-### 2. Stop running containers
+### 2. Pull latest changes and restart
 ```powershell
 docker compose down
-```
-
-### 3. Pull latest changes from GitHub
-```powershell
-git checkout prilink
+git reset --hard HEAD
 git pull origin prilink
-```
-
-### 4. Rebuild and start containers
-```powershell
 docker compose up --build -d
 ```
 

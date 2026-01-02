@@ -467,7 +467,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         st.info(f"📌 Available from Section 2: {len(selected_families)} Brand Families, {len(selected_brands)} Brands")
         
         # Brand Family filter (only show families from Section 2)
-        st.markdown("**Select Brand Families to display:**")
+        st.markdown("**Select Key Competitor Brand Families**")
         selected_families_family = st.multiselect(
             "Brand Families",
             options=sorted(selected_families),
@@ -617,7 +617,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=120
     )
     
-    if st.button("Save Brand Family Chart to Dashboard", key=f"save_family_chart_{segment['id']}"):
+    if st.button("Save Chart to Dashboard", key=f"save_family_chart_{segment['id']}"):
         if not selected_families_family or not selected_brands_family:
             st.error("Please select Brand Families and Brands.")
         else:
@@ -648,8 +648,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     # 3. Zonal Pivot Table Configuration
-    st.markdown("### 3. Zonal Pivot Table (Brand Family x Zone)")
-    st.caption("Pivot table showing NS M INR for A25 by Brand Family, Brand, and Zone")
+    st.markdown("### Zonal View")
+    st.caption("Market share, salience, growth rates and BTM for each zone")
     
     # Parse saved zonal config
     zonal_config = json.loads(saved_zonal["filter_json"]) if saved_zonal and saved_zonal["filter_json"] else {}
@@ -658,7 +658,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Editable title - pre-populated with saved value
     zonal_title = st.text_input(
-        "Table Title (editable)",
+        "Slide Title",
         value=saved_zonal_title,
         key=f"ns_zonal_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -750,7 +750,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # Comment box AFTER zonal preview - pre-populated with saved value
                 zonal_comment = st.text_area(
-                    "Add comment for zonal table (optional)",
+                    "Add Comment",
                     value=saved_zonal_comment,
                     key=f"ns_zonal_comment_{segment['id']}",
                     placeholder="Add insights about zonal performance...",
@@ -788,8 +788,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # 4. NORTH Zone State Drill-Down
-    st.markdown("### 4. NORTH Zone - State Drill-Down")
-    st.caption("State-level performance within NORTH zone with brand deep-dive")
+    st.markdown("### North Zone")
+    st.caption("Performance of key states within the zone")
     
     # Parse saved NORTH config
     north_config = json.loads(saved_north["filter_json"]) if saved_north and saved_north["filter_json"] else {}
@@ -801,7 +801,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Editable title - pre-populated with saved value
     north_title = st.text_input(
-        "Table Title (editable)",
+        "Slide Title",
         value=saved_north_title,
         key=f"ns_north_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -822,8 +822,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_north = sorted(df_north["State"].dropna().unique().tolist())
                 
                 # First show state summary for ALL states in North Zone
-                st.markdown("**State Summary - All States in North Zone:**")
-                preview_all_states = create_north_state_drilldown(df_filtered, selected_families, selected_brands, states_in_north)
+
+                preview_all_states = create_north_state_drilldown(df_filtered, selected_families, selected_brands, states_in_north, df_filtered)
                 
                 if preview_all_states:
                     # Define colors for styling
@@ -849,7 +849,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 north_comment_top = st.text_area(
-                    "Comment for State Summary Table (optional)",
+                    "Add Comment",
                     value=saved_north_comment_top,
                     key=f"ns_north_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
@@ -864,7 +864,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 valid_saved_states = [s for s in saved_north_states if s in available_states] if saved_north_states else []
                 default_north_states = valid_saved_states if valid_saved_states else (available_states[:4] if len(available_states) > 4 else available_states)
                 selected_states = st.multiselect(
-                    "Select States for Brand Deep-Dive",
+                    "Select Key States",
                     options=available_states,
                     default=default_north_states,
                     key=f"ns_north_states_{segment['id']}"
@@ -872,8 +872,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if selected_states:
                     # Preview deep-dive
-                    st.markdown("**Preview - State Deep-Dive:**")
-                    preview_north = create_north_state_drilldown(df_filtered, selected_families, selected_brands, selected_states)
+                    st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
+                    preview_north = create_north_state_drilldown(df_filtered, selected_families, selected_brands, selected_states, df_filtered)
                     
                     if preview_north and preview_north['state_details']:
                         # Define colors for brand families
@@ -931,14 +931,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 north_comment_bottom = st.text_area(
-                    "Comment for Brand Deep-Dive (optional)",
+                    "Add Comment",
                     value=saved_north_comment_bottom,
                     key=f"ns_north_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
                 
-                if st.button("Save NORTH Zone Drill-Down to Dashboard", key=f"save_ns_north_{segment['id']}"):
+                if st.button("Save North Zone to Dashboard", key=f"save_ns_north_{segment['id']}"):
                     if not selected_states:
                         st.error("Please select at least one state for deep-dive.")
                     else:
@@ -977,8 +977,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # 5. WEST+CSD Zone State Drill-Down
-    st.markdown("### 5. WEST+CSD Zone - State Drill-Down")
-    st.caption("State-level performance within WEST+CSD zone with brand deep-dive")
+    st.markdown("### West + CSD Zone")
+    st.caption("Performance of key states within the zone")
     
     # Parse saved WEST config
     west_config = json.loads(saved_west["filter_json"]) if saved_west and saved_west["filter_json"] else {}
@@ -990,7 +990,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Editable title - pre-populated with saved value
     west_title = st.text_input(
-        "Table Title (editable)",
+        "Slide Title",
         value=saved_west_title,
         key=f"ns_west_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -1007,8 +1007,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             else:
                 states_in_west = sorted(df_west["State"].dropna().unique().tolist())
                 
-                st.markdown("**State Summary - All States in West+CSD Zone:**")
-                preview_all_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_west, "West+CSD Zone")
+
+                preview_all_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_west, "West+CSD Zone", df_filtered)
                 
                 if preview_all_west:
                     summary_styled = style_state_summary(preview_all_west['state_summary'])
@@ -1019,7 +1019,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 west_comment_top = st.text_area(
-                    "Comment for State Summary Table (optional)",
+                    "Add Comment",
                     value=saved_west_comment_top,
                     key=f"ns_west_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
@@ -1034,15 +1034,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 valid_saved_west = [s for s in saved_west_states if s in available_states_west] if saved_west_states else []
                 default_west_states = valid_saved_west if valid_saved_west else (available_states_west[:4] if len(available_states_west) > 4 else available_states_west)
                 selected_states_west = st.multiselect(
-                    "Select States for Brand Deep-Dive",
+                    "Select Key States",
                     options=available_states_west,
                     default=default_west_states,
                     key=f"ns_west_states_{segment['id']}"
                 )
                 
                 if selected_states_west:
-                    st.markdown("**Preview - State Deep-Dive:**")
-                    preview_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_west, "West+CSD Zone")
+                    st.markdown("**Select Key States**")
+                    preview_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_west, "West+CSD Zone", df_filtered)
                     
                     if preview_west and preview_west['state_details']:
                         render_state_drilldown_preview(preview_west, selected_states_west)
@@ -1050,14 +1050,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 west_comment_bottom = st.text_area(
-                    "Comment for Brand Deep-Dive (optional)",
+                    "Add Comment",
                     value=saved_west_comment_bottom,
                     key=f"ns_west_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
                 
-                if st.button("Save WEST+CSD Zone Drill-Down to Dashboard", key=f"save_ns_west_{segment['id']}"):
+                if st.button("Save West + CSD Zone to Dashboard", key=f"save_ns_west_{segment['id']}"):
                     if not selected_states_west:
                         st.error("Please select at least one state for deep-dive.")
                     else:
@@ -1089,8 +1089,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # 6. EAST Zone State Drill-Down
-    st.markdown("### 6. EAST Zone - State Drill-Down")
-    st.caption("State-level performance within EAST zone with brand deep-dive")
+    st.markdown("### East Zone")
+    st.caption("Performance of key states within the zone")
     
     # Parse saved EAST config
     east_config = json.loads(saved_east["filter_json"]) if saved_east and saved_east["filter_json"] else {}
@@ -1102,7 +1102,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Editable title - pre-populated with saved value
     east_title = st.text_input(
-        "Table Title (editable)",
+        "Slide Title",
         value=saved_east_title,
         key=f"ns_east_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -1119,8 +1119,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             else:
                 states_in_east = sorted(df_east["State"].dropna().unique().tolist())
                 
-                st.markdown("**State Summary - All States in East Zone:**")
-                preview_all_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_east, "East Zone")
+
+                preview_all_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_east, "East Zone", df_filtered)
                 
                 if preview_all_east:
                     summary_styled = style_state_summary(preview_all_east['state_summary'])
@@ -1131,7 +1131,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 east_comment_top = st.text_area(
-                    "Comment for State Summary Table (optional)",
+                    "Add Comment",
                     value=saved_east_comment_top,
                     key=f"ns_east_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
@@ -1146,15 +1146,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 valid_saved_east = [s for s in saved_east_states if s in available_states_east] if saved_east_states else []
                 default_east_states = valid_saved_east if valid_saved_east else (available_states_east[:4] if len(available_states_east) > 4 else available_states_east)
                 selected_states_east = st.multiselect(
-                    "Select States for Brand Deep-Dive",
+                    "Select Key States",
                     options=available_states_east,
                     default=default_east_states,
                     key=f"ns_east_states_{segment['id']}"
                 )
                 
                 if selected_states_east:
-                    st.markdown("**Preview - State Deep-Dive:**")
-                    preview_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_east, "East Zone")
+                    st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
+                    preview_east = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_east, "East Zone", df_filtered)
                     
                     if preview_east and preview_east['state_details']:
                         render_state_drilldown_preview(preview_east, selected_states_east)
@@ -1162,14 +1162,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 east_comment_bottom = st.text_area(
-                    "Comment for Brand Deep-Dive (optional)",
+                    "Add Comment",
                     value=saved_east_comment_bottom,
                     key=f"ns_east_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
                 
-                if st.button("Save EAST Zone Drill-Down to Dashboard", key=f"save_ns_east_{segment['id']}"):
+                if st.button("Save East Zone to Dashboard", key=f"save_ns_east_{segment['id']}"):
                     if not selected_states_east:
                         st.error("Please select at least one state for deep-dive.")
                     else:
@@ -1201,8 +1201,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("---")
     
     # 7. SOUTH Zone State Drill-Down
-    st.markdown("### 7. SOUTH Zone - State Drill-Down")
-    st.caption("State-level performance within SOUTH zone with brand deep-dive")
+    st.markdown("### South Zone")
+    st.caption("Performance of key states within the zone")
     
     # Parse saved SOUTH config
     south_config = json.loads(saved_south["filter_json"]) if saved_south and saved_south["filter_json"] else {}
@@ -1214,7 +1214,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Editable title - pre-populated with saved value
     south_title = st.text_input(
-        "Table Title (editable)",
+        "Slide Title",
         value=saved_south_title,
         key=f"ns_south_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -1231,8 +1231,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             else:
                 states_in_south = sorted(df_south["State"].dropna().unique().tolist())
                 
-                st.markdown("**State Summary - All States in South Zone:**")
-                preview_all_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_south, "South Zone")
+
+                preview_all_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_south, "South Zone", df_filtered)
                 
                 if preview_all_south:
                     summary_styled = style_state_summary(preview_all_south['state_summary'])
@@ -1243,7 +1243,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # Comment for state summary table - RIGHT AFTER the table - pre-populated with saved value
                 south_comment_top = st.text_area(
-                    "Comment for State Summary Table (optional)",
+                    "Add Comment",
                     value=saved_south_comment_top,
                     key=f"ns_south_comment_top_{segment['id']}",
                     placeholder="Add insights about state-level performance...",
@@ -1258,15 +1258,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 valid_saved_south = [s for s in saved_south_states if s in available_states_south] if saved_south_states else []
                 default_south_states = valid_saved_south if valid_saved_south else (available_states_south[:4] if len(available_states_south) > 4 else available_states_south)
                 selected_states_south = st.multiselect(
-                    "Select States for Brand Deep-Dive",
+                    "Select Key States",
                     options=available_states_south,
                     default=default_south_states,
                     key=f"ns_south_states_{segment['id']}"
                 )
                 
                 if selected_states_south:
-                    st.markdown("**Preview - State Deep-Dive:**")
-                    preview_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_south, "South Zone")
+                    st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
+                    preview_south = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, selected_states_south, "South Zone", df_filtered)
                     
                     if preview_south and preview_south['state_details']:
                         render_state_drilldown_preview(preview_south, selected_states_south)
@@ -1274,14 +1274,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
                 south_comment_bottom = st.text_area(
-                    "Comment for Brand Deep-Dive (optional)",
+                    "Add Comment",
                     value=saved_south_comment_bottom,
                     key=f"ns_south_comment_bottom_{segment['id']}",
                     placeholder="Add insights about brand performance by state...",
                     height=100
                 )
                 
-                if st.button("Save SOUTH Zone Drill-Down to Dashboard", key=f"save_ns_south_{segment['id']}"):
+                if st.button("Save South Zone to Dashboard", key=f"save_ns_south_{segment['id']}"):
                     if not selected_states_south:
                         st.error("Please select at least one state for deep-dive.")
                     else:
@@ -1312,21 +1312,21 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
-    # 5. State Performance Analysis Table
-    st.markdown("### 5. State Performance Analysis Table")
+    # BTM Detailed Analysis
+    st.markdown("### BTM Detailed Analysis")
     st.caption("Select states and brand family to view detailed performance metrics")
     
     # Load existing saved configuration
-    saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
+    saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "BTM Detailed Analysis"), None)
     state_perf_config = json.loads(saved_state_perf["filter_json"]) if saved_state_perf and saved_state_perf["filter_json"] else {}
-    saved_state_perf_title = state_perf_config.get("title", "State Performance Analysis")
+    saved_state_perf_title = state_perf_config.get("title", "BTM Detailed Analysis")
     saved_state_perf_states = state_perf_config.get("states", [])
     saved_state_perf_family = state_perf_config.get("brand_family", "")
     saved_state_perf_comment = saved_state_perf["comment"] if saved_state_perf else ""
     
     # Editable title
     state_perf_title = st.text_input(
-        "Table Title (editable)",
+        "Slide Title",
         value=saved_state_perf_title,
         key=f"ns_state_perf_title_{segment['id']}",
         help="This title will appear on the dashboard"
@@ -1354,7 +1354,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         with col2:
             # Independent brand family selection
             selected_family = st.selectbox(
-                "Select Brand Family",
+                "Select Brand Family (select one PRI brand)",
                 options=all_brand_families,
                 index=all_brand_families.index(saved_state_perf_family) if saved_state_perf_family in all_brand_families else 0,
                 key=f"ns_state_perf_family_{segment['id']}"
@@ -1376,7 +1376,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     
                     # Show bubble chart preview
                     st.markdown("---")
-                    st.markdown("**Bubble Chart Preview:**")
+                    st.markdown("**Chart Preview:**")
                     
                     # Create bubble chart
                     import plotly.graph_objects as go
@@ -1476,9 +1476,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=120
                 )
                 
-                if st.button("Save State Performance Table to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
+                if st.button("Save Table and Chart to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
                     # Delete existing table
-                    delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+                    delete_tables_for_section(segment["id"], "NS Landscape", "BTM Detailed Analysis")
                     
                     # Save configuration (independent from Section 2)
                     filter_config = json.dumps({
@@ -1487,7 +1487,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         "title": state_perf_title
                     })
                     save_table(
-                        name="State Performance Analysis",
+                        name="BTM Detailed Analysis",
                         dataset_id=dataset_id,
                         columns=["State", "Brand Family", "Metrics"],
                         created_by=current_user["username"],
@@ -1496,24 +1496,24 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         filter_json=filter_config,
                         comment=state_perf_comment
                     )
-                    st.success("State Performance Analysis Table saved to dashboard!")
+                    st.success("BTM Detailed Analysis Table saved to dashboard!")
                 
                 st.markdown("---")
-                st.markdown("### Strategic Insights Grid")
-                st.caption("Add strategic insights in a 3x3 grid format")
+                st.markdown("### Battleground Summary Slide")
+                st.caption("Cluster states and add Battleground Summary")
                 
                 # Load existing grid data
-                saved_grid = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Strategic Insights Grid"), None)
+                saved_grid = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Battleground Summary Slide"), None)
                 grid_config = json.loads(saved_grid["filter_json"]) if saved_grid and saved_grid["filter_json"] else {}
-                saved_grid_title = grid_config.get("title", "Strategic Insights")
+                saved_grid_title = grid_config.get("title", "Battleground Summary")
                 saved_grid_data = grid_config.get("grid_data", {})
                 
                 # Title for the grid
                 grid_title = st.text_input(
-                    "Grid Title",
+                    "Slide Title",
                     value=saved_grid_title,
                     key=f"ns_grid_title_{segment['id']}",
-                    placeholder="e.g., Strategic Insights"
+                    placeholder="e.g., Battleground Summary"
                 )
                 
                 # 3 rows with titles and 3 columns
@@ -1648,12 +1648,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
                 
                 # Save button for grid
-                if st.button("Save Strategic Insights Grid to Dashboard", key=f"save_ns_grid_{segment['id']}"):
+                if st.button("Save Battleground Summary Slide to Dashboard", key=f"save_ns_grid_{segment['id']}"):
                     if not grid_title:
-                        st.error("Please provide a grid title.")
+                        st.error("Please provide a Slide Title.")
                     else:
                         # Delete existing grid
-                        delete_tables_for_section(segment["id"], "NS Landscape", "Strategic Insights Grid")
+                        delete_tables_for_section(segment["id"], "NS Landscape", "Battleground Summary Slide")
                         
                         # Save configuration
                         filter_config = json.dumps({
@@ -1661,7 +1661,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             "grid_data": grid_data
                         })
                         save_table(
-                            name="Strategic Insights Grid",
+                            name="Battleground Summary Slide",
                             dataset_id=dataset_id,
                             columns=["Grid"],
                             created_by=current_user["username"],
@@ -1670,14 +1670,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             filter_json=filter_config,
                             comment=""
                         )
-                        st.success("Strategic Insights Grid saved to dashboard!")
+                        st.success("Battleground Summary Slide saved to dashboard!")
     
     st.markdown("---")
     
-    # 6. Placeholder Images (5 images)
-    st.markdown("### 6. Placeholder Images")
+    # Placeholder Slides (5 images)
+    st.markdown("### Placeholder Slides")
     
-    with st.expander("📸 Upload Placeholder Images (Optional)", expanded=False):
+    with st.expander("📸 Upload Placeholder Slides (optional)", expanded=False):
         st.caption("Upload up to 5 images with titles and comments")
         
         # Load existing placeholder images
@@ -1856,9 +1856,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
-    # 7. Custom Trends View Builder
-    st.markdown("### 7. Custom Trends View Builder")
-    st.caption("Create a custom view with title, description, and numbered sections")
+    # NS Landscape Summary Slide
+    st.markdown("### NS Landscape Summary Slide")
+    st.caption("Add content for NS Landscape summary slide")
     
     # Load existing saved configuration
     existing_tables = get_tables_for_segment(segment["id"])
@@ -1872,14 +1872,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Title and main description - pre-populated with saved values
     trends_title = st.text_input(
-        "View Title",
+        "Slide Title",
         value=saved_trends_title,
         placeholder="e.g., NS Landscape Key Insights",
         key=f"ns_trends_title_{segment['id']}"
     )
     
     trends_description = st.text_area(
-        "Main Description",
+        "Overall Comment",
         value=saved_trends_description,
         placeholder="e.g., Key insights from NS performance analysis...",
         height=100,
@@ -2018,7 +2018,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         """, unsafe_allow_html=True)
     
     # Save button
-    if st.button("Save Custom Trends View to Dashboard", key=f"save_ns_trends_{segment['id']}"):
+    if st.button("Save Summary to Dashboard", key=f"save_ns_trends_{segment['id']}"):
         if not trends_title:
             st.error("Please provide a title for the custom trends view.")
         else:

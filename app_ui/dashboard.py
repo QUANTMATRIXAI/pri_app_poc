@@ -1835,7 +1835,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     
     # Use the same function as preview - first get ALL states summary
     from app_ui.data_studio import create_zone_state_drilldown
-    result_all = create_zone_state_drilldown(df, selected_families, selected_brands, states_in_zone, zone_name)
+    result_all = create_zone_state_drilldown(df, selected_families, selected_brands, states_in_zone, zone_name, df)
     
     if result_all is None:
         st.warning("Unable to create state drill-down.")
@@ -1910,7 +1910,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     
     # Show state deep-dives for SELECTED states only
     if selected_states:
-        result = create_zone_state_drilldown(df, selected_families, selected_brands, selected_states, zone_name)
+        result = create_zone_state_drilldown(df, selected_families, selected_brands, selected_states, zone_name, df)
         
         if result and result['state_details']:
             st.markdown("---")
@@ -2165,7 +2165,7 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         textfont=dict(size=10, color='black', family='Arial Black'),
         customdata=contributions,  # Pass contribution values for hover
         hovertemplate='<b>%{text}</b><br>' +
-                      'BP FAM MS: %{x:.0f}%<br>' +
+                      'Brand FAM MS: %{x:.0f}%<br>' +
                       'Segment Salience: %{y:.0f}%<br>' +
                       'State Contribution: %{customdata:.0f}%<br>' +
                       '<extra></extra>',
@@ -2175,17 +2175,17 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
     # Add reference lines for All India
     fig.add_hline(y=ai_salience, line_dash="dash", line_color="#9B59B6", line_width=2,
                   annotation_text=f"A25 Seg. Sal. ({ai_salience:.1f}%) All India",
-                  annotation_position="right",
+                  annotation_position="top left",
                   annotation=dict(font=dict(size=11, color="#9B59B6")))
     
     fig.add_vline(x=ai_ms, line_dash="dash", line_color="#E74C3C", line_width=2,
-                  annotation_text=f"A25 BP Fam MS ({ai_ms:.1f}%) All India",
+                  annotation_text=f"A25 Brand Fam MS ({ai_ms:.1f}%) All India",
                   annotation_position="top",
                   annotation=dict(font=dict(size=11, color="#E74C3C")))
     
     # Update layout
     fig.update_layout(
-        xaxis_title="X-Axis: State Segment Salience (BP FAM A25 MS %)",
+        xaxis_title="X-Axis: State Segment Salience (Brand FAM A25 MS %)",
         yaxis_title="Y-Axis: State Segment Salience Gr (LY)",
         height=600,
         showlegend=False,
