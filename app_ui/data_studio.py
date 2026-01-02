@@ -171,6 +171,9 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
             st.warning(f"No rows found for segment '{segment['name']}' (Excel: '{excel_name}', Column: '{filter_column}') in the uploaded data.")
         else:
             st.dataframe(df_filtered.head(200), use_container_width=True)
+    
+    # Show formatting tips once for all sections
+    show_formatting_tips()
 
     # Section tabs for configuration
     st.markdown("---")
@@ -275,8 +278,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=120
     )
     
-    show_formatting_tips()
-    
     if st.button("Save Manufacturing Pivot to Dashboard", key=f"save_ns_pivot_{segment['id']}"):
         if not selected_years_pivot:
             st.error("Please select at least one year.")
@@ -347,12 +348,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             brands_in_families = sorted(
                 df_filtered[df_filtered["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
             )
-            # Use saved brands if available, otherwise auto-select all
-            default_brands = [b for b in saved_brands if b in brands_in_families] if saved_brands else brands_in_families
+            # Always auto-select all brands from selected families
             selected_brands = st.multiselect(
                 "Select Brands",
                 options=brands_in_families,
-                default=default_brands,
+                default=brands_in_families,
                 key=f"ns_chart_brands_{segment['id']}"
             )
         else:
@@ -374,6 +374,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     if excluded_states and "State" in df_filtered.columns:
         df_filtered = df_filtered[~df_filtered["State"].isin(excluded_states)].copy()
         st.info(f"🚫 Excluding {len(excluded_states)} state(s) from all sections: {', '.join(excluded_states)}")
+    
+    # Keep a copy of the full segment data (all brands, after state exclusion) for MS denominator calculations
+    df_full_segment = df_filtered.copy()
     
     # Preview chart
     if selected_brands:
@@ -554,14 +557,25 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     ascending=[True, False, True]
                 ).reset_index(drop=True)
                 
+                # Rename NS columns to include "NS M INR"
+                rename_map = {}
+                if "A23" in combined_df.columns:
+                    rename_map["A23"] = "A23 NS M INR"
+                if "A24" in combined_df.columns:
+                    rename_map["A24"] = "A24 NS M INR"
+                if "A25" in combined_df.columns:
+                    rename_map["A25"] = "A25 NS M INR"
+                
+                combined_df = combined_df.rename(columns=rename_map)
+                
                 # Reorder columns
                 column_order = ["Brand Family", "Brand"]
-                if "A23" in combined_df.columns:
-                    column_order.append("A23")
-                if "A24" in combined_df.columns:
-                    column_order.append("A24")
-                if "A25" in combined_df.columns:
-                    column_order.append("A25")
+                if "A23 NS M INR" in combined_df.columns:
+                    column_order.append("A23 NS M INR")
+                if "A24 NS M INR" in combined_df.columns:
+                    column_order.append("A24 NS M INR")
+                if "A25 NS M INR" in combined_df.columns:
+                    column_order.append("A25 NS M INR")
                 if "A24 Growth %" in combined_df.columns:
                     column_order.append("A24 Growth %")
                 if "A25 Growth %" in combined_df.columns:
@@ -572,7 +586,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 display_df = combined_df[column_order].copy()
                 
                 # Format NS columns with commas
-                for col in ["A23", "A24", "A25"]:
+                for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR"]:
                     if col in display_df.columns:
                         display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
                 
@@ -661,6 +675,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # Show available options from Section 2
     if not selected_families or not selected_brands:
         st.warning("⚠️ Please configure Section 2 (Brand Performance Chart) first to select Brand Families and Brands.")
+        selected_families_family = []
+        selected_brands_family = []
     else:
         st.info(f"📌 Available from Section 2: {len(selected_families)} Brand Families, {len(selected_brands)} Brands")
         
@@ -1206,7 +1222,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_west = sorted(df_west["State"].dropna().unique().tolist())
                 
 
-                preview_all_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_west, "West+CSD Zone", df_filtered)
+                preview_all_west = create_zone_state_drilldown(df_filtered, selected_families, selected_brands, states_in_west, "West+CSD Zone", df_full_segment)
                 
                 if preview_all_west:
                     summary_styled = style_state_summary(preview_all_west['state_summary'])
@@ -1749,9 +1765,17 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     st.markdown("**Preview:**")
                     st.markdown(f"### {grid_title}")
                     
+                    # Define colors for each row
+                    row_colors = [
+                        {"bg": "#E8F5E9", "border": "#81C784", "text": "#2E7D32"},  # Row 1: Light green
+                        {"bg": "#E3F2FD", "border": "#90CAF9", "text": "#1565C0"},  # Row 2: Light blue
+                        {"bg": "#FFEBEE", "border": "#EF9A9A", "text": "#C62828"}   # Row 3: Red
+                    ]
+                    
                     # Display 3x3 grid preview with row titles as first column
                     for row_idx in range(3):
                         row_title = grid_data.get(f"row_{row_idx}_title", "")
+                        row_color = row_colors[row_idx]
                         
                         # 4 columns: row title + 3 content columns
                         cols = st.columns([1, 2, 2, 2])
@@ -1761,8 +1785,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             if row_title:
                                 st.markdown(f"""
                                     <div style='
-                                        background: #E3F2FD;
-                                        border: 1px solid #90CAF9;
+                                        background: {row_color["bg"]};
+                                        border: 1px solid {row_color["border"]};
                                         padding: 1rem;
                                         margin: 0.5rem 0;
                                         border-radius: 6px;
@@ -1774,7 +1798,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                         <div style='
                                             font-size: 0.95rem;
                                             font-weight: 600;
-                                            color: #1565C0;
+                                            color: {row_color["text"]};
                                             text-align: center;
                                         '>
                                             {row_title}
@@ -2347,9 +2371,6 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
         height=200,
         key=f"seg_truth_comment_{segment['id']}"
     )
-    
-    # Show formatting tips once for both title and insights
-    show_formatting_tips()
     
     # P3M Segment Profile CSV Upload - BEFORE PREVIEW
     st.markdown("---")
@@ -4208,7 +4229,7 @@ def format_extra_comments(extras: list[str] | None) -> str:
 
 def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
     """Configure Segment Trends: Images and Carousel"""
-    st.markdown("#### Segment Trends Configuration")
+
     
     # Get existing media
     from app_core.media import get_media_for_segment
@@ -4217,9 +4238,6 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     # Get existing images
     trend_images = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Additional Images"]
     trend_images = sorted(trend_images, key=lambda x: x.get("id", 0))
-    
-    # Show formatting tips
-    show_formatting_tips()
     
     # Section title for image uploads
     st.markdown("---")
@@ -4615,7 +4633,7 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Parse saved config
     custom_trends_config = json.loads(saved_custom_trends["filter_json"]) if saved_custom_trends and saved_custom_trends["filter_json"] else {}
-    saved_trends_title = custom_trends_config.get("title", "")
+    saved_trends_title = custom_trends_config.get("title", "Segment Trends in L1Y")
     saved_trends_description = custom_trends_config.get("description", "")
     saved_trends_sections = custom_trends_config.get("sections", [])
     
@@ -4810,8 +4828,6 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # Get existing standalone images
     brand_trends_standalone = [m for m in existing_media if m.get("section") == "Brand Trends" and m.get("name") == "Standalone Images"]
     brand_trends_standalone = sorted(brand_trends_standalone, key=lambda x: x.get("id", 0))
-    
-    show_formatting_tips()
     
     # Image 1: 5Cs Performance Slide
     st.markdown("**5Cs Performance Slide**")
@@ -6257,9 +6273,6 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             "content": brand_content
         })
     
-    # Show formatting tips once for all text fields
-    show_formatting_tips()
-    
     # Preview
     if brand_title or brand_description or any(b["content"] for b in brands_data):
         st.markdown("---")
@@ -7489,8 +7502,15 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
     st.markdown(f"**All India Segment Growth (A25):** {all_india_growth:+.1f}%")
     st.markdown("---")
     
+    # Define colors for each state position (matching dashboard mode)
+    state_colors = [
+        {"bg": "#E8F5E9", "border": "#81C784", "text": "#2E7D32"},  # State 1: Light green
+        {"bg": "#E3F2FD", "border": "#90CAF9", "text": "#1565C0"},  # State 2: Light blue
+        {"bg": "#FFEBEE", "border": "#EF9A9A", "text": "#C62828"}   # State 3: Light red/pink
+    ]
+    
     # Process each selected state
-    for state in selected_states[:3]:  # Show max 3 states in preview
+    for state_idx, state in enumerate(selected_states[:3]):  # Show max 3 states in preview
         st.markdown(f"### {state}")
         
         # Filter data for this state
@@ -7513,10 +7533,15 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
         # State BTM Status vs AI
         btm_status = segment_growth - all_india_growth
         
+        # Get color for this state based on position
+        state_color = state_colors[state_idx % len(state_colors)]
+        btm_color = state_color["text"]
+        btm_bg_color = state_color["bg"]
+        border_color = state_color["border"]
+        
         # Display state header
-        btm_color = "#4CAF50" if btm_status >= 0 else "#F44336"
         st.markdown(f"""
-            <div style='background-color: #F5F5F5; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;'>
+            <div style='background-color: {btm_bg_color}; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border-left: 4px solid {border_color};'>
                 <div style='display: flex; justify-content: space-between; align-items: center;'>
                     <div>
                         <h4 style='margin: 0;'>{state}</h4>
@@ -7603,8 +7628,6 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     # Configure 3 tabs
     st.markdown("### Battlegrounds Deep Dive")
     st.caption("Cluster states into three groups based on the brand's position and market realities")
-    
-    show_formatting_tips()
     
     tabs_config = []
     # Track which states have been selected in previous tabs

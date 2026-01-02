@@ -57,12 +57,55 @@ def bootstrap() -> None:
 
 
 def render_header() -> None:
+    # Create container for the card
     st.markdown(
         """
         <div class="info-card" style="margin-bottom: 1rem; background: white; padding: 2rem; border: 1px solid rgba(0,0,0,0.08);">
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Create two columns inside the card
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.markdown(
+            """
             <div class="pill">Secure Workspace</div>
             <h1 style="margin-bottom:0.5rem; margin-top:0.8rem; color: #1d2733; font-size: 2.5rem; font-weight: 700; letter-spacing: -0.5px;">Strategic Alignment Dashboard</h1>
             <p style="color: #f5b400; margin-bottom:0; font-size: 1.1rem; font-weight: 600;">For Pernod Ricard India</p>
+            """,
+            unsafe_allow_html=True,
+        )
+    
+    with col2:
+        # Display Pernod Ricard logo
+        import os
+        logo_path = "static/Pernod_Ricard_logo_2019.svg.png"
+        if os.path.exists(logo_path):
+            st.image(logo_path, width=200)
+    
+    # Close the card
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_footer() -> None:
+    st.markdown(
+        """
+        <div style='
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #f8f9fa;
+            padding: 0.8rem 2rem;
+            text-align: center;
+            border-top: 1px solid rgba(0,0,0,0.08);
+            z-index: 999;
+        '>
+            <p style='margin: 0; color: #6c757d; font-size: 0.9rem;'>
+                Powered by <span style='font-weight: 600; color: #1d2733;'>Quant Matrix AI</span>
+            </p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -140,6 +183,7 @@ def main() -> None:
     if st.session_state["selected_segment_id"] is None:
         render_header()
         render_segment_landing(segments)
+        render_footer()
         return
 
     segment = get_segment(st.session_state["selected_segment_id"])
@@ -173,6 +217,9 @@ def main() -> None:
         render_data_upload(current_user, segment)
     else:
         st.warning("You do not have access to this section.")
+    
+    # Render footer
+    render_footer()
 
 
 if __name__ == "__main__":

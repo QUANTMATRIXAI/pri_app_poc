@@ -936,14 +936,25 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             ascending=[True, False, True]
         ).reset_index(drop=True)
         
-        # Reorder columns: Brand Family, Brand, A23, A24, A25, A24 Growth %, A25 Growth %, 2-Yr CAGR %
-        column_order = ["Brand Family", "Brand"]
+        # Rename NS columns to include "NS M INR"
+        rename_map = {}
         if "A23" in combined_df.columns:
-            column_order.append("A23")
+            rename_map["A23"] = "A23 NS M INR"
         if "A24" in combined_df.columns:
-            column_order.append("A24")
+            rename_map["A24"] = "A24 NS M INR"
         if "A25" in combined_df.columns:
-            column_order.append("A25")
+            rename_map["A25"] = "A25 NS M INR"
+        
+        combined_df = combined_df.rename(columns=rename_map)
+        
+        # Reorder columns: Brand Family, Brand, A23 NS M INR, A24 NS M INR, A25 NS M INR, A24 Growth %, A25 Growth %, 2-Yr CAGR %
+        column_order = ["Brand Family", "Brand"]
+        if "A23 NS M INR" in combined_df.columns:
+            column_order.append("A23 NS M INR")
+        if "A24 NS M INR" in combined_df.columns:
+            column_order.append("A24 NS M INR")
+        if "A25 NS M INR" in combined_df.columns:
+            column_order.append("A25 NS M INR")
         if "A24 Growth %" in combined_df.columns:
             column_order.append("A24 Growth %")
         if "A25 Growth %" in combined_df.columns:
@@ -954,7 +965,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         display_df = combined_df[column_order].copy()
         
         # Format NS columns with commas
-        for col in ["A23", "A24", "A25"]:
+        for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR"]:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
         
@@ -1549,8 +1560,9 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                                     </div>
                                 """, unsafe_allow_html=True)
                         else:
-                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                            with col2:
+                            # No comment - still use left half only
+                            col_img, col_empty = st.columns([1, 1])
+                            with col_img:
                                 st.image(file_path, use_container_width=True)
         else:
             # Single image in carousel 1
@@ -1604,8 +1616,9 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                             </div>
                         """, unsafe_allow_html=True)
                 else:
-                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                    with col2:
+                    # No comment - still use left half only
+                    col_img, col_empty = st.columns([1, 1])
+                    with col_img:
                         st.image(file_path, use_container_width=True)
     
     # Display Carousel 2
@@ -1671,8 +1684,9 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                                     </div>
                                 """, unsafe_allow_html=True)
                         else:
-                            col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                            with col2:
+                            # No comment - still use left half only
+                            col_img, col_empty = st.columns([1, 1])
+                            with col_img:
                                 st.image(file_path, use_container_width=True)
         else:
             # Single image in carousel 2
@@ -1726,8 +1740,9 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                             </div>
                         """, unsafe_allow_html=True)
                 else:
-                    col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                    with col2:
+                    # No comment - still use left half only
+                    col_img, col_empty = st.columns([1, 1])
+                    with col_img:
                         st.image(file_path, use_container_width=True)
     
     # Display images one below the other
@@ -2236,8 +2251,16 @@ def render_strategic_insights_grid(table_row: Dict, segment: Dict, is_editor: bo
     st.markdown(f"### {grid_title}")
     
     # Display 3x3 grid with row titles as first column
+    # Define colors for each row
+    row_colors = [
+        {"bg": "#E8F5E9", "border": "#81C784", "text": "#2E7D32"},  # Row 1: Light green
+        {"bg": "#E3F2FD", "border": "#90CAF9", "text": "#1565C0"},  # Row 2: Light blue
+        {"bg": "#FFEBEE", "border": "#EF9A9A", "text": "#C62828"}   # Row 3: Red
+    ]
+    
     for row_idx in range(3):
         row_title = grid_data.get(f"row_{row_idx}_title", "")
+        row_color = row_colors[row_idx]
         
         # 4 columns: row title + 3 content columns
         cols = st.columns([1, 2, 2, 2])
@@ -2247,8 +2270,8 @@ def render_strategic_insights_grid(table_row: Dict, segment: Dict, is_editor: bo
             if row_title:
                 st.markdown(f"""
                     <div style='
-                        background: #E3F2FD;
-                        border: 1px solid #90CAF9;
+                        background: {row_color["bg"]};
+                        border: 1px solid {row_color["border"]};
                         padding: 1rem;
                         margin: 0.5rem 0;
                         border-radius: 6px;
@@ -2260,7 +2283,7 @@ def render_strategic_insights_grid(table_row: Dict, segment: Dict, is_editor: bo
                         <div style='
                             font-size: 0.95rem;
                             font-weight: 600;
-                            color: #1565C0;
+                            color: {row_color["text"]};
                             text-align: center;
                         '>
                             {row_title}
