@@ -2354,20 +2354,20 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     # P3M Segment Profile CSV Upload - BEFORE PREVIEW
     st.markdown("---")
     st.markdown("**Segment Profile Data**")
-    st.caption("Upload a CSV file with 3 columns: Metric, TBA, Premium Whisky")
+    st.caption("Upload a CSV file with: Column 1 = Metric names, Column 2 = Baseline values, Column 3+ = Comparison values (any number of columns)")
     
     # Load existing P3M profile data
     saved_p3m_profile = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "P3M Segment Profile"), None)
     
     if saved_p3m_profile and saved_p3m_profile["filter_json"]:
-        st.info("✅ P3M Segment Profile data already uploaded. Upload a new CSV to replace it.")
+        st.info("✅ Segment Profile data already uploaded. Upload a new CSV to replace it.")
     
     # CSV file uploader
     uploaded_csv = st.file_uploader(
         "Upload CSV File",
         type=["csv"],
         key=f"p3m_profile_csv_{segment['id']}",
-        help="CSV should have 3 columns: Metric, TBA, Premium Whisky"
+        help="CSV should have at least 3 columns: Metric, Baseline, and one or more comparison columns"
     )
     
     # Variable to hold the CSV data for preview
@@ -2380,45 +2380,50 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
             
             # Validate columns
             if len(df_csv.columns) < 3:
-                st.error("CSV must have at least 3 columns: Metric, TBA, Premium Whisky")
+                st.error("CSV must have at least 3 columns: Metric, Baseline, and at least one comparison column")
             else:
-                # Use first 3 columns
-                df_csv = df_csv.iloc[:, :3]
-                df_csv.columns = ["Metric", "TBA", "Premium Whisky"]
+                # Keep all columns with their original names
+                st.success(f"✅ CSV loaded successfully! {len(df_csv)} rows, {len(df_csv.columns)} columns found.")
                 
-                st.success(f"✅ CSV loaded successfully! {len(df_csv)} rows found.")
+                # Calculate index for each comparison column (columns 3+)
+                baseline_col = df_csv.columns[1]  # Column 2 is the baseline
                 
-                # Calculate index for preview
-                def calculate_index(row):
-                    """Calculate index from TBA and Premium Whisky values"""
-                    try:
-                        tba_val = str(row["TBA"]).replace("%", "").strip()
-                        pw_val = str(row["Premium Whisky"]).replace("%", "").strip()
-                        
-                        if not tba_val or not pw_val or tba_val == "" or pw_val == "":
+                for col_idx in range(2, len(df_csv.columns)):
+                    col_name = df_csv.columns[col_idx]
+                    index_col_name = f"{col_name}_Index"
+                    
+                    def calculate_index(row):
+                        """Calculate index from baseline and comparison value"""
+                        try:
+                            baseline_val = str(row[baseline_col]).replace("%", "").replace(",", "").strip()
+                            comp_val = str(row[col_name]).replace("%", "").replace(",", "").strip()
+                            
+                            if not baseline_val or not comp_val or baseline_val == "" or comp_val == "":
+                                return None
+                            
+                            baseline_num = float(baseline_val)
+                            comp_num = float(comp_val)
+                            
+                            if baseline_num == 0:
+                                return None
+                            
+                            return (comp_num / baseline_num) * 100
+                        except:
                             return None
-                        
-                        tba_num = float(tba_val)
-                        pw_num = float(pw_val)
-                        
-                        if tba_num == 0:
-                            return None
-                        
-                        return (pw_num / tba_num) * 100
-                    except:
-                        return None
+                    
+                    # Add index column for this comparison column
+                    df_csv[index_col_name] = df_csv.apply(calculate_index, axis=1).round(0).astype('Int64')
                 
-                # Add index column for preview (rounded to integer)
-                df_csv["_index"] = df_csv.apply(calculate_index, axis=1).round(0).astype('Int64')
                 df_csv_for_preview = df_csv
                 
-                # Save button for P3M profile
-                if st.button("Save P3M Segment Profile", key=f"save_p3m_profile_{segment['id']}"):
+                # Save button for profile
+                if st.button("Save Segment Profile", key=f"save_p3m_profile_{segment['id']}"):
                     # Delete existing
                     delete_tables_for_section(segment["id"], "Segment Truths", "P3M Segment Profile")
                     
-                    # Save only the 3 columns (without _index)
-                    df_to_save = df_csv[["Metric", "TBA", "Premium Whisky"]].copy()
+                    # Save all original columns (without index columns)
+                    original_cols = [col for col in df_csv.columns if not col.endswith("_Index")]
+                    df_to_save = df_csv[original_cols].copy()
                     profile_dict = df_to_save.to_dict('list')
                     
                     save_table(
@@ -3430,7 +3435,7 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
     # Build HTML table
     html = """
     <div style='overflow-x: auto; margin: 1rem 0;'>
-        <table style='width: 100%; border-collapse: collapse; font-size: 0.9rem; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'>
+        <table style='width: 100%; border-collapse: collapse; font-size: 0.9rem; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-family: Inter, sans-serif;'>
             <thead>
                 <tr>
     """
@@ -3502,7 +3507,7 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
         # State aggregated to AI columns
         for col in ["BP FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"]:
             value = row[col]
-            display_value = f"{value:.1f}%" if isinstance(value, (int, float)) else value
+            display_value = f"{value:.0f}%" if isinstance(value, (int, float)) else value
             html += f"""
                 <td style='
                     padding: 0.7rem 0.5rem;
@@ -3516,7 +3521,7 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
         # NS Growth Data columns
         for col in ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr", "BP FAM\nBTM"]:
             value = row[col]
-            display_value = f"{value:+.1f}%" if isinstance(value, (int, float)) else value
+            display_value = f"{value:+.0f}%" if isinstance(value, (int, float)) else value
             color = "#2E7D32" if isinstance(value, (int, float)) and value > 0 else ("#D32F2F" if isinstance(value, (int, float)) and value < 0 else "#424242")
             html += f"""
                 <td style='

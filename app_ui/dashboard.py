@@ -1395,8 +1395,8 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     
     with col2:
         # Profile data table in expander
-        with st.expander("📊 P3M Segment Profile Data", expanded=False):
-            # Load P3M profile data from database
+        with st.expander("📊 Segment Profile Data", expanded=False):
+            # Load profile data from database
             from app_core.tables import get_tables_for_segment
             existing_tables = get_tables_for_segment(segment["id"])
             saved_p3m_profile = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "P3M Segment Profile"), None)
@@ -1410,69 +1410,81 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                     # Replace None/NaN values with empty strings for display
                     df_profile = df_profile.fillna("")
                     
-                    # Calculate index for conditional formatting
-                    def calculate_index(row):
-                        """Calculate index from TBA and Premium Whisky values"""
-                        try:
-                            tba_val = str(row["TBA"]).replace("%", "").strip()
-                            pw_val = str(row["Premium Whisky"]).replace("%", "").strip()
-                            
-                            if not tba_val or not pw_val or tba_val == "" or pw_val == "":
-                                return None
-                            
-                            tba_num = float(tba_val)
-                            pw_num = float(pw_val)
-                            
-                            if tba_num == 0:
-                                return None
-                            
-                            return (pw_num / tba_num) * 100
-                        except:
-                            return None
+                    # Get column names
+                    metric_col = df_profile.columns[0]
+                    baseline_col = df_profile.columns[1]
+                    comparison_cols = df_profile.columns[2:].tolist()
                     
-                    # Add index column
-                    df_profile["_index"] = df_profile.apply(calculate_index, axis=1)
+                    # Calculate index for each comparison column
+                    index_cols = []
+                    for comp_col in comparison_cols:
+                        index_col_name = f"{comp_col}_Index"
+                        index_cols.append(index_col_name)
+                        
+                        def calculate_index(row, baseline=baseline_col, comparison=comp_col):
+                            """Calculate index from baseline and comparison values"""
+                            try:
+                                baseline_val = str(row[baseline]).replace("%", "").replace(",", "").strip()
+                                comp_val = str(row[comparison]).replace("%", "").replace(",", "").strip()
+                                
+                                if not baseline_val or not comp_val or baseline_val == "" or comp_val == "":
+                                    return None
+                                
+                                baseline_num = float(baseline_val)
+                                comp_num = float(comp_val)
+                                
+                                if baseline_num == 0:
+                                    return None
+                                
+                                return (comp_num / baseline_num) * 100
+                            except:
+                                return None
+                        
+                        # Add index column
+                        df_profile[index_col_name] = df_profile.apply(lambda row: calculate_index(row, baseline_col, comp_col), axis=1)
                     
                     # Function to apply conditional formatting
-                    def color_premium_whisky(row):
-                        """Apply background color to Premium Whisky column based on index value"""
-                        idx_val = row["_index"]
+                    def color_comparison_cols(row):
+                        """Apply background color to comparison columns based on index values"""
+                        styles = [""] * len(row)  # Start with no styling
                         
-                        if idx_val is None:
-                            return [""] * len(row)
-                        
-                        try:
-                            if idx_val > 110:
-                                color = "background-color: #90EE90; font-weight: bold;"
-                            elif idx_val >= 105:
-                                color = "background-color: #D4EDDA; font-weight: bold;"
-                            elif idx_val < 75:
-                                color = "background-color: #FFB380; font-weight: bold;"
-                            else:
-                                color = ""
+                        for i, comp_col in enumerate(comparison_cols):
+                            col_idx = df_profile.columns.get_loc(comp_col)
+                            index_col = f"{comp_col}_Index"
+                            idx_val = row[index_col]
                             
-                            # Apply color only to Premium Whisky column (index 2)
-                            return ["", "", color, ""]
-                        except:
-                            return [""] * len(row)
+                            if idx_val is None or pd.isna(idx_val):
+                                continue
+                            
+                            try:
+                                if idx_val > 110:
+                                    styles[col_idx] = "background-color: #90EE90; font-weight: bold;"
+                                elif idx_val >= 105:
+                                    styles[col_idx] = "background-color: #D4EDDA; font-weight: bold;"
+                                elif idx_val < 75:
+                                    styles[col_idx] = "background-color: #FFB380; font-weight: bold;"
+                            except:
+                                pass
+                        
+                        return styles
                     
                     # Apply styling
-                    styled_df = df_profile.style.apply(color_premium_whisky, axis=1)
+                    styled_df = df_profile.style.apply(color_comparison_cols, axis=1)
                     
-                    # Display only first 3 columns (hide _index)
-                    display_df = df_profile[["Metric", "TBA", "Premium Whisky"]].copy()
+                    # Display only original columns (hide index columns)
+                    display_cols = [metric_col, baseline_col] + comparison_cols
                     
                     st.dataframe(
                         styled_df, 
                         use_container_width=True, 
                         hide_index=True,
                         height=450,
-                        column_order=["Metric", "TBA", "Premium Whisky"]
+                        column_order=display_cols
                     )
                 except Exception as e:
-                    st.error(f"Error loading P3M profile data: {str(e)}")
+                    st.error(f"Error loading profile data: {str(e)}")
             else:
-                st.info("No P3M Segment Profile data uploaded yet. Please upload CSV in Data Studio.")
+                st.info("No Segment Profile data uploaded yet. Please upload CSV in Data Studio.")
     
     # Display Carousel 1
     carousel1_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 1"]
@@ -2043,30 +2055,6 @@ def render_state_performance_dashboard(table_row: Dict, segment: Dict, is_editor
     else:
         st.info("No data available for selected states and brand family.")
     
-    # Show comment below the table if exists
-    comment = table_row["comment"] if table_row["comment"] else ""
-    if comment:
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-        st.markdown(f"""
-            <div style='
-                background: #F8F9FA;
-                border-left: 4px solid #f5b400;
-                padding: 1.5rem;
-                margin: 1rem 0;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            '>
-                <div style='
-                    font-size: 0.95rem;
-                    line-height: 1.7;
-                    color: #2C2C2C;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                '>
-                    {format_comment(comment)}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-    
     # Delete button for editors
     if is_editor:
         if st.button("Delete State Performance Table", key=f"del_state_perf_{segment['id']}"):
@@ -2093,7 +2081,6 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         return
     
     st.markdown("---")
-    st.caption(f"Bubble chart showing BP FAM MS vs Segment Salience for **{selected_family}**")
     
     # Load data
     df = load_dataset(table_row["dataset_id"])
@@ -2210,6 +2197,30 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
     )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Show comment below the bubble chart if exists
+    comment = table_row["comment"] if table_row["comment"] else ""
+    if comment:
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style='
+                background: #F8F9FA;
+                border-left: 4px solid #f5b400;
+                padding: 1.5rem;
+                margin: 1rem 0;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            '>
+                <div style='
+                    font-size: 0.95rem;
+                    line-height: 1.7;
+                    color: #2C2C2C;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                '>
+                    {format_comment(comment)}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
 
 def render_strategic_insights_grid(table_row: Dict, segment: Dict, is_editor: bool) -> None:
