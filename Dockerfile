@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -11,6 +11,7 @@ COPY app.py .
 COPY app_core/ ./app_core/
 COPY app_ui/ ./app_ui/
 COPY logo/ ./logo/
+COPY static/ ./static/
 
 # Create data directory (will be overwritten by volume mount)
 RUN mkdir -p /app/data/media /app/data/uploads

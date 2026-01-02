@@ -4237,8 +4237,8 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
 
 
 def get_india_geojson_url():
-    """Return URL to India states GeoJSON from a public source"""
-    return "https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson"
+    """Return path to local India states GeoJSON file"""
+    return "static/india_states.geojson"
 
 
 def normalize_state_name(state_name: str) -> str:
@@ -4248,8 +4248,8 @@ def normalize_state_name(state_name: str) -> str:
         "andaman and nicobar": "Andaman & Nicobar Island",
         "a & n islands": "Andaman & Nicobar Island",
         "andhra pradesh": "Andhra Pradesh",
-        "arunachal pradesh": "Arunanchal Pradesh",
-        "arunanchal pradesh": "Arunanchal Pradesh",
+        "arunachal pradesh": "Arunachal Pradesh",
+        "arunanchal pradesh": "Arunachal Pradesh",
         "assam": "Assam",
         "bihar": "Bihar",
         "chandigarh": "Chandigarh",
@@ -4661,10 +4661,10 @@ def render_india_map_dashboard(tabs_config: List[Dict]) -> None:
     tab_colors[-1] = "#E0E0E0"  # Gray - Unassigned
     
     try:
-        # Fetch GeoJSON data
-        geojson_url = get_india_geojson_url()
-        response = requests.get(geojson_url, timeout=5)
-        india_geojson = response.json()
+        # Load GeoJSON data from local file
+        geojson_path = get_india_geojson_url()
+        with open(geojson_path, 'r', encoding='utf-8') as f:
+            india_geojson = json.load(f)
         
         # Prepare data for choropleth
         states_data = []

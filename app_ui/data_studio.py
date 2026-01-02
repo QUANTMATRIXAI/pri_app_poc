@@ -7237,9 +7237,8 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
 
 
 def get_india_geojson_url():
-    """Return URL to India states GeoJSON from a public source"""
-    # Using a public GeoJSON source for Indian states
-    return "https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson"
+    """Return path to local India states GeoJSON file"""
+    return "static/india_states.geojson"
 
 
 def normalize_state_name(state_name: str) -> str:
@@ -7318,10 +7317,10 @@ def render_india_map_overview(all_states: List[str], tabs_config: List[Dict]) ->
     }
     
     try:
-        # Fetch GeoJSON data
-        geojson_url = get_india_geojson_url()
-        response = requests.get(geojson_url, timeout=5)
-        india_geojson = response.json()
+        # Load GeoJSON data from local file
+        geojson_path = get_india_geojson_url()
+        with open(geojson_path, 'r', encoding='utf-8') as f:
+            india_geojson = json.load(f)
         
         # Prepare data for choropleth
         states_data = []
