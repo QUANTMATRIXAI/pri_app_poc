@@ -70,6 +70,16 @@ def save_media_comment(media_id: int, comment: str) -> None:
         conn.commit()
 
 
+def update_media_metadata(media_id: int, title: str, comment: str) -> None:
+    """Update title and comment for existing media"""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE media SET title = ?, comment = ? WHERE id = ?",
+            (title, comment, media_id),
+        )
+        conn.commit()
+
+
 def delete_media(media_id: int) -> None:
     with get_connection() as conn:
         row = conn.execute("SELECT file_path FROM media WHERE id = ?", (media_id,)).fetchone()

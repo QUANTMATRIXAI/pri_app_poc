@@ -204,15 +204,19 @@ def main() -> None:
     render_header()
 
     is_editor = current_user["role"] == "editor"
-    menu = ["Dashboard"]
+    
+    # Editors only see Data Studio, viewers only see Dashboard
     if is_editor:
-        menu.insert(0, "Data Studio")
-    selection = st.sidebar.radio("Navigate", options=menu, index=0 if is_editor else 0)
+        menu = ["Data Studio"]
+        selection = "Data Studio"
+    else:
+        menu = ["Dashboard"]
+        selection = st.sidebar.radio("Navigate", options=menu, index=0)
 
     charts = get_charts_for_segment(segment["id"])
     tables = get_tables_for_segment(segment["id"])
     if selection == "Dashboard":
-        draw_dashboard(segment, charts, tables, is_editor=is_editor)
+        draw_dashboard(segment, charts, tables, is_editor=False)
     elif selection == "Data Studio" and is_editor:
         render_data_upload(current_user, segment)
     else:
