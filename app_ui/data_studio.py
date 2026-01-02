@@ -5946,6 +5946,15 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
             key=f"jtbd_tab{tab_idx}_name_{segment['id']}"
         )
         
+        # Slide title for this tab
+        saved_slide_title = saved_tab.get("slide_title", "")
+        slide_title = st.text_input(
+            f"Brand {tab_idx + 1} Slide Title",
+            value=saved_slide_title,
+            placeholder="Enter slide title to display inside the tab...",
+            key=f"jtbd_tab{tab_idx}_slide_title_{segment['id']}"
+        )
+        
         # Main description for this tab
         tab_description = st.text_area(
             f"Brand {tab_idx + 1} Overall Comment",
@@ -6029,6 +6038,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
         
         all_tabs_data.append({
             "tab_name": tab_name,
+            "slide_title": slide_title,
             "description": tab_description,
             "left_header": left_header,
             "right_header": right_header,
@@ -6045,6 +6055,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
             if tab_idx < len(existing_tabs):
                 existing_tabs[tab_idx] = {
                     "tab_name": tab_name,
+                    "slide_title": slide_title,
                     "description": tab_description,
                     "left_header": left_header,
                     "right_header": right_header,
@@ -6055,6 +6066,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                 while len(existing_tabs) < tab_idx:
                     existing_tabs.append({
                         "tab_name": f"JTBD {len(existing_tabs) + 1}",
+                        "slide_title": "",
                         "description": "",
                         "left_header": "What's Working & Holding Us Back?",
                         "right_header": "JTBDs:",
@@ -6062,6 +6074,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                     })
                 existing_tabs.append({
                     "tab_name": tab_name,
+                    "slide_title": slide_title,
                     "description": tab_description,
                     "left_header": left_header,
                     "right_header": right_header,
@@ -6105,6 +6118,10 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
             for tab_idx, preview_tab in enumerate(preview_tabs):
                 with preview_tab:
                     tab_data = all_tabs_data[tab_idx]
+                    
+                    # Show slide title if exists
+                    if tab_data.get("slide_title"):
+                        st.markdown(f"### {tab_data['slide_title']}")
                     
                     # Show tab description if exists
                     if tab_data.get("description"):
@@ -6246,6 +6263,10 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
         else:
             # Single tab - display without tabs
             tab_data = all_tabs_data[0]
+            
+            # Show slide title if exists
+            if tab_data.get("slide_title"):
+                st.markdown(f"### {tab_data['slide_title']}")
             
             # Show tab description if exists
             if tab_data.get("description"):

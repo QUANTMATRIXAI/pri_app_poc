@@ -3521,6 +3521,10 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
                 with dashboard_tab:
                     tab = tabs_data[tab_idx]
                     
+                    # Show slide title if exists
+                    if tab.get("slide_title"):
+                        st.markdown(f"### {tab['slide_title']}")
+                    
                     # Show tab description if exists
                     if tab.get("description"):
                         formatted_desc = format_comment(tab["description"])
@@ -3670,6 +3674,10 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
         else:
             # Single tab - display without tab interface
             tab = tabs_data[0] if tabs_data else {}
+            
+            # Show slide title if exists
+            if tab.get("slide_title"):
+                st.markdown(f"### {tab['slide_title']}")
             
             # Show tab description if exists
             if tab.get("description"):
