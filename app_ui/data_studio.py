@@ -1903,7 +1903,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         st.caption("Upload up to 5 images with titles and comments")
         
         # Load existing placeholder images
-        from app_core.media import get_media_for_segment, delete_media
+        from app_core.media import get_media_for_segment, delete_media, update_media_metadata
         existing_media = get_media_for_segment(segment["id"])
         placeholder_images = [m for m in existing_media if m.get("section") == "NS Landscape" and m.get("name") == "Placeholder Images"]
         placeholder_images = sorted(placeholder_images, key=lambda x: x.get("id", 0))
@@ -1913,19 +1913,27 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         existing_p1 = placeholder_images[0] if len(placeholder_images) > 0 else None
         
         if existing_p1:
-            # Show existing image with delete button
+            # Show existing image with edit/delete buttons
             file_path_p1 = existing_p1.get("file_path")
             if file_path_p1 and os.path.exists(file_path_p1):
                 col_img, col_info = st.columns([1, 1])
                 with col_img:
                     st.image(file_path_p1, caption="Current Image", use_container_width=True)
                 with col_info:
-                    st.text_input("Title", value=existing_p1.get("title", ""), key=f"ns_p1_title_display_{segment['id']}", disabled=True)
-                    st.text_area("Comment", value=existing_p1.get("comment", ""), key=f"ns_p1_comment_display_{segment['id']}", height=100, disabled=True)
-                    if st.button("🗑️ Delete Image", key=f"delete_ns_p1_{segment['id']}", type="secondary"):
-                        delete_media(existing_p1["id"])
-                        st.success("Image deleted!")
-                        st.rerun()
+                    title_p1 = st.text_input("Title", value=existing_p1.get("title", ""), key=f"ns_p1_title_edit_{segment['id']}")
+                    comment_p1 = st.text_area("Comment", value=existing_p1.get("comment", ""), key=f"ns_p1_comment_edit_{segment['id']}", height=100)
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 Update", key=f"update_ns_p1_{segment['id']}", type="primary"):
+                            update_media_metadata(existing_p1["id"], title_p1, comment_p1)
+                            st.success("Updated!")
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("🗑️ Delete", key=f"delete_ns_p1_{segment['id']}", type="secondary"):
+                            delete_media(existing_p1["id"])
+                            st.success("Deleted!")
+                            st.rerun()
         else:
             # Show upload form
             uploaded_p1 = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "ppt", "pptx"], key=f"ns_placeholder_1_{segment['id']}")
@@ -1962,12 +1970,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 with col_img:
                     st.image(file_path_p2, caption="Current Image", use_container_width=True)
                 with col_info:
-                    st.text_input("Title", value=existing_p2.get("title", ""), key=f"ns_p2_title_display_{segment['id']}", disabled=True)
-                    st.text_area("Comment", value=existing_p2.get("comment", ""), key=f"ns_p2_comment_display_{segment['id']}", height=100, disabled=True)
-                    if st.button("🗑️ Delete Image", key=f"delete_ns_p2_{segment['id']}", type="secondary"):
-                        delete_media(existing_p2["id"])
-                        st.success("Image deleted!")
-                        st.rerun()
+                    title_p2 = st.text_input("Title", value=existing_p2.get("title", ""), key=f"ns_p2_title_edit_{segment['id']}")
+                    comment_p2 = st.text_area("Comment", value=existing_p2.get("comment", ""), key=f"ns_p2_comment_edit_{segment['id']}", height=100)
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 Update", key=f"update_ns_p2_{segment['id']}", type="primary"):
+                            update_media_metadata(existing_p2["id"], title_p2, comment_p2)
+                            st.success("Updated!")
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("🗑️ Delete", key=f"delete_ns_p2_{segment['id']}", type="secondary"):
+                            delete_media(existing_p2["id"])
+                            st.success("Deleted!")
+                            st.rerun()
         else:
             uploaded_p2 = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "ppt", "pptx"], key=f"ns_placeholder_2_{segment['id']}")
             title_p2 = st.text_input("Title", key=f"ns_p_title_2_{segment['id']}")
@@ -2003,12 +2019,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 with col_img:
                     st.image(file_path_p3, caption="Current Image", use_container_width=True)
                 with col_info:
-                    st.text_input("Title", value=existing_p3.get("title", ""), key=f"ns_p3_title_display_{segment['id']}", disabled=True)
-                    st.text_area("Comment", value=existing_p3.get("comment", ""), key=f"ns_p3_comment_display_{segment['id']}", height=100, disabled=True)
-                    if st.button("🗑️ Delete Image", key=f"delete_ns_p3_{segment['id']}", type="secondary"):
-                        delete_media(existing_p3["id"])
-                        st.success("Image deleted!")
-                        st.rerun()
+                    title_p3 = st.text_input("Title", value=existing_p3.get("title", ""), key=f"ns_p3_title_edit_{segment['id']}")
+                    comment_p3 = st.text_area("Comment", value=existing_p3.get("comment", ""), key=f"ns_p3_comment_edit_{segment['id']}", height=100)
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 Update", key=f"update_ns_p3_{segment['id']}", type="primary"):
+                            update_media_metadata(existing_p3["id"], title_p3, comment_p3)
+                            st.success("Updated!")
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("🗑️ Delete", key=f"delete_ns_p3_{segment['id']}", type="secondary"):
+                            delete_media(existing_p3["id"])
+                            st.success("Deleted!")
+                            st.rerun()
         else:
             uploaded_p3 = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "ppt", "pptx"], key=f"ns_placeholder_3_{segment['id']}")
             title_p3 = st.text_input("Title", key=f"ns_p_title_3_{segment['id']}")
@@ -2044,12 +2068,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 with col_img:
                     st.image(file_path_p4, caption="Current Image", use_container_width=True)
                 with col_info:
-                    st.text_input("Title", value=existing_p4.get("title", ""), key=f"ns_p4_title_display_{segment['id']}", disabled=True)
-                    st.text_area("Comment", value=existing_p4.get("comment", ""), key=f"ns_p4_comment_display_{segment['id']}", height=100, disabled=True)
-                    if st.button("🗑️ Delete Image", key=f"delete_ns_p4_{segment['id']}", type="secondary"):
-                        delete_media(existing_p4["id"])
-                        st.success("Image deleted!")
-                        st.rerun()
+                    title_p4 = st.text_input("Title", value=existing_p4.get("title", ""), key=f"ns_p4_title_edit_{segment['id']}")
+                    comment_p4 = st.text_area("Comment", value=existing_p4.get("comment", ""), key=f"ns_p4_comment_edit_{segment['id']}", height=100)
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 Update", key=f"update_ns_p4_{segment['id']}", type="primary"):
+                            update_media_metadata(existing_p4["id"], title_p4, comment_p4)
+                            st.success("Updated!")
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("🗑️ Delete", key=f"delete_ns_p4_{segment['id']}", type="secondary"):
+                            delete_media(existing_p4["id"])
+                            st.success("Deleted!")
+                            st.rerun()
         else:
             uploaded_p4 = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "ppt", "pptx"], key=f"ns_placeholder_4_{segment['id']}")
             title_p4 = st.text_input("Title", key=f"ns_p_title_4_{segment['id']}")
@@ -2085,12 +2117,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 with col_img:
                     st.image(file_path_p5, caption="Current Image", use_container_width=True)
                 with col_info:
-                    st.text_input("Title", value=existing_p5.get("title", ""), key=f"ns_p5_title_display_{segment['id']}", disabled=True)
-                    st.text_area("Comment", value=existing_p5.get("comment", ""), key=f"ns_p5_comment_display_{segment['id']}", height=100, disabled=True)
-                    if st.button("🗑️ Delete Image", key=f"delete_ns_p5_{segment['id']}", type="secondary"):
-                        delete_media(existing_p5["id"])
-                        st.success("Image deleted!")
-                        st.rerun()
+                    title_p5 = st.text_input("Title", value=existing_p5.get("title", ""), key=f"ns_p5_title_edit_{segment['id']}")
+                    comment_p5 = st.text_area("Comment", value=existing_p5.get("comment", ""), key=f"ns_p5_comment_edit_{segment['id']}", height=100)
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 Update", key=f"update_ns_p5_{segment['id']}", type="primary"):
+                            update_media_metadata(existing_p5["id"], title_p5, comment_p5)
+                            st.success("Updated!")
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("🗑️ Delete", key=f"delete_ns_p5_{segment['id']}", type="secondary"):
+                            delete_media(existing_p5["id"])
+                            st.success("Deleted!")
+                            st.rerun()
         else:
             uploaded_p5 = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "ppt", "pptx"], key=f"ns_placeholder_5_{segment['id']}")
             title_p5 = st.text_input("Title", key=f"ns_p_title_5_{segment['id']}")
