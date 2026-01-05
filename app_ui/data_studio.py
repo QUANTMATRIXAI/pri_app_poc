@@ -4396,7 +4396,17 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Get existing images
     trend_images = [m for m in existing_media if m.get("section") == "Segment Trends" and m.get("name") == "Additional Images"]
-    trend_images = sorted(trend_images, key=lambda x: x.get("id", 0))
+    
+    # Create a dictionary mapping slot numbers to images
+    slot_map = {}
+    for img in trend_images:
+        comment = img.get("comment", "")
+        if comment.startswith("SLOT:"):
+            try:
+                slot_num = int(comment.split("##")[0].replace("SLOT:", ""))
+                slot_map[slot_num] = img
+            except:
+                pass
     
     # Section title for image uploads
     st.markdown("---")
@@ -4405,23 +4415,28 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Segment Growth Slide
     st.markdown("**Segment Growth Slide**")
-    existing_1 = trend_images[0] if len(trend_images) > 0 else None
+    existing_1 = slot_map.get(1, None)
     
     if existing_1:
         file_path_1 = existing_1.get("file_path")
         if file_path_1 and os.path.exists(file_path_1):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_1.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_1, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_add_1 = st.text_input("Title", value=existing_1.get("title", ""), key=f"seg_trends_1_title_edit_{segment['id']}")
-                comment_add_1 = st.text_area("Comment", value=existing_1.get("comment", ""), key=f"seg_trends_1_comment_edit_{segment['id']}", height=100)
+                comment_add_1 = st.text_area("Comment", value=actual_comment, key=f"seg_trends_1_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_seg_trends_1_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_1["id"], title_add_1, comment_add_1)
+                        updated_comment = f"SLOT:1##" + comment_add_1
+                        update_media_metadata(existing_1["id"], title_add_1, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -4440,12 +4455,13 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.error("Please upload Image 1.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:1##" + comment_add_1
                 save_media_upload(
                     uploaded_file=uploaded_add_1,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=comment_add_1,
+                    comment=slot_comment,
                     title=title_add_1,
                     label="Additional Images"
                 )
@@ -4456,23 +4472,28 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # P3M Interactions Slide
     st.markdown("**P3M Interactions Slide**")
-    existing_2 = trend_images[1] if len(trend_images) > 1 else None
+    existing_2 = slot_map.get(2, None)
     
     if existing_2:
         file_path_2 = existing_2.get("file_path")
         if file_path_2 and os.path.exists(file_path_2):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_2.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_2, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_add_2 = st.text_input("Title", value=existing_2.get("title", ""), key=f"seg_trends_2_title_edit_{segment['id']}")
-                comment_add_2 = st.text_area("Comment", value=existing_2.get("comment", ""), key=f"seg_trends_2_comment_edit_{segment['id']}", height=100)
+                comment_add_2 = st.text_area("Comment", value=actual_comment, key=f"seg_trends_2_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_seg_trends_2_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_2["id"], title_add_2, comment_add_2)
+                        updated_comment = f"SLOT:2##" + comment_add_2
+                        update_media_metadata(existing_2["id"], title_add_2, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -4491,12 +4512,13 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.error("Please upload Image 2.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:2##" + comment_add_2
                 save_media_upload(
                     uploaded_file=uploaded_add_2,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=comment_add_2,
+                    comment=slot_comment,
                     title=title_add_2,
                     label="Additional Images"
                 )
@@ -4507,23 +4529,28 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # P3M Profile Changes Slide
     st.markdown("**P3M Profile Changes Slide**")
-    existing_3 = trend_images[2] if len(trend_images) > 2 else None
+    existing_3 = slot_map.get(3, None)
     
     if existing_3:
         file_path_3 = existing_3.get("file_path")
         if file_path_3 and os.path.exists(file_path_3):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_3.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_3, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_add_3 = st.text_input("Title", value=existing_3.get("title", ""), key=f"seg_trends_3_title_edit_{segment['id']}")
-                comment_add_3 = st.text_area("Comment", value=existing_3.get("comment", ""), key=f"seg_trends_3_comment_edit_{segment['id']}", height=100)
+                comment_add_3 = st.text_area("Comment", value=actual_comment, key=f"seg_trends_3_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_seg_trends_3_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_3["id"], title_add_3, comment_add_3)
+                        updated_comment = f"SLOT:3##" + comment_add_3
+                        update_media_metadata(existing_3["id"], title_add_3, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -4542,12 +4569,13 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.error("Please upload Image 3.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:3##" + comment_add_3
                 save_media_upload(
                     uploaded_file=uploaded_add_3,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=comment_add_3,
+                    comment=slot_comment,
                     title=title_add_3,
                     label="Additional Images"
                 )
@@ -4558,23 +4586,28 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # Upgrades & Downgrades Slide
     st.markdown("**Upgrades & Downgrades Slide**")
-    existing_4 = trend_images[3] if len(trend_images) > 3 else None
+    existing_4 = slot_map.get(4, None)
     
     if existing_4:
         file_path_4 = existing_4.get("file_path")
         if file_path_4 and os.path.exists(file_path_4):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_4.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_4, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_add_4 = st.text_input("Title", value=existing_4.get("title", ""), key=f"seg_trends_4_title_edit_{segment['id']}")
-                comment_add_4 = st.text_area("Comment", value=existing_4.get("comment", ""), key=f"seg_trends_4_comment_edit_{segment['id']}", height=100)
+                comment_add_4 = st.text_area("Comment", value=actual_comment, key=f"seg_trends_4_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_seg_trends_4_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_4["id"], title_add_4, comment_add_4)
+                        updated_comment = f"SLOT:4##" + comment_add_4
+                        update_media_metadata(existing_4["id"], title_add_4, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -4593,12 +4626,13 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.error("Please upload Image 4.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:4##" + comment_add_4
                 save_media_upload(
                     uploaded_file=uploaded_add_4,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=comment_add_4,
+                    comment=slot_comment,
                     title=title_add_4,
                     label="Additional Images"
                 )
@@ -4609,23 +4643,28 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
     
     # KPIs Slide
     st.markdown("**KPIs Slide**")
-    existing_5 = trend_images[4] if len(trend_images) > 4 else None
+    existing_5 = slot_map.get(5, None)
     
     if existing_5:
         file_path_5 = existing_5.get("file_path")
         if file_path_5 and os.path.exists(file_path_5):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_5.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_5, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_add_5 = st.text_input("Title", value=existing_5.get("title", ""), key=f"seg_trends_5_title_edit_{segment['id']}")
-                comment_add_5 = st.text_area("Comment", value=existing_5.get("comment", ""), key=f"seg_trends_5_comment_edit_{segment['id']}", height=100)
+                comment_add_5 = st.text_area("Comment", value=actual_comment, key=f"seg_trends_5_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_seg_trends_5_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_5["id"], title_add_5, comment_add_5)
+                        updated_comment = f"SLOT:5##" + comment_add_5
+                        update_media_metadata(existing_5["id"], title_add_5, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -4644,12 +4683,13 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 st.error("Please upload Image 5.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:5##" + comment_add_5
                 save_media_upload(
                     uploaded_file=uploaded_add_5,
                     segment_id=segment["id"],
                     section="Segment Trends",
                     created_by=current_user["username"],
-                    comment=comment_add_5,
+                    comment=slot_comment,
                     title=title_add_5,
                     label="Additional Images"
                 )
@@ -5124,29 +5164,44 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Get existing standalone images
     brand_trends_standalone = [m for m in existing_media if m.get("section") == "Brand Trends" and m.get("name") == "Standalone Images"]
-    brand_trends_standalone = sorted(brand_trends_standalone, key=lambda x: x.get("id", 0))
+    
+    # Create a dictionary mapping slot numbers to images
+    slot_map_bt = {}
+    for img in brand_trends_standalone:
+        comment = img.get("comment", "")
+        if comment.startswith("SLOT:"):
+            try:
+                slot_num = int(comment.split("##")[0].replace("SLOT:", ""))
+                slot_map_bt[slot_num] = img
+            except:
+                pass
     
     from app_core.media import delete_media
     
     # Image 1: 5Cs Performance Slide
     st.markdown("**5Cs Performance Slide**")
-    existing_bt1 = brand_trends_standalone[0] if len(brand_trends_standalone) > 0 else None
+    existing_bt1 = slot_map_bt.get(1, None)
     
     if existing_bt1:
         file_path_bt1 = existing_bt1.get("file_path")
         if file_path_bt1 and os.path.exists(file_path_bt1):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_bt1.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_bt1, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_bt1 = st.text_input("Title", value=existing_bt1.get("title", ""), key=f"bt1_title_edit_{segment['id']}")
-                comment_bt1 = st.text_area("Comment", value=existing_bt1.get("comment", ""), key=f"bt1_comment_edit_{segment['id']}", height=100)
+                comment_bt1 = st.text_area("Comment", value=actual_comment, key=f"bt1_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_bt1_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_bt1["id"], title_bt1, comment_bt1)
+                        updated_comment = f"SLOT:1##" + comment_bt1
+                        update_media_metadata(existing_bt1["id"], title_bt1, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -5164,12 +5219,13 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload a slide.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:1##" + comment_bt1
                 save_media_upload(
                     uploaded_file=uploaded_bt1,
                     segment_id=segment["id"],
                     section="Brand Trends",
                     created_by=current_user["username"],
-                    comment=comment_bt1,
+                    comment=slot_comment,
                     title=title_bt1,
                     label="Standalone Images"
                 )
@@ -5180,23 +5236,28 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 2: 5Cs Data Slide
     st.markdown("**5Cs Data Slide**")
-    existing_bt2 = brand_trends_standalone[1] if len(brand_trends_standalone) > 1 else None
+    existing_bt2 = slot_map_bt.get(2, None)
     
     if existing_bt2:
         file_path_bt2 = existing_bt2.get("file_path")
         if file_path_bt2 and os.path.exists(file_path_bt2):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_bt2.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_bt2, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_bt2 = st.text_input("Title", value=existing_bt2.get("title", ""), key=f"bt2_title_edit_{segment['id']}")
-                comment_bt2 = st.text_area("Comment", value=existing_bt2.get("comment", ""), key=f"bt2_comment_edit_{segment['id']}", height=100)
+                comment_bt2 = st.text_area("Comment", value=actual_comment, key=f"bt2_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_bt2_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_bt2["id"], title_bt2, comment_bt2)
+                        updated_comment = f"SLOT:2##" + comment_bt2
+                        update_media_metadata(existing_bt2["id"], title_bt2, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -5214,12 +5275,13 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload a slide.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:2##" + comment_bt2
                 save_media_upload(
                     uploaded_file=uploaded_bt2,
                     segment_id=segment["id"],
                     section="Brand Trends",
                     created_by=current_user["username"],
-                    comment=comment_bt2,
+                    comment=slot_comment,
                     title=title_bt2,
                     label="Standalone Images"
                 )
@@ -5230,23 +5292,28 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 3: Sources of Growth Slide
     st.markdown("**Sources of Growth Slide**")
-    existing_bt3 = brand_trends_standalone[2] if len(brand_trends_standalone) > 2 else None
+    existing_bt3 = slot_map_bt.get(3, None)
     
     if existing_bt3:
         file_path_bt3 = existing_bt3.get("file_path")
         if file_path_bt3 and os.path.exists(file_path_bt3):
+            # Extract actual comment (remove SLOT:3## prefix)
+            raw_comment_bt3 = existing_bt3.get("comment", "")
+            actual_comment_bt3 = raw_comment_bt3.split("##", 1)[1] if "##" in raw_comment_bt3 else raw_comment_bt3
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_bt3, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_bt3 = st.text_input("Title", value=existing_bt3.get("title", ""), key=f"bt3_title_edit_{segment['id']}")
-                comment_bt3 = st.text_area("Comment", value=existing_bt3.get("comment", ""), key=f"bt3_comment_edit_{segment['id']}", height=100)
+                comment_bt3 = st.text_area("Comment", value=actual_comment_bt3, key=f"bt3_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_bt3_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_bt3["id"], title_bt3, comment_bt3)
+                        updated_comment_bt3 = f"SLOT:3##" + comment_bt3
+                        update_media_metadata(existing_bt3["id"], title_bt3, updated_comment_bt3)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -5264,12 +5331,13 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload a slide.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:3##" + comment_bt3
                 save_media_upload(
                     uploaded_file=uploaded_bt3,
                     segment_id=segment["id"],
                     section="Brand Trends",
                     created_by=current_user["username"],
-                    comment=comment_bt3,
+                    comment=slot_comment,
                     title=title_bt3,
                     label="Standalone Images"
                 )
@@ -5280,23 +5348,28 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 4: P3M Profile Shifts Slide
     st.markdown("**P3M Profile Shifts Slide**")
-    existing_bt4 = brand_trends_standalone[3] if len(brand_trends_standalone) > 3 else None
+    existing_bt4 = slot_map_bt.get(4, None)
     
     if existing_bt4:
         file_path_bt4 = existing_bt4.get("file_path")
         if file_path_bt4 and os.path.exists(file_path_bt4):
+            # Extract actual comment (remove SLOT:4## prefix)
+            raw_comment_bt4 = existing_bt4.get("comment", "")
+            actual_comment_bt4 = raw_comment_bt4.split("##", 1)[1] if "##" in raw_comment_bt4 else raw_comment_bt4
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_bt4, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_bt4 = st.text_input("Title", value=existing_bt4.get("title", ""), key=f"bt4_title_edit_{segment['id']}")
-                comment_bt4 = st.text_area("Comment", value=existing_bt4.get("comment", ""), key=f"bt4_comment_edit_{segment['id']}", height=100)
+                comment_bt4 = st.text_area("Comment", value=actual_comment_bt4, key=f"bt4_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_bt4_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_bt4["id"], title_bt4, comment_bt4)
+                        updated_comment_bt4 = f"SLOT:4##" + comment_bt4
+                        update_media_metadata(existing_bt4["id"], title_bt4, updated_comment_bt4)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -5314,12 +5387,13 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload a slide.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:4##" + comment_bt4
                 save_media_upload(
                     uploaded_file=uploaded_bt4,
                     segment_id=segment["id"],
                     section="Brand Trends",
                     created_by=current_user["username"],
-                    comment=comment_bt4,
+                    comment=slot_comment,
                     title=title_bt4,
                     label="Standalone Images"
                 )
@@ -5330,23 +5404,28 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 5: Imagery vs LY Slide
     st.markdown("**Imagery vs LY Slide**")
-    existing_bt5 = brand_trends_standalone[4] if len(brand_trends_standalone) > 4 else None
+    existing_bt5 = slot_map_bt.get(5, None)
     
     if existing_bt5:
         file_path_bt5 = existing_bt5.get("file_path")
         if file_path_bt5 and os.path.exists(file_path_bt5):
+            # Extract actual comment (remove SLOT:5## prefix)
+            raw_comment_bt5 = existing_bt5.get("comment", "")
+            actual_comment_bt5 = raw_comment_bt5.split("##", 1)[1] if "##" in raw_comment_bt5 else raw_comment_bt5
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_bt5, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_bt5 = st.text_input("Title", value=existing_bt5.get("title", ""), key=f"bt5_title_edit_{segment['id']}")
-                comment_bt5 = st.text_area("Comment", value=existing_bt5.get("comment", ""), key=f"bt5_comment_edit_{segment['id']}", height=100)
+                comment_bt5 = st.text_area("Comment", value=actual_comment_bt5, key=f"bt5_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_bt5_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_bt5["id"], title_bt5, comment_bt5)
+                        updated_comment_bt5 = f"SLOT:5##" + comment_bt5
+                        update_media_metadata(existing_bt5["id"], title_bt5, updated_comment_bt5)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -5364,12 +5443,13 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload a slide.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:5##" + comment_bt5
                 save_media_upload(
                     uploaded_file=uploaded_bt5,
                     segment_id=segment["id"],
                     section="Brand Trends",
                     created_by=current_user["username"],
-                    comment=comment_bt5,
+                    comment=slot_comment,
                     title=title_bt5,
                     label="Standalone Images"
                 )
@@ -5380,23 +5460,28 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 6: P3M Interaction x Age Slide
     st.markdown("**P3M Interaction x Age Slide**")
-    existing_bt6 = brand_trends_standalone[5] if len(brand_trends_standalone) > 5 else None
+    existing_bt6 = slot_map_bt.get(6, None)
     
     if existing_bt6:
         file_path_bt6 = existing_bt6.get("file_path")
         if file_path_bt6 and os.path.exists(file_path_bt6):
+            # Extract actual comment (remove SLOT:6## prefix)
+            raw_comment_bt6 = existing_bt6.get("comment", "")
+            actual_comment_bt6 = raw_comment_bt6.split("##", 1)[1] if "##" in raw_comment_bt6 else raw_comment_bt6
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_bt6, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_bt6 = st.text_input("Title", value=existing_bt6.get("title", ""), key=f"bt6_title_edit_{segment['id']}")
-                comment_bt6 = st.text_area("Comment", value=existing_bt6.get("comment", ""), key=f"bt6_comment_edit_{segment['id']}", height=100)
+                comment_bt6 = st.text_area("Comment", value=actual_comment_bt6, key=f"bt6_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_bt6_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_bt6["id"], title_bt6, comment_bt6)
+                        updated_comment_bt6 = f"SLOT:6##" + comment_bt6
+                        update_media_metadata(existing_bt6["id"], title_bt6, updated_comment_bt6)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -5414,12 +5499,13 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload a slide.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:6##" + comment_bt6
                 save_media_upload(
                     uploaded_file=uploaded_bt6,
                     segment_id=segment["id"],
                     section="Brand Trends",
                     created_by=current_user["username"],
-                    comment=comment_bt6,
+                    comment=slot_comment,
                     title=title_bt6,
                     label="Standalone Images"
                 )
@@ -5700,6 +5786,9 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # Load existing saved configurations
     existing_tables = get_tables_for_segment(segment["id"])
     
+    # Collect all views data
+    all_views_data = []
+    
     # Create each view
     for view_idx in range(num_views):
         view_num = view_idx + 1
@@ -5785,7 +5874,14 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 "right": right_content
             })
         
-
+        # Add this view's data to all_views_data
+        all_views_data.append({
+            "view_num": view_num,
+            "tab_title": tab_title,
+            "title": trends_title,
+            "description": trends_description,
+            "sections": sections_data
+        })
         
         # Preview for this view
         if trends_title or trends_description or any(s["left"] or s["right"] for s in sections_data):
@@ -5899,6 +5995,51 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     comment=""
                 )
                 st.success(f"Brand {view_num} saved to Brand Trends dashboard!")
+    
+    # Save All Brands button (after all individual views)
+    st.markdown("---")
+    st.markdown("### 💾 Save All Brands Configuration")
+    st.caption("This will save ALL brands based on the current 'Number of Brands' setting and remove any old brands.")
+    
+    if st.button(f"💾 Save All {num_views} Brand(s) to Dashboard", key=f"save_all_brand_trends_{segment['id']}", type="primary"):
+        # Validate that all views have titles
+        missing_titles = []
+        for view_data in all_views_data:
+            if not view_data["title"]:
+                missing_titles.append(view_data["view_num"])
+        
+        if missing_titles:
+            st.error(f"Please provide titles for Brand(s): {', '.join(map(str, missing_titles))}")
+        else:
+            # Delete ALL existing Custom Trends Views for this segment (1-6)
+            for i in range(1, 7):
+                delete_tables_for_section(segment["id"], "Brand Trends", f"Custom Trends View {i}")
+            
+            # Save only the current number of views
+            for view_data in all_views_data:
+                config_data = json.dumps({
+                    "title": view_data["title"],
+                    "description": view_data["description"],
+                    "sections": view_data["sections"],
+                    "tab_title": view_data["tab_title"]
+                })
+                
+                save_table(
+                    name=f"Custom Trends View {view_data['view_num']}",
+                    dataset_id=dataset_id,
+                    columns=["Config"],
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="Brand Trends",
+                    filter_json=config_data,
+                    comment=""
+                )
+            
+            st.success(f"✅ All {num_views} brand(s) saved to Brand Trends dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
 
 
 def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -6047,13 +6188,16 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
         
         # Individual save button for this tab
         if st.button(f"💾 Save Tab {tab_idx + 1} ({tab_name or f'JTBD {tab_idx + 1}'})", key=f"save_jtbd_tab{tab_idx}_{segment['id']}"):
-            # Load existing config to preserve other tabs
-            existing_config = jtbd_config if jtbd_config else {}
-            existing_tabs = existing_config.get("tabs", [])
-            
-            # Update or add this specific tab
-            if tab_idx < len(existing_tabs):
-                existing_tabs[tab_idx] = {
+            # Validate that we have some content
+            if not any(s.get("left") or s.get("right") for s in jtbd_sections_data):
+                st.warning("⚠️ Please add content to at least one section before saving.")
+            else:
+                # Load existing config to preserve other tabs
+                existing_config = jtbd_config if jtbd_config else {}
+                existing_tabs = existing_config.get("tabs", [])
+                
+                # Build the tab data
+                current_tab_data = {
                     "tab_name": tab_name,
                     "slide_title": slide_title,
                     "description": tab_description,
@@ -6061,31 +6205,69 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                     "right_header": right_header,
                     "sections": jtbd_sections_data
                 }
-            else:
-                # Extend the list if needed
-                while len(existing_tabs) < tab_idx:
-                    existing_tabs.append({
-                        "tab_name": f"JTBD {len(existing_tabs) + 1}",
-                        "slide_title": "",
-                        "description": "",
-                        "left_header": "What's Working & Holding Us Back?",
-                        "right_header": "JTBDs:",
-                        "sections": []
-                    })
-                existing_tabs.append({
-                    "tab_name": tab_name,
-                    "slide_title": slide_title,
-                    "description": tab_description,
-                    "left_header": left_header,
-                    "right_header": right_header,
-                    "sections": jtbd_sections_data
+                
+                # Update or add this specific tab
+                if tab_idx < len(existing_tabs):
+                    existing_tabs[tab_idx] = current_tab_data
+                else:
+                    # Extend the list if needed
+                    while len(existing_tabs) < tab_idx:
+                        existing_tabs.append({
+                            "tab_name": f"JTBD {len(existing_tabs) + 1}",
+                            "slide_title": "",
+                            "description": "",
+                            "left_header": "What's Working & Holding Us Back?",
+                            "right_header": "JTBDs:",
+                            "sections": []
+                        })
+                    existing_tabs.append(current_tab_data)
+                
+                # Delete existing
+                delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
+                
+                # Save updated configuration
+                config_json = json.dumps({
+                    "tabs": existing_tabs
                 })
-            
-            # Delete existing
+                
+                save_table(
+                    name="JTBD View",
+                    section="Battlegrounds",
+                    dataset_id=dataset_id,
+                    segment_id=segment["id"],
+                    columns=["Config"],
+                    filter_json=config_json,
+                    created_by=current_user["username"]
+                )
+                
+                st.success(f"✅ Tab {tab_idx + 1} saved to dashboard!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+    
+    # Save All Brands button (after all individual tabs)
+    st.markdown("---")
+    st.markdown("### 💾 Save All Brands Configuration")
+    st.caption("This will save ALL brands based on the current 'Number of Brands' setting and remove any old brands.")
+    
+    if st.button(f"💾 Save All {num_jtbd_tabs} Brand(s) to Dashboard", key=f"save_all_jtbd_{segment['id']}", type="primary"):
+        # Validate that we have some content in at least one tab
+        has_content = False
+        for tab_data in all_tabs_data:
+            if any(s.get("left") or s.get("right") for s in tab_data.get("sections", [])):
+                has_content = True
+                break
+        
+        if not has_content:
+            st.warning("⚠️ Please add content to at least one section in at least one brand before saving.")
+        else:
+            # Delete existing JTBD configuration
             delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
             
-            # Save updated configuration
+            # Save the complete configuration with only the current number of brands
             config_json = json.dumps({
+                "tabs": all_tabs_data
             })
             
             save_table(
@@ -6098,7 +6280,7 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                 created_by=current_user["username"]
             )
             
-            st.success(f"✅ Tab {tab_idx + 1} saved to dashboard!")
+            st.success(f"✅ All {num_jtbd_tabs} brand(s) saved to dashboard!")
             if hasattr(st, "rerun"):
                 st.rerun()
             else:
@@ -7046,29 +7228,46 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### Additional Analysis Slides")
     st.caption("Upload slides and add title and comment")
     
-    # Get existing standalone images
+    # Get existing standalone images for Brand Truths
     brand_standalone_images = [m for m in existing_media if m.get("section") == "Brand Truths" and m.get("name") == "Standalone Images"]
-    brand_standalone_images = sorted(brand_standalone_images, key=lambda x: x.get("id", 0))
+    
+    # Create a dictionary mapping slot numbers to images
+    # We'll use the comment field to store slot info: "SLOT:1##actual_comment"
+    slot_map = {}
+    for img in brand_standalone_images:
+        comment = img.get("comment", "")
+        if comment.startswith("SLOT:"):
+            try:
+                slot_num = int(comment.split("##")[0].replace("SLOT:", ""))
+                slot_map[slot_num] = img
+            except:
+                pass
     
     # Image 1
     st.markdown("**Consumer Palate Slide 1**")
-    existing_s1 = brand_standalone_images[0] if len(brand_standalone_images) > 0 else None
+    existing_s1 = slot_map.get(1, None)
     
     if existing_s1:
         file_path_s1 = existing_s1.get("file_path")
         if file_path_s1 and os.path.exists(file_path_s1):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_s1.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_s1, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_s1 = st.text_input("Title", value=existing_s1.get("title", ""), key=f"brand_s1_title_edit_{segment['id']}")
-                comment_s1 = st.text_area("Comment", value=existing_s1.get("comment", ""), key=f"brand_s1_comment_edit_{segment['id']}", height=100)
+                comment_s1 = st.text_area("Comment", value=actual_comment, key=f"brand_s1_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_brand_s1_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_s1["id"], title_s1, comment_s1)
+                        # Preserve slot number in comment
+                        updated_comment = f"SLOT:1##" + comment_s1
+                        update_media_metadata(existing_s1["id"], title_s1, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -7087,12 +7286,14 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload Image 1.")
             else:
                 from app_core.media import save_media_upload
+                # Store slot number in comment
+                slot_comment = f"SLOT:1##" + comment_s1
                 save_media_upload(
                     uploaded_file=uploaded_s1,
                     segment_id=segment["id"],
                     section="Brand Truths",
                     created_by=current_user["username"],
-                    comment=comment_s1,
+                    comment=slot_comment,
                     title=title_s1,
                     label="Standalone Images"
                 )
@@ -7103,23 +7304,28 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 2
     st.markdown("**Consumer Palate slide 2**")
-    existing_s2 = brand_standalone_images[1] if len(brand_standalone_images) > 1 else None
+    existing_s2 = slot_map.get(2, None)
     
     if existing_s2:
         file_path_s2 = existing_s2.get("file_path")
         if file_path_s2 and os.path.exists(file_path_s2):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_s2.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_s2, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_s2 = st.text_input("Title", value=existing_s2.get("title", ""), key=f"brand_s2_title_edit_{segment['id']}")
-                comment_s2 = st.text_area("Comment", value=existing_s2.get("comment", ""), key=f"brand_s2_comment_edit_{segment['id']}", height=100)
+                comment_s2 = st.text_area("Comment", value=actual_comment, key=f"brand_s2_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_brand_s2_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_s2["id"], title_s2, comment_s2)
+                        updated_comment = f"SLOT:2##" + comment_s2
+                        update_media_metadata(existing_s2["id"], title_s2, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -7138,12 +7344,13 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload Image 2.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:2##" + comment_s2
                 save_media_upload(
                     uploaded_file=uploaded_s2,
                     segment_id=segment["id"],
                     section="Brand Truths",
                     created_by=current_user["username"],
-                    comment=comment_s2,
+                    comment=slot_comment,
                     title=title_s2,
                     label="Standalone Images"
                 )
@@ -7154,23 +7361,28 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 3
     st.markdown("**Brand Associations Slide**")
-    existing_s3 = brand_standalone_images[2] if len(brand_standalone_images) > 2 else None
+    existing_s3 = slot_map.get(3, None)
     
     if existing_s3:
         file_path_s3 = existing_s3.get("file_path")
         if file_path_s3 and os.path.exists(file_path_s3):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_s3.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_s3, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_s3 = st.text_input("Title", value=existing_s3.get("title", ""), key=f"brand_s3_title_edit_{segment['id']}")
-                comment_s3 = st.text_area("Comment", value=existing_s3.get("comment", ""), key=f"brand_s3_comment_edit_{segment['id']}", height=100)
+                comment_s3 = st.text_area("Comment", value=actual_comment, key=f"brand_s3_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_brand_s3_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_s3["id"], title_s3, comment_s3)
+                        updated_comment = f"SLOT:3##" + comment_s3
+                        update_media_metadata(existing_s3["id"], title_s3, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -7189,12 +7401,13 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload Image 3.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:3##" + comment_s3
                 save_media_upload(
                     uploaded_file=uploaded_s3,
                     segment_id=segment["id"],
                     section="Brand Truths",
                     created_by=current_user["username"],
-                    comment=comment_s3,
+                    comment=slot_comment,
                     title=title_s3,
                     label="Standalone Images"
                 )
@@ -7205,23 +7418,28 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 4
     st.markdown("**Repertoire vs Core Slide**")
-    existing_s4 = brand_standalone_images[3] if len(brand_standalone_images) > 3 else None
+    existing_s4 = slot_map.get(4, None)
     
     if existing_s4:
         file_path_s4 = existing_s4.get("file_path")
         if file_path_s4 and os.path.exists(file_path_s4):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_s4.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_s4, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_s4 = st.text_input("Title", value=existing_s4.get("title", ""), key=f"brand_s4_title_edit_{segment['id']}")
-                comment_s4 = st.text_area("Comment", value=existing_s4.get("comment", ""), key=f"brand_s4_comment_edit_{segment['id']}", height=100)
+                comment_s4 = st.text_area("Comment", value=actual_comment, key=f"brand_s4_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_brand_s4_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_s4["id"], title_s4, comment_s4)
+                        updated_comment = f"SLOT:4##" + comment_s4
+                        update_media_metadata(existing_s4["id"], title_s4, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -7240,12 +7458,13 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload Image 4.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:4##" + comment_s4
                 save_media_upload(
                     uploaded_file=uploaded_s4,
                     segment_id=segment["id"],
                     section="Brand Truths",
                     created_by=current_user["username"],
-                    comment=comment_s4,
+                    comment=slot_comment,
                     title=title_s4,
                     label="Standalone Images"
                 )
@@ -7256,23 +7475,28 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Image 5
     st.markdown("**MOC Slide**")
-    existing_s5 = brand_standalone_images[4] if len(brand_standalone_images) > 4 else None
+    existing_s5 = slot_map.get(5, None)
     
     if existing_s5:
         file_path_s5 = existing_s5.get("file_path")
         if file_path_s5 and os.path.exists(file_path_s5):
+            # Extract actual comment (remove SLOT: prefix)
+            raw_comment = existing_s5.get("comment", "")
+            actual_comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
+            
             col_img, col_info = st.columns([1, 1])
             with col_img:
                 st.image(file_path_s5, caption="Current Slide", use_container_width=True)
             with col_info:
                 title_s5 = st.text_input("Title", value=existing_s5.get("title", ""), key=f"brand_s5_title_edit_{segment['id']}")
-                comment_s5 = st.text_area("Comment", value=existing_s5.get("comment", ""), key=f"brand_s5_comment_edit_{segment['id']}", height=100)
+                comment_s5 = st.text_area("Comment", value=actual_comment, key=f"brand_s5_comment_edit_{segment['id']}", height=100)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("💾 Update", key=f"update_brand_s5_{segment['id']}", type="primary"):
                         from app_core.media import update_media_metadata
-                        update_media_metadata(existing_s5["id"], title_s5, comment_s5)
+                        updated_comment = f"SLOT:5##" + comment_s5
+                        update_media_metadata(existing_s5["id"], title_s5, updated_comment)
                         st.success("Updated!")
                         st.rerun()
                 with col_btn2:
@@ -7291,12 +7515,13 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.error("Please upload Image 5.")
             else:
                 from app_core.media import save_media_upload
+                slot_comment = f"SLOT:5##" + comment_s5
                 save_media_upload(
                     uploaded_file=uploaded_s5,
                     segment_id=segment["id"],
                     section="Brand Truths",
                     created_by=current_user["username"],
-                    comment=comment_s5,
+                    comment=slot_comment,
                     title=title_s5,
                     label="Standalone Images"
                 )

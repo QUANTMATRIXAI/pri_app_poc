@@ -1322,17 +1322,19 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
     from app_core.media import get_media_for_segment
     media_items = get_media_for_segment(segment["id"])
     first_image = next((m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "First Image"), None)
+    carousel1_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 1"]
+    carousel2_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 2"]
+    seg_truth_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
     
     # Filter for Segment Truths content
     seg_truth_table = next((t for t in tables if t["section"] == "Segment Truths" and t["name"] == "Segment Truth"), None)
     
-    # Check if there's any content at all (image or table)
-    if not seg_truth_table and not first_image:
+    # Check if there's any content at all (table, images, or carousels)
+    if not seg_truth_table and not first_image and not carousel1_images and not carousel2_images and not seg_truth_images:
         st.info("No content published for Segment Truths yet. Editors can configure it in Data Studio.")
         return
     
     # Display first image at the very top (if exists)
-    
     if first_image:
         file_path = first_image.get("file_path")
         title = first_image.get("title", "")
@@ -1375,143 +1377,140 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
             st.markdown("---")
     
     # Only show profile summary section if seg_truth_table exists
-    if not seg_truth_table:
-        return
-    
-    # Parse configuration
-    try:
-        config = json.loads(seg_truth_table["filter_json"]) if seg_truth_table["filter_json"] else {}
-        title = config.get("title", "")
-        comment = config.get("comment", "")
-    except:
-        title = ""
-        comment = seg_truth_table.get("comment", "")
-    
-    # Display title
-    if title:
-        st.markdown(f"### {title}")
-    
-    # Comment box and table side by side
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if comment:
-            st.markdown(f"""
-                <div style='
-                    background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
-                    border: 1px solid #B0D4F1;
-                    border-left: 5px solid #2196F3;
-                    padding: 1.5rem 1.8rem;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                    min-height: 500px;
-                '>
+    if seg_truth_table:
+            # Parse configuration
+        try:
+            config = json.loads(seg_truth_table["filter_json"]) if seg_truth_table["filter_json"] else {}
+            title = config.get("title", "")
+            comment = config.get("comment", "")
+        except:
+            title = ""
+            comment = seg_truth_table.get("comment", "")
+        
+        # Display title
+        if title:
+            st.markdown(f"### {title}")
+        
+        # Comment box and table side by side
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if comment:
+                st.markdown(f"""
                     <div style='
-                        font-size: 0.95rem;
-                        line-height: 1.8;
-                        color: #2C2C2C;
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                        background: linear-gradient(to right, #F0F8FF 0%, #E6F3FF 100%);
+                        border: 1px solid #B0D4F1;
+                        border-left: 5px solid #2196F3;
+                        padding: 1.5rem 1.8rem;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                        min-height: 500px;
                     '>
-                        {format_comment(comment)}
+                        <div style='
+                            font-size: 0.95rem;
+                            line-height: 1.8;
+                            color: #2C2C2C;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                        '>
+                            {format_comment(comment)}
+                        </div>
                     </div>
-                </div>
-            """, unsafe_allow_html=True)
-    
-    with col2:
-        # Profile data table in expander
-        with st.expander("📊 Segment Profile Data", expanded=False):
-            # Load profile data from database
-            from app_core.tables import get_tables_for_segment
-            existing_tables = get_tables_for_segment(segment["id"])
-            saved_p3m_profile = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "P3M Segment Profile"), None)
-            
-            if saved_p3m_profile and saved_p3m_profile["filter_json"]:
-                try:
-                    # Load saved CSV data
-                    profile_dict = json.loads(saved_p3m_profile["filter_json"])
-                    df_profile = pd.DataFrame(profile_dict)
-                    
-                    # Replace None/NaN values with empty strings for display
-                    df_profile = df_profile.fillna("")
-                    
-                    # Get column names
-                    metric_col = df_profile.columns[0]
-                    baseline_col = df_profile.columns[1]
-                    comparison_cols = df_profile.columns[2:].tolist()
-                    
-                    # Calculate index for each comparison column
-                    index_cols = []
-                    for comp_col in comparison_cols:
-                        index_col_name = f"{comp_col}_Index"
-                        index_cols.append(index_col_name)
+                """, unsafe_allow_html=True)
+        
+        with col2:
+            # Profile data table in expander
+            with st.expander("📊 Segment Profile Data", expanded=False):
+                # Load profile data from database
+                from app_core.tables import get_tables_for_segment
+                existing_tables = get_tables_for_segment(segment["id"])
+                saved_p3m_profile = next((t for t in existing_tables if t["section"] == "Segment Truths" and t["name"] == "P3M Segment Profile"), None)
+                
+                if saved_p3m_profile and saved_p3m_profile["filter_json"]:
+                    try:
+                        # Load saved CSV data
+                        profile_dict = json.loads(saved_p3m_profile["filter_json"])
+                        df_profile = pd.DataFrame(profile_dict)
                         
-                        def calculate_index(row, baseline=baseline_col, comparison=comp_col):
-                            """Calculate index from baseline and comparison values"""
-                            try:
-                                baseline_val = str(row[baseline]).replace("%", "").replace(",", "").strip()
-                                comp_val = str(row[comparison]).replace("%", "").replace(",", "").strip()
-                                
-                                if not baseline_val or not comp_val or baseline_val == "" or comp_val == "":
-                                    return None
-                                
-                                baseline_num = float(baseline_val)
-                                comp_num = float(comp_val)
-                                
-                                if baseline_num == 0:
-                                    return None
-                                
-                                return (comp_num / baseline_num) * 100
-                            except:
-                                return None
+                        # Replace None/NaN values with empty strings for display
+                        df_profile = df_profile.fillna("")
                         
-                        # Add index column
-                        df_profile[index_col_name] = df_profile.apply(lambda row: calculate_index(row, baseline_col, comp_col), axis=1)
-                    
-                    # Function to apply conditional formatting
-                    def color_comparison_cols(row):
-                        """Apply background color to comparison columns based on index values"""
-                        styles = [""] * len(row)  # Start with no styling
+                        # Get column names
+                        metric_col = df_profile.columns[0]
+                        baseline_col = df_profile.columns[1]
+                        comparison_cols = df_profile.columns[2:].tolist()
                         
-                        for i, comp_col in enumerate(comparison_cols):
-                            col_idx = df_profile.columns.get_loc(comp_col)
-                            index_col = f"{comp_col}_Index"
-                            idx_val = row[index_col]
+                        # Calculate index for each comparison column
+                        index_cols = []
+                        for comp_col in comparison_cols:
+                            index_col_name = f"{comp_col}_Index"
+                            index_cols.append(index_col_name)
                             
-                            if idx_val is None or pd.isna(idx_val):
-                                continue
+                            def calculate_index(row, baseline=baseline_col, comparison=comp_col):
+                                """Calculate index from baseline and comparison values"""
+                                try:
+                                    baseline_val = str(row[baseline]).replace("%", "").replace(",", "").strip()
+                                    comp_val = str(row[comparison]).replace("%", "").replace(",", "").strip()
+                                    
+                                    if not baseline_val or not comp_val or baseline_val == "" or comp_val == "":
+                                        return None
+                                    
+                                    baseline_num = float(baseline_val)
+                                    comp_num = float(comp_val)
+                                    
+                                    if baseline_num == 0:
+                                        return None
+                                    
+                                    return (comp_num / baseline_num) * 100
+                                except:
+                                    return None
                             
-                            try:
-                                if idx_val > 110:
-                                    styles[col_idx] = "background-color: #90EE90; font-weight: bold;"
-                                elif idx_val >= 105:
-                                    styles[col_idx] = "background-color: #D4EDDA; font-weight: bold;"
-                                elif idx_val < 75:
-                                    styles[col_idx] = "background-color: #FFB380; font-weight: bold;"
-                            except:
-                                pass
+                            # Add index column
+                            df_profile[index_col_name] = df_profile.apply(lambda row: calculate_index(row, baseline_col, comp_col), axis=1)
                         
-                        return styles
-                    
-                    # Apply styling
-                    styled_df = df_profile.style.apply(color_comparison_cols, axis=1)
-                    
-                    # Display only original columns (hide index columns)
-                    display_cols = [metric_col, baseline_col] + comparison_cols
-                    
-                    st.dataframe(
-                        styled_df, 
-                        use_container_width=True, 
-                        hide_index=True,
-                        height=450,
-                        column_order=display_cols
-                    )
-                except Exception as e:
-                    st.error(f"Error loading profile data: {str(e)}")
-            else:
-                st.info("No Segment Profile data uploaded yet. Please upload CSV in Data Studio.")
+                        # Function to apply conditional formatting
+                        def color_comparison_cols(row):
+                            """Apply background color to comparison columns based on index values"""
+                            styles = [""] * len(row)  # Start with no styling
+                            
+                            for i, comp_col in enumerate(comparison_cols):
+                                col_idx = df_profile.columns.get_loc(comp_col)
+                                index_col = f"{comp_col}_Index"
+                                idx_val = row[index_col]
+                                
+                                if idx_val is None or pd.isna(idx_val):
+                                    continue
+                                
+                                try:
+                                    if idx_val > 110:
+                                        styles[col_idx] = "background-color: #90EE90; font-weight: bold;"
+                                    elif idx_val >= 105:
+                                        styles[col_idx] = "background-color: #D4EDDA; font-weight: bold;"
+                                    elif idx_val < 75:
+                                        styles[col_idx] = "background-color: #FFB380; font-weight: bold;"
+                                except:
+                                    pass
+                            
+                            return styles
+                        
+                        # Apply styling
+                        styled_df = df_profile.style.apply(color_comparison_cols, axis=1)
+                        
+                        # Display only original columns (hide index columns)
+                        display_cols = [metric_col, baseline_col] + comparison_cols
+                        
+                        st.dataframe(
+                            styled_df, 
+                            use_container_width=True, 
+                            hide_index=True,
+                            height=450,
+                            column_order=display_cols
+                        )
+                    except Exception as e:
+                        st.error(f"Error loading profile data: {str(e)}")
+                else:
+                    st.info("No Segment Profile data uploaded yet. Please upload CSV in Data Studio.")
     
-    # Display Carousel 1
-    carousel1_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 1"]
+    # Display Carousel 1 (independent of seg_truth_table)
     carousel1_images = sorted(carousel1_images, key=lambda x: x.get("id", 0))
     
     if carousel1_images:
@@ -1634,8 +1633,7 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                     with col_img:
                         st.image(file_path, use_container_width=True)
     
-    # Display Carousel 2
-    carousel2_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Carousel 2"]
+    # Display Carousel 2 (independent of seg_truth_table)
     carousel2_images = sorted(carousel2_images, key=lambda x: x.get("id", 0))
     
     if carousel2_images:
@@ -1758,8 +1756,7 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                     with col_img:
                         st.image(file_path, use_container_width=True)
     
-    # Display images one below the other
-    seg_truth_images = [m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "Segment Truth Images"]
+    # Display images one below the other (independent of seg_truth_table)
     # Sort by ID to maintain upload order (Image 1, 2, 3, 4, 5)
     seg_truth_images = sorted(seg_truth_images, key=lambda x: x.get("id", 0))
     
@@ -2458,7 +2455,19 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
     
     # Get all images (now just "Additional Images" - no more carousel)
     trend_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Additional Images"]
-    trend_images = sorted(trend_images, key=lambda x: x.get("id", 0))
+    
+    # Sort by slot number (extracted from comment), not by ID
+    def get_slot_number_trends(media):
+        """Extract slot number from comment field"""
+        comment = media.get("comment", "")
+        if comment.startswith("SLOT:"):
+            try:
+                return int(comment.split("##")[0].replace("SLOT:", ""))
+            except:
+                return 999  # Put at end if can't parse
+        return 999  # Put at end if no slot number
+    
+    trend_images = sorted(trend_images, key=get_slot_number_trends)
     
     # Get placeholder images
     placeholder_images = [m for m in media_items if m.get("section") == "Segment Trends" and m.get("name") == "Placeholder Images"]
@@ -2479,7 +2488,10 @@ def render_segment_trends_dashboard(segment: Dict, is_editor: bool) -> None:
         for idx, media in enumerate(trend_images):
             file_path = media.get("file_path")
             title = media.get("title", "")
-            comment = media.get("comment", "")
+            raw_comment = media.get("comment", "")
+            
+            # Extract actual comment (remove SLOT: prefix)
+            comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
             
             if file_path and os.path.exists(file_path):
                 # Display title first (outside columns)
@@ -2711,9 +2723,10 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
     media_items = get_media_for_segment(segment["id"])
     brand_carousel_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Brand Carousel"]
     brand_placeholder_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Placeholder Images"]
+    brand_standalone_images_check = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Standalone Images"]
     
-    # Check if there's any content at all
-    if not brand_view and not brand_profile_table and not brand_carousel_images and not brand_placeholder_images:
+    # Check if there's any content at all (including standalone images)
+    if not brand_view and not brand_profile_table and not brand_carousel_images and not brand_placeholder_images and not brand_standalone_images_check:
         st.info("No content published for Brand Truths yet. Editors can configure it in Data Studio.")
         return
     
@@ -2955,7 +2968,19 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
     
     # Display standalone images (BEFORE S&V and SWOT)
     brand_standalone_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Standalone Images"]
-    brand_standalone_images = sorted(brand_standalone_images, key=lambda x: x.get("id", 0))
+    
+    # Sort by slot number (extracted from comment), not by ID
+    def get_slot_number(media):
+        """Extract slot number from comment field"""
+        comment = media.get("comment", "")
+        if comment.startswith("SLOT:"):
+            try:
+                return int(comment.split("##")[0].replace("SLOT:", ""))
+            except:
+                return 999  # Put at end if can't parse
+        return 999  # Put at end if no slot number
+    
+    brand_standalone_images = sorted(brand_standalone_images, key=get_slot_number)
     
     if brand_standalone_images:
         st.markdown("---")
@@ -2963,7 +2988,10 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
         for idx, media in enumerate(brand_standalone_images):
             file_path = media.get("file_path")
             title = media.get("title", "")
-            comment = media.get("comment", "")
+            raw_comment = media.get("comment", "")
+            
+            # Extract actual comment (remove SLOT: prefix)
+            comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
             
             if file_path and os.path.exists(file_path):
                 if title:
@@ -3952,7 +3980,18 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
     
     # Get standalone images
     brand_trends_standalone = [m for m in media_items if m.get("section") == "Brand Trends" and m.get("name") == "Standalone Images"]
-    brand_trends_standalone = sorted(brand_trends_standalone, key=lambda x: x.get("id", 0))
+    
+    # Sort by slot number (extract from SLOT:X## format)
+    def get_slot_number(media):
+        comment = media.get("comment", "")
+        if comment.startswith("SLOT:") and "##" in comment:
+            try:
+                return int(comment.split("##")[0].replace("SLOT:", ""))
+            except:
+                return 999
+        return 999
+    
+    brand_trends_standalone = sorted(brand_trends_standalone, key=get_slot_number)
     
     # Get placeholder images
     brand_trends_placeholders = [m for m in media_items if m.get("section") == "Brand Trends" and m.get("name") == "Placeholder Images"]
@@ -3972,7 +4011,10 @@ def render_brand_trends_dashboard(segment: Dict, tables: List, is_editor: bool) 
         for idx, media in enumerate(brand_trends_standalone):
             file_path = media.get("file_path")
             title = media.get("title", "")
-            comment = media.get("comment", "")
+            raw_comment = media.get("comment", "")
+            
+            # Extract actual comment (remove SLOT:X## prefix)
+            comment = raw_comment.split("##", 1)[1] if "##" in raw_comment else raw_comment
             
             if file_path and os.path.exists(file_path):
                 if title:
