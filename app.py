@@ -13,6 +13,7 @@ from app_core.database import (
     ensure_uploads_data_path_column,
     ensure_segments_excel_columns,
     clear_all_data,
+    clear_segment_data,
     init_db,
     migrate_charts_table,
     get_connection,
@@ -146,6 +147,11 @@ def main() -> None:
     )
     
     st.sidebar.success(f"Logged in as {current_user['username']} ({current_user['role']})")
+    
+    # Initialize confirmation states
+    if "confirm_clear_segment" not in st.session_state:
+        st.session_state["confirm_clear_segment"] = False
+    
     # Global upload for editors (reused across segments)
     if current_user["role"] == "editor":
         uploaded_global = st.sidebar.file_uploader("Upload data file (CSV/XLSX)", type=["csv", "xlsx", "xls"])
@@ -168,10 +174,6 @@ def main() -> None:
             except Exception as exc:  # noqa: BLE001
                 spinner_slot.empty()
                 st.sidebar.error(f"Failed to process file: {exc}")
-        if st.sidebar.button("Clear all data (uploads + dashboard)", key="clear_all_data"):
-            clear_all_data()
-            st.sidebar.success("All data cleared.")
-            trigger_rerun()
     else:
         if st.sidebar.button("Refresh dashboard"):
             trigger_rerun()
@@ -210,6 +212,28 @@ def main() -> None:
         st.session_state["selected_segment_id"] = None
         trigger_rerun()
         return
+    
+    # Segment-level clear button (only for editors, after segment selection)
+    if current_user["role"] == "editor":
+        st.sidebar.markdown("---")
+        if not st.session_state["confirm_clear_segment"]:
+            if st.sidebar.button(f"🗑️ Clear Data for {segment['name']}", key="clear_segment_data"):
+                st.session_state["confirm_clear_segment"] = True
+                trigger_rerun()
+        else:
+            st.sidebar.warning(f"⚠️ This will delete all data for {segment['name']} only!")
+            col1, col2 = st.sidebar.columns(2)
+            with col1:
+                if st.button("✅ Yes", key="confirm_yes_segment"):
+                    from app_core.database import clear_segment_data
+                    clear_segment_data(segment["id"])
+                    st.session_state["confirm_clear_segment"] = False
+                    st.sidebar.success(f"{segment['name']} data cleared.")
+                    trigger_rerun()
+            with col2:
+                if st.button("❌ No", key="confirm_no_segment"):
+                    st.session_state["confirm_clear_segment"] = False
+                    trigger_rerun()
 
     render_header()
 

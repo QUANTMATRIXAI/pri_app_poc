@@ -85,10 +85,30 @@ def delete_media(media_id: int) -> None:
         row = conn.execute("SELECT file_path FROM media WHERE id = ?", (media_id,)).fetchone()
         conn.execute("DELETE FROM media WHERE id = ?", (media_id,))
         conn.commit()
-    if row and row["file_path"] and os.path.exists(row["file_path"]):
+    
+    if row and row["file_path"]:
         try:
-            os.remove(row["file_path"])
-        except OSError:
+            file_to_delete = Path(row["file_path"])
+            
+            # Skip if file doesn't exist
+            if not file_to_delete.exists() or not file_to_delete.is_file():
+                return
+            
+            # Resolve paths with strict validation
+            media_dir_resolved = MEDIA_DIR.resolve(strict=True)
+            file_resolved = file_to_delete.resolve(strict=True)
+            
+            # Multiple safety checks:
+            # 1. File must be within MEDIA_DIR
+            # 2. No parent directory traversal
+            # 3. File path must start with media directory path
+            if (media_dir_resolved in file_resolved.parents and
+                str(file_resolved).startswith(str(media_dir_resolved)) and
+                file_resolved.exists() and
+                file_resolved.is_file()):
+                os.remove(row["file_path"])
+        except (OSError, ValueError, RuntimeError):
+            # Skip files that can't be resolved or deleted
             pass
 
 
@@ -105,9 +125,37 @@ def delete_media_for_section(segment_id: int, section: str, name: str | None = N
         else:
             conn.execute("DELETE FROM media WHERE segment_id = ? AND section = ?", (segment_id, section))
         conn.commit()
-    for row in rows:
-        if row["file_path"] and os.path.exists(row["file_path"]):
-            try:
-                os.remove(row["file_path"])
-            except OSError:
-                pass
+    
+    # Delete files with enhanced path validation
+    if MEDIA_DIR.exists() and MEDIA_DIR.is_dir():
+        try:
+            media_dir_resolved = MEDIA_DIR.resolve(strict=True)
+            
+            for row in rows:
+                if not row["file_path"]:
+                    continue
+                
+                try:
+                    file_to_delete = Path(row["file_path"])
+                    
+                    # Skip if not a file
+                    if not file_to_delete.exists() or not file_to_delete.is_file():
+                        continue
+                    
+                    file_resolved = file_to_delete.resolve(strict=True)
+                    
+                    # Multiple safety checks:
+                    # 1. File must be within MEDIA_DIR
+                    # 2. No parent directory traversal
+                    # 3. File path must start with media directory path
+                    if (media_dir_resolved in file_resolved.parents and
+                        str(file_resolved).startswith(str(media_dir_resolved)) and
+                        file_resolved.exists() and
+                        file_resolved.is_file()):
+                        os.remove(row["file_path"])
+                except (OSError, ValueError, RuntimeError):
+                    # Skip files that can't be resolved or deleted
+                    continue
+        except (OSError, ValueError, RuntimeError):
+            # If directory can't be resolved, skip deletion
+            pass

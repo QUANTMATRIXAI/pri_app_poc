@@ -8,8 +8,13 @@ DB_PATH = Path("data/app.db")
 def get_connection() -> sqlite3.Connection:
     """Return a SQLite connection with row factory configured."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrency
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 
@@ -78,6 +83,20 @@ def ensure_chart_comment_column() -> None:
         if "filter_json" not in cols:
             conn.execute("ALTER TABLE charts ADD COLUMN filter_json TEXT DEFAULT '{}' ")
             conn.commit()
+        # Create indexes for faster queries
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_charts_segment_section 
+            ON charts(segment_id, section)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_charts_dataset 
+            ON charts(dataset_id)
+            """
+        )
+        conn.commit()
 
 
 def migrate_charts_table() -> None:
@@ -108,15 +127,23 @@ def migrate_charts_table() -> None:
             conn.commit()
             return
 
+        # Check if migration is needed by inspecting actual columns
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(charts)").fetchall()]
+        required_cols = ["comment", "segment_id", "section", "filter_json"]
+        has_all_cols = all(col in cols for col in required_cols)
+        
         schema_sql = schema_row["sql"] or ""
         needs_migration = "CHECK(chart_type" in schema_sql
-        has_comment = "comment" in schema_sql
-        if not needs_migration and has_comment:
+        
+        if not needs_migration and has_all_cols:
             return
 
+        # Drop any leftover charts_new from failed previous migration
+        conn.execute("DROP TABLE IF EXISTS charts_new")
+        
         conn.execute(
             """
-                CREATE TABLE IF NOT EXISTS charts_new (
+                CREATE TABLE charts_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     chart_type TEXT NOT NULL,
@@ -171,6 +198,13 @@ def ensure_tables_table() -> None:
         cols = [row["name"] for row in conn.execute("PRAGMA table_info(tables)").fetchall()]
         if "filter_json" not in cols:
             conn.execute("ALTER TABLE tables ADD COLUMN filter_json TEXT DEFAULT '{}' ")
+        # Create indexes for faster queries
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_tables_segment_section 
+            ON tables(segment_id, section)
+            """
+        )
         conn.commit()
 
 
@@ -191,6 +225,13 @@ def ensure_media_table() -> None:
             )
             """
         )
+        # Create indexes for faster queries
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_media_segment_section 
+            ON media(segment_id, section)
+            """
+        )
         conn.commit()
 
 
@@ -203,6 +244,14 @@ def ensure_uploads_segment_column(default_segment_id: Optional[int]) -> None:
             if default_segment_id:
                 conn.execute("UPDATE uploads SET segment_id = ?", (default_segment_id,))
             conn.commit()
+        # Create index for faster queries
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_uploads_segment 
+            ON uploads(segment_id)
+            """
+        )
+        conn.commit()
 
 
 def ensure_uploads_data_path_column() -> None:
@@ -215,21 +264,163 @@ def ensure_uploads_data_path_column() -> None:
 
 
 def clear_all_data() -> None:
-    """Dangerous: delete uploads, charts, tables, media and drop stored files."""
+    """Dangerous: delete ALL data from ALL segments - uploads, charts, tables, media and drop stored files."""
     from .uploads import DATA_UPLOAD_DIR
+    from .media import MEDIA_DIR
+    from pathlib import Path
 
     with get_connection() as conn:
-        conn.execute("DELETE FROM charts")
-        conn.execute("DELETE FROM tables")
-        conn.execute("DELETE FROM media")
-        conn.execute("DELETE FROM uploads")
+        # Safe deletion - only delete from tables that exist
+        try:
+            conn.execute("DELETE FROM charts")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("DELETE FROM tables")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("DELETE FROM media")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("DELETE FROM uploads")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("DELETE FROM battleground_notes")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
-    if DATA_UPLOAD_DIR.exists():
-        for f in DATA_UPLOAD_DIR.glob("*"):
-            try:
-                f.unlink()
-            except OSError:
-                pass
+    
+    # Delete all upload files with enhanced path validation
+    if DATA_UPLOAD_DIR.exists() and DATA_UPLOAD_DIR.is_dir():
+        try:
+            upload_dir_resolved = DATA_UPLOAD_DIR.resolve(strict=True)
+            
+            # Safety check: ensure we're in the expected data directory
+            if "data" not in str(upload_dir_resolved).lower() or "uploads" not in str(upload_dir_resolved).lower():
+                pass  # Skip this directory but continue with others
+            else:
+                for f in DATA_UPLOAD_DIR.glob("*"):
+                    try:
+                        # Skip if not a file
+                        if not f.is_file():
+                            continue
+                        
+                        file_resolved = f.resolve(strict=True)
+                        
+                        # Multiple safety checks:
+                        # 1. File must be direct child of upload directory
+                        # 2. No parent directory traversal
+                        # 3. File path must start with upload directory path
+                        if (file_resolved.parent == upload_dir_resolved and 
+                            upload_dir_resolved in file_resolved.parents and
+                            str(file_resolved).startswith(str(upload_dir_resolved))):
+                            f.unlink()
+                    except (OSError, ValueError, RuntimeError):
+                        # Skip files that can't be resolved or deleted
+                        continue
+        except (OSError, ValueError, RuntimeError):
+            # If directory can't be resolved, skip deletion
+            pass
+    
+    # Delete all media files with enhanced path validation
+    if MEDIA_DIR.exists() and MEDIA_DIR.is_dir():
+        try:
+            media_dir_resolved = MEDIA_DIR.resolve(strict=True)
+            
+            # Safety check: ensure we're in the expected data directory
+            if "data" not in str(media_dir_resolved).lower() or "media" not in str(media_dir_resolved).lower():
+                pass  # Skip this directory but continue
+            else:
+                for f in MEDIA_DIR.glob("*"):
+                    try:
+                        # Skip if not a file
+                        if not f.is_file():
+                            continue
+                        
+                        file_resolved = f.resolve(strict=True)
+                        
+                        # Multiple safety checks:
+                        # 1. File must be direct child of media directory
+                        # 2. No parent directory traversal
+                        # 3. File path must start with media directory path
+                        if (file_resolved.parent == media_dir_resolved and 
+                            media_dir_resolved in file_resolved.parents and
+                            str(file_resolved).startswith(str(media_dir_resolved))):
+                            f.unlink()
+                    except (OSError, ValueError, RuntimeError):
+                        # Skip files that can't be resolved or deleted
+                        continue
+        except (OSError, ValueError, RuntimeError):
+            # If directory can't be resolved, skip deletion
+            pass
+
+
+def clear_segment_data(segment_id: int) -> None:
+    """Delete all data for a specific segment only (keeps uploads as they're shared)."""
+    from .media import MEDIA_DIR
+    from pathlib import Path
+    
+    # Validate segment_id is a positive integer
+    if not isinstance(segment_id, int) or segment_id <= 0:
+        return
+    
+    with get_connection() as conn:
+        # Get all media file paths for this segment before deleting records
+        media_files = conn.execute(
+            "SELECT file_path FROM media WHERE segment_id = ?",
+            (segment_id,)
+        ).fetchall()
+        
+        # Delete database records for this segment
+        conn.execute("DELETE FROM charts WHERE segment_id = ?", (segment_id,))
+        conn.execute("DELETE FROM tables WHERE segment_id = ?", (segment_id,))
+        conn.execute("DELETE FROM media WHERE segment_id = ?", (segment_id,))
+        conn.execute("DELETE FROM battleground_notes WHERE segment_id = ?", (segment_id,))
+        conn.commit()
+    
+    # Delete media files for this segment with enhanced path validation
+    if MEDIA_DIR.exists() and MEDIA_DIR.is_dir():
+        try:
+            media_dir_resolved = MEDIA_DIR.resolve(strict=True)
+            
+            # Safety check: ensure we're in the expected data directory
+            if "data" not in str(media_dir_resolved).lower() or "media" not in str(media_dir_resolved).lower():
+                return  # Abort if path doesn't look right
+            
+            for row in media_files:
+                file_path = row["file_path"]
+                if not file_path:
+                    continue
+                
+                try:
+                    # Convert to Path object
+                    file_to_delete = Path(file_path)
+                    
+                    # Skip if not a file
+                    if not file_to_delete.exists() or not file_to_delete.is_file():
+                        continue
+                    
+                    file_resolved = file_to_delete.resolve(strict=True)
+                    
+                    # Multiple safety checks:
+                    # 1. File must be within MEDIA_DIR (direct child or subdirectory)
+                    # 2. No parent directory traversal
+                    # 3. File path must start with media directory path
+                    # 4. File must actually exist
+                    if (media_dir_resolved in file_resolved.parents and
+                        str(file_resolved).startswith(str(media_dir_resolved)) and
+                        file_resolved.exists() and
+                        file_resolved.is_file()):
+                        file_to_delete.unlink()
+                except (OSError, FileNotFoundError, ValueError, RuntimeError):
+                    # Skip files that can't be resolved or deleted
+                    continue
+        except (OSError, ValueError, RuntimeError):
+            # If directory can't be resolved, skip deletion
+            pass
 
 
 def ensure_battleground_notes_table() -> None:
@@ -248,6 +439,13 @@ def ensure_battleground_notes_table() -> None:
                 updated_at TEXT NOT NULL,
                 UNIQUE(segment_id, tab_index)
             )
+            """
+        )
+        # Create index for faster queries
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_battleground_notes_segment 
+            ON battleground_notes(segment_id)
             """
         )
         conn.commit()
