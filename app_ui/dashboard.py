@@ -22,8 +22,10 @@ from .charts import plot_chart
 def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> None:
     st.subheader(f"Segment: {segment['name']}")
     
-    # Check if there's any published content
-    if not charts and not tables:
+    # Check if there's any published content (charts, tables, OR media)
+    media_items = get_media_for_segment(segment["id"])
+    
+    if not charts and not tables and not media_items:
         st.info("No content published yet. Editors can publish content from the Data Studio.")
         return
     
@@ -471,7 +473,13 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
     ns_charts = [c for c in charts if c["section"] == "NS Landscape"]
     ns_tables = [t for t in tables if t["section"] == "NS Landscape"]
     
-    if not ns_charts and not ns_tables:
+    # Check for placeholder images
+    from app_core.media import get_media_for_segment
+    existing_media = get_media_for_segment(segment["id"])
+    placeholder_images = [m for m in existing_media if m.get("section") == "NS Landscape" and m.get("name") == "Placeholder Images"]
+    
+    # Check if there's any content at all (charts, tables, or placeholder images)
+    if not ns_charts and not ns_tables and not placeholder_images:
         st.info("No content published for NS Landscape yet. Editors can configure it in Data Studio.")
         return
     
@@ -538,10 +546,8 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
         if strategic_grid:
             render_strategic_insights_grid(strategic_grid, segment, is_editor)
     
-    # Render Placeholder Images
-    from app_core.media import get_media_for_segment
-    existing_media = get_media_for_segment(segment["id"])
-    placeholder_images = [m for m in existing_media if m.get("section") == "NS Landscape" and m.get("name") == "Placeholder Images"]
+    # Render Placeholder Images (already loaded at the top)
+    # placeholder_images was already loaded in the dependency check above
     placeholder_images = sorted(placeholder_images, key=lambda x: x.get("id", 0))
     
     if placeholder_images:
@@ -1312,17 +1318,20 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
 
 def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool) -> None:
     """Render Segment Truths section"""
+    # Get media items first
+    from app_core.media import get_media_for_segment
+    media_items = get_media_for_segment(segment["id"])
+    first_image = next((m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "First Image"), None)
+    
     # Filter for Segment Truths content
     seg_truth_table = next((t for t in tables if t["section"] == "Segment Truths" and t["name"] == "Segment Truth"), None)
     
-    if not seg_truth_table:
+    # Check if there's any content at all (image or table)
+    if not seg_truth_table and not first_image:
         st.info("No content published for Segment Truths yet. Editors can configure it in Data Studio.")
         return
     
     # Display first image at the very top (if exists)
-    from app_core.media import get_media_for_segment
-    media_items = get_media_for_segment(segment["id"])
-    first_image = next((m for m in media_items if m.get("section") == "Segment Truths" and m.get("name") == "First Image"), None)
     
     if first_image:
         file_path = first_image.get("file_path")
@@ -1364,6 +1373,10 @@ def render_segment_truths_dashboard(segment: Dict, tables: List, is_editor: bool
                     """, unsafe_allow_html=True)
             
             st.markdown("---")
+    
+    # Only show profile summary section if seg_truth_table exists
+    if not seg_truth_table:
+        return
     
     # Parse configuration
     try:
@@ -2693,6 +2706,17 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
     brand_view = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
     brand_profile_table = next((t for t in tables if t["section"] == "Brand Truths" and t["name"] == "Brand Profile Comparison"), None)
     
+    # Check for carousel and placeholder images
+    from app_core.media import get_media_for_segment
+    media_items = get_media_for_segment(segment["id"])
+    brand_carousel_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Brand Carousel"]
+    brand_placeholder_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Placeholder Images"]
+    
+    # Check if there's any content at all
+    if not brand_view and not brand_profile_table and not brand_carousel_images and not brand_placeholder_images:
+        st.info("No content published for Brand Truths yet. Editors can configure it in Data Studio.")
+        return
+    
     # Render Brand Profile Comparison Table first (if exists)
     if brand_profile_table:
         try:
@@ -2795,18 +2819,12 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
         except Exception as e:
             st.error(f"Error rendering Brand Profile table: {str(e)}")
     
-    if not brand_view and not brand_profile_table:
-        st.info("No content published for Brand Truths yet. Editors can configure it in Data Studio.")
-        return
-    
     # Render first section (without S&V)
     if brand_view:
         render_brand_truths_section(brand_view, is_editor, segment, "1", show_sv=False)
     
     # Display carousel images (BEFORE S&V and SWOT)
-    from app_core.media import get_media_for_segment, delete_media_for_section
-    media_items = get_media_for_segment(segment["id"])
-    brand_carousel_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Brand Carousel"]
+    # brand_carousel_images already loaded at the top, just sort them
     brand_carousel_images = sorted(brand_carousel_images, key=lambda x: x.get("id", 0))
     
     if brand_carousel_images:
@@ -2987,6 +3005,7 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
         # Delete button for standalone images
         if is_editor:
             if st.button("Delete Standalone Images", key=f"del_brand_standalone_{segment['id']}"):
+                from app_core.media import delete_media_for_section
                 delete_media_for_section(segment["id"], "Brand Truths", "Standalone Images")
                 st.success("Standalone images removed")
                 if hasattr(st, "rerun"):
@@ -2994,8 +3013,7 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
                 else:
                     st.experimental_rerun()
     
-    # Display placeholder images
-    brand_placeholder_images = [m for m in media_items if m.get("section") == "Brand Truths" and m.get("name") == "Placeholder Images"]
+    # Display placeholder images (already loaded at the top, just sort)
     brand_placeholder_images = sorted(brand_placeholder_images, key=lambda x: x.get("id", 0))
     
     if brand_placeholder_images:
@@ -3046,6 +3064,7 @@ def render_brand_truths_dashboard(segment: Dict, tables: List, is_editor: bool) 
         # Delete button for placeholder images
         if is_editor:
             if st.button("Delete Placeholder Images", key=f"del_brand_placeholder_{segment['id']}"):
+                from app_core.media import delete_media_for_section
                 delete_media_for_section(segment["id"], "Brand Truths", "Placeholder Images")
                 st.success("Placeholder images removed")
                 if hasattr(st, "rerun"):
@@ -3491,7 +3510,8 @@ def render_battlegrounds_jtbd_dashboard(segment: Dict, tables: List, is_editor: 
     jtbd_view = next((t for t in tables if t["section"] == "Battlegrounds" and t["name"] == "JTBD View"), None)
     
     if not jtbd_view:
-        return  # No JTBD configured
+        # Silently skip if no JTBD configured (this is OK - JTBD is optional)
+        return
     
     try:
         config = json.loads(jtbd_view["filter_json"]) if jtbd_view["filter_json"] else {}
@@ -4873,221 +4893,224 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
     # Get battlegrounds config
     bg_config_table = next((t for t in tables if t["section"] == "Battlegrounds" and t["name"] == "Battlegrounds Config"), None)
     
-    if not bg_config_table:
+    # Get JTBD view
+    jtbd_view = next((t for t in tables if t["section"] == "Battlegrounds" and t["name"] == "JTBD View"), None)
+    
+    # Check if there's any content at all (clusters or JTBD)
+    if not bg_config_table and not jtbd_view:
         st.info("No content published for Battlegrounds yet. Editors can configure it in Data Studio.")
         return
     
-    try:
-        config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
-        tabs_config = config.get("tabs", [])
-        
-        if not tabs_config:
-            st.info("No battleground tabs configured yet.")
-            return
-        
-        # Show India Map at the top
-        st.markdown("### 📍 India Map - Battlegrounds Overview")
-        render_india_map_dashboard(tabs_config)
-        st.markdown("---")
-        
-        # Get all media for Battlegrounds
-        from app_core.media import get_media_for_segment
-        media_items = get_media_for_segment(segment["id"])
-        bg_media = [m for m in media_items if m.get("section") == "Battlegrounds"]
-        
-        # Create tabs with custom names
-        tab_names = [tab.get("name", f"Tab {i+1}") for i, tab in enumerate(tabs_config)]
-        dashboard_tabs = st.tabs(tab_names)
-        
-        for idx, (tab, tab_config) in enumerate(zip(dashboard_tabs, tabs_config)):
-            with tab:
-                # Get images for this tab - check 'name' field (which stores the label)
-                tab_images = [m for m in bg_media if m.get("name") == f"Tab {idx+1} Images"]
-                
-                # Find images by comment
-                image_1 = None
-                image_2 = None
-                for img in tab_images:
-                    comment = img.get("comment", "")
-                    if f"Tab {idx+1} - Image 1" in comment:
-                        image_1 = img
-                    elif f"Tab {idx+1} - Image 2" in comment:
-                        image_2 = img
-                # Display Image 1 (Top) with title and comment
-                if image_1:
-                    file_path = image_1.get("file_path")
-                    title = image_1.get("title", "")
-                    # Extract actual comment (remove the "Tab X - Image 1" prefix)
-                    raw_comment = image_1.get("comment", "")
-                    comment = raw_comment.replace(f"Tab {idx+1} - Image 1", "").strip()
-                    
-                    if file_path and os.path.exists(file_path):
-                        if str(file_path).lower().endswith((".ppt", ".pptx")):
-                            st.caption("📄 PPT File - Download to view")
-                            with open(file_path, "rb") as f:
-                                st.download_button(
-                                    "Download PPT",
-                                    data=f.read(),
-                                    file_name=os.path.basename(file_path),
-                                    key=f"dl_bg_img1_{segment['id']}_{idx}",
-                                )
-                        else:
-                            # Show title if exists
-                            if title:
-                                st.markdown(f"### {title}")
-                            
-                            # Display image and comment side by side if comment exists
-                            if comment:
-                                col_img, col_comment = st.columns([1, 1])
-                                
-                                with col_img:
-                                    st.image(file_path, use_container_width=True)
-                                
-                                with col_comment:
-                                    st.markdown(f"""
-                                        <div style='
-                                            background: #F8F9FA;
-                                            border-left: 4px solid #f5b400;
-                                            padding: 1.5rem;
-                                            margin: 1.5rem 0 1rem 0;
-                                            border-radius: 8px;
-                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                                        '>
-                                            <div style='
-                                                font-size: 0.95rem;
-                                                line-height: 1.7;
-                                                color: #2C2C2C;
-                                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                                            '>
-                                                {format_comment(comment)}
-                                            </div>
-                                        </div>
-                                    """, unsafe_allow_html=True)
-                            else:
-                                # No comment, center the image
-                                col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                                with col2:
-                                    st.image(file_path, use_container_width=True)
-                    else:
-                        st.warning("Image 1 file not found")
-                
+    # Only render clusters section if config exists
+    if bg_config_table:
+        try:
+            config = json.loads(bg_config_table["filter_json"]) if bg_config_table["filter_json"] else {}
+            tabs_config = config.get("tabs", [])
+            
+            if tabs_config:
+                # Show India Map at the top
+                st.markdown("### 📍 India Map - Battlegrounds Overview")
+                render_india_map_dashboard(tabs_config)
                 st.markdown("---")
                 
-                # STATE PERFORMANCE CALCULATIONS (Between Images)
-                st.markdown("### 📊 Battleground Analysis")
-                render_battlegrounds_calculations(segment, tab_config, segment["id"], idx, is_editor)
+                # Get all media for Battlegrounds
+                from app_core.media import get_media_for_segment
+                media_items = get_media_for_segment(segment["id"])
+                bg_media = [m for m in media_items if m.get("section") == "Battlegrounds"]
                 
-                st.markdown("---")
+                # Create tabs with custom names
+                tab_names = [tab.get("name", f"Tab {i+1}") for i, tab in enumerate(tabs_config)]
+                dashboard_tabs = st.tabs(tab_names)
                 
-                # Display Image 2 (Bottom) with title and comment
-                if image_2:
-                    file_path = image_2.get("file_path")
-                    title = image_2.get("title", "")
-                    # Extract actual comment (remove the "Tab X - Image 2" prefix)
-                    raw_comment = image_2.get("comment", "")
-                    comment = raw_comment.replace(f"Tab {idx+1} - Image 2", "").strip()
-                    
-                    if file_path and os.path.exists(file_path):
-                        if str(file_path).lower().endswith((".ppt", ".pptx")):
-                            st.caption("📄 PPT File - Download to view")
-                            with open(file_path, "rb") as f:
-                                st.download_button(
-                                    "Download PPT",
-                                    data=f.read(),
-                                    file_name=os.path.basename(file_path),
-                                    key=f"dl_bg_img2_{segment['id']}_{idx}",
-                                )
-                        else:
-                            # Show title if exists
-                            if title:
-                                st.markdown(f"### {title}")
+                for idx, (tab, tab_config) in enumerate(zip(dashboard_tabs, tabs_config)):
+                    with tab:
+                        # Get images for this tab - check 'name' field (which stores the label)
+                        tab_images = [m for m in bg_media if m.get("name") == f"Tab {idx+1} Images"]
+                        
+                        # Find images by comment
+                        image_1 = None
+                        image_2 = None
+                        for img in tab_images:
+                            comment = img.get("comment", "")
+                            if f"Tab {idx+1} - Image 1" in comment:
+                                image_1 = img
+                            elif f"Tab {idx+1} - Image 2" in comment:
+                                image_2 = img
+                        # Display Image 1 (Top) with title and comment
+                        if image_1:
+                            file_path = image_1.get("file_path")
+                            title = image_1.get("title", "")
+                            # Extract actual comment (remove the "Tab X - Image 1" prefix)
+                            raw_comment = image_1.get("comment", "")
+                            comment = raw_comment.replace(f"Tab {idx+1} - Image 1", "").strip()
                             
-                            # Display image and comment side by side if comment exists
-                            if comment:
-                                col_img, col_comment = st.columns([1, 1])
-                                
-                                with col_img:
-                                    st.image(file_path, use_container_width=True)
-                                
-                                with col_comment:
-                                    st.markdown(f"""
-                                        <div style='
-                                            background: #F8F9FA;
-                                            border-left: 4px solid #f5b400;
-                                            padding: 1.5rem;
-                                            margin: 1.5rem 0 1rem 0;
-                                            border-radius: 8px;
-                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                                        '>
-                                            <div style='
-                                                font-size: 0.95rem;
-                                                line-height: 1.7;
-                                                color: #2C2C2C;
-                                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                                            '>
-                                                {format_comment(comment)}
-                                            </div>
-                                        </div>
-                                    """, unsafe_allow_html=True)
+                            if file_path and os.path.exists(file_path):
+                                if str(file_path).lower().endswith((".ppt", ".pptx")):
+                                    st.caption("📄 PPT File - Download to view")
+                                    with open(file_path, "rb") as f:
+                                        st.download_button(
+                                            "Download PPT",
+                                            data=f.read(),
+                                            file_name=os.path.basename(file_path),
+                                            key=f"dl_bg_img1_{segment['id']}_{idx}",
+                                        )
+                                else:
+                                    # Show title if exists
+                                    if title:
+                                        st.markdown(f"### {title}")
+                                    
+                                    # Display image and comment side by side if comment exists
+                                    if comment:
+                                        col_img, col_comment = st.columns([1, 1])
+                                        
+                                        with col_img:
+                                            st.image(file_path, use_container_width=True)
+                                        
+                                        with col_comment:
+                                            st.markdown(f"""
+                                                <div style='
+                                                    background: #F8F9FA;
+                                                    border-left: 4px solid #f5b400;
+                                                    padding: 1.5rem;
+                                                    margin: 1.5rem 0 1rem 0;
+                                                    border-radius: 8px;
+                                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                                '>
+                                                    <div style='
+                                                        font-size: 0.95rem;
+                                                        line-height: 1.7;
+                                                        color: #2C2C2C;
+                                                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                                    '>
+                                                        {format_comment(comment)}
+                                                    </div>
+                                                </div>
+                                            """, unsafe_allow_html=True)
+                                    else:
+                                        # No comment, center the image
+                                        col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                                        with col2:
+                                            st.image(file_path, use_container_width=True)
                             else:
-                                # No comment, center the image
-                                col1, col2, col3 = st.columns([0.5, 2, 0.5])
-                                with col2:
-                                    st.image(file_path, use_container_width=True)
-                    else:
-                        st.warning("Image 2 file not found")
-                
-                # Display Placeholder Slides
-                placeholder_slides = [m for m in bg_media if m.get("name") == f"Tab {idx+1} Placeholders"]
-                
-                if placeholder_slides:
-                    for p_idx, placeholder in enumerate(sorted(placeholder_slides, key=lambda x: x.get("id", 0))):
+                                st.warning("Image 1 file not found")
+                        
                         st.markdown("---")
                         
-                        file_path = placeholder.get("file_path")
-                        title = placeholder.get("title", "")
-                        # Extract actual comment (remove the "Tab X - Placeholder Y" prefix)
-                        raw_comment = placeholder.get("comment", "")
-                        comment = raw_comment.replace(f"Tab {idx+1} - Placeholder {p_idx+1}", "").strip()
+                        # STATE PERFORMANCE CALCULATIONS (Between Images)
+                        st.markdown("### 📊 Battleground Analysis")
+                        render_battlegrounds_calculations(segment, tab_config, segment["id"], idx, is_editor)
                         
-                        if file_path and os.path.exists(file_path):
-                            if str(file_path).lower().endswith((".ppt", ".pptx")):
-                                st.caption(f"📄 PPT File - Download to view")
-                                with open(file_path, "rb") as f:
-                                    st.download_button(
-                                        f"Download PPT",
-                                        data=f.read(),
-                                        file_name=os.path.basename(file_path),
-                                        key=f"dl_bg_p{p_idx+1}_{segment['id']}_{idx}",
-                                    )
-                            else:
-                                # Show title if exists
-                                if title:
-                                    st.markdown(f"### {title}")
-                                
-                                # Display image and comment side by side if comment exists
-                                if comment:
-                                    col_img, col_comment = st.columns([1, 1])
+                        st.markdown("---")
+                        
+                        # Display Image 2 (Bottom) with title and comment
+                        if image_2:
+                            file_path = image_2.get("file_path")
+                            title = image_2.get("title", "")
+                            # Extract actual comment (remove the "Tab X - Image 2" prefix)
+                            raw_comment = image_2.get("comment", "")
+                            comment = raw_comment.replace(f"Tab {idx+1} - Image 2", "").strip()
+                            
+                            if file_path and os.path.exists(file_path):
+                                if str(file_path).lower().endswith((".ppt", ".pptx")):
+                                    st.caption("📄 PPT File - Download to view")
+                                    with open(file_path, "rb") as f:
+                                        st.download_button(
+                                            "Download PPT",
+                                            data=f.read(),
+                                            file_name=os.path.basename(file_path),
+                                            key=f"dl_bg_img2_{segment['id']}_{idx}",
+                                        )
+                                else:
+                                    # Show title if exists
+                                    if title:
+                                        st.markdown(f"### {title}")
                                     
-                                    with col_img:
-                                        st.image(file_path, use_container_width=True)
-                                    
-                                    with col_comment:
-                                        st.markdown(f"""
-                                            <div style='
-                                                background: #F8F9FA;
-                                                border-left: 4px solid #6c757d;
-                                                padding: 1.5rem;
-                                                margin: 1.5rem 0 1rem 0;
-                                                border-radius: 8px;
-                                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                                            '>
+                                    # Display image and comment side by side if comment exists
+                                    if comment:
+                                        col_img, col_comment = st.columns([1, 1])
+                                        
+                                        with col_img:
+                                            st.image(file_path, use_container_width=True)
+                                        
+                                        with col_comment:
+                                            st.markdown(f"""
                                                 <div style='
-                                                    font-size: 0.95rem;
-                                                    line-height: 1.7;
-                                                    color: #2C2C2C;
-                                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                                    background: #F8F9FA;
+                                                    border-left: 4px solid #f5b400;
+                                                    padding: 1.5rem;
+                                                    margin: 1.5rem 0 1rem 0;
+                                                    border-radius: 8px;
+                                                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                                                 '>
+                                                    <div style='
+                                                        font-size: 0.95rem;
+                                                        line-height: 1.7;
+                                                        color: #2C2C2C;
+                                                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                                    '>
+                                                        {format_comment(comment)}
+                                                    </div>
+                                                </div>
+                                            """, unsafe_allow_html=True)
+                                    else:
+                                        # No comment, center the image
+                                        col1, col2, col3 = st.columns([0.5, 2, 0.5])
+                                        with col2:
+                                            st.image(file_path, use_container_width=True)
+                            else:
+                                st.warning("Image 2 file not found")
+                        
+                        # Display Placeholder Slides
+                        placeholder_slides = [m for m in bg_media if m.get("name") == f"Tab {idx+1} Placeholders"]
+                        
+                        if placeholder_slides:
+                            for p_idx, placeholder in enumerate(sorted(placeholder_slides, key=lambda x: x.get("id", 0))):
+                                st.markdown("---")
+                                
+                                file_path = placeholder.get("file_path")
+                                title = placeholder.get("title", "")
+                                # Extract actual comment (remove the "Tab X - Placeholder Y" prefix)
+                                raw_comment = placeholder.get("comment", "")
+                                comment = raw_comment.replace(f"Tab {idx+1} - Placeholder {p_idx+1}", "").strip()
+                                
+                                if file_path and os.path.exists(file_path):
+                                    if str(file_path).lower().endswith((".ppt", ".pptx")):
+                                        st.caption(f"📄 PPT File - Download to view")
+                                        with open(file_path, "rb") as f:
+                                            st.download_button(
+                                                f"Download PPT",
+                                                data=f.read(),
+                                                file_name=os.path.basename(file_path),
+                                                key=f"dl_bg_p{p_idx+1}_{segment['id']}_{idx}",
+                                            )
+                                    else:
+                                        # Show title if exists
+                                        if title:
+                                            st.markdown(f"### {title}")
+                                        
+                                        # Display image and comment side by side if comment exists
+                                        if comment:
+                                            col_img, col_comment = st.columns([1, 1])
+                                            
+                                            with col_img:
+                                                st.image(file_path, use_container_width=True)
+                                            
+                                            with col_comment:
+                                                st.markdown(f"""
+                                                    <div style='
+                                                        background: #F8F9FA;
+                                                        border-left: 4px solid #6c757d;
+                                                        padding: 1.5rem;
+                                                        margin: 1.5rem 0 1rem 0;
+                                                        border-radius: 8px;
+                                                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                                    '>
+                                                        <div style='
+                                                            font-size: 0.95rem;
+                                                            line-height: 1.7;
+                                                            color: #2C2C2C;
+                                                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                                        '>
                                                     {format_comment(comment)}
                                                 </div>
                                             </div>
@@ -5097,29 +5120,29 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
                                     col1, col2, col3 = st.columns([0.5, 2, 0.5])
                                     with col2:
                                         st.image(file_path, use_container_width=True)
-        
-        # JTBD Section at the end
-        st.markdown("---")
-        st.markdown("---")
-        render_battlegrounds_jtbd_dashboard(segment, tables, is_editor)
-        
-        # Delete button for editors
-        if is_editor:
-            st.markdown("---")
-            if st.button("Delete Battlegrounds Configuration", key=f"del_battlegrounds_{segment['id']}"):
-                from app_core.tables import delete_table
-                from app_core.media import delete_media_for_section
                 
-                delete_table(bg_config_table["id"])
-                # Delete all battlegrounds media
-                for i in range(3):
-                    delete_media_for_section(segment["id"], "Battlegrounds", f"Tab {i+1} Images")
-                
-                st.success("Battlegrounds configuration removed")
-                if hasattr(st, "rerun"):
-                    st.rerun()
-                else:
-                    st.experimental_rerun()
+                # Delete button for editors (inside cluster section)
+                if is_editor:
+                    st.markdown("---")
+                    if st.button("Delete Battlegrounds Configuration", key=f"del_battlegrounds_{segment['id']}"):
+                        from app_core.tables import delete_table
+                        from app_core.media import delete_media_for_section
+                        
+                        delete_table(bg_config_table["id"])
+                        # Delete all battlegrounds media
+                        for i in range(3):
+                            delete_media_for_section(segment["id"], "Battlegrounds", f"Tab {i+1} Images")
+                        
+                        st.success("Battlegrounds configuration removed")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+        
+        except Exception as e:
+            st.error(f"Error rendering Battlegrounds clusters: {str(e)}")
     
-    except Exception as e:
-        st.error(f"Error rendering Battlegrounds: {str(e)}")
+    # JTBD Section (independent of clusters)
+    st.markdown("---")
+    st.markdown("---")
+    render_battlegrounds_jtbd_dashboard(segment, tables, is_editor)

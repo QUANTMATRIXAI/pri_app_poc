@@ -30,8 +30,8 @@ def create_default_users() -> None:
 
         now = datetime.datetime.utcnow().isoformat()
         defaults = [
-            ("admin", "admin123", "editor"),
-            ("viewer", "viewer123", "viewer"),
+            ("PRI_Planner", "dashboard123", "editor"),
+            ("PRI_BusinessUser", "dashboard456", "viewer"),
         ]
         for username, password, role in defaults:
             salt, hashed = hash_password(password)
