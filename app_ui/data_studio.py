@@ -301,6 +301,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 comment=pivot_comment
             )
             st.success("Manufacturing Pivot saved to dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    # Delete button next to save
+    if saved_pivot:
+        if st.button("🗑️ Delete Manufacturing Pivot", key=f"delete_ns_pivot_{segment['id']}", type="secondary"):
+            delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
+            st.success("Manufacturing Pivot deleted!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
     
     st.markdown("---")
     
@@ -641,6 +655,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 comment=chart_comment
             )
             st.success("Brand Performance Chart saved to dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    # Delete button next to save
+    if saved_chart:
+        if st.button("🗑️ Delete Brand Performance Chart", key=f"delete_ns_chart_{segment['id']}", type="secondary"):
+            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
+            st.success("Brand Performance Chart deleted!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
     
     st.markdown("---")
     
@@ -859,6 +887,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 comment=family_chart_comment
             )
             st.success("Brand Family Performance Chart saved to dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    # Delete button next to save
+    if saved_family_chart:
+        if st.button("🗑️ Delete Brand Family Performance Chart", key=f"delete_ns_family_chart_{segment['id']}", type="secondary"):
+            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
+            st.success("Brand Family Performance Chart deleted!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
     
     st.markdown("---")
     # 3. Zonal Pivot Table Configuration
@@ -994,6 +1036,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         comment=zonal_comment
                     )
                     st.success("Zonal Pivot Table saved to dashboard!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_zonal:
+                    if st.button("🗑️ Delete Zonal Pivot", key=f"delete_ns_zonal_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
+                        st.success("Zonal Pivot deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
             else:
                 st.info("No data available for A25 with selected brands.")
     else:
@@ -1001,6 +1057,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
+    st.markdown("---")
     # 4. NORTH Zone State Drill-Down
     st.markdown("### North Zone")
     st.caption("Performance of key states within the zone")
@@ -1185,6 +1242,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             comment=comments_json
                         )
                         st.success("NORTH Zone Drill-Down saved to dashboard!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_north:
+                    if st.button("🗑️ Delete NORTH Zone Drill-Down", key=f"delete_ns_north_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
+                        st.success("NORTH Zone Drill-Down deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1297,6 +1368,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             comment=comments_json
                         )
                         st.success("WEST+CSD Zone Drill-Down saved to dashboard!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_west:
+                    if st.button("🗑️ Delete WEST+CSD Zone Drill-Down", key=f"delete_ns_west_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
+                        st.success("WEST+CSD Zone Drill-Down deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1409,6 +1494,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             comment=comments_json
                         )
                         st.success("EAST Zone Drill-Down saved to dashboard!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_east:
+                    if st.button("🗑️ Delete EAST Zone Drill-Down", key=f"delete_ns_east_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
+                        st.success("EAST Zone Drill-Down deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1521,17 +1620,33 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             comment=comments_json
                         )
                         st.success("SOUTH Zone Drill-Down saved to dashboard!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_south:
+                    if st.button("🗑️ Delete SOUTH Zone Drill-Down", key=f"delete_ns_south_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
+                        st.success("SOUTH Zone Drill-Down deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
     st.markdown("---")
     
+    st.markdown("---")
     # BTM Detailed Analysis
     st.markdown("### BTM Detailed Analysis")
     st.caption("Select states and brand family to view detailed performance metrics")
     
     # Load existing saved configuration
     saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
+    
     state_perf_config = json.loads(saved_state_perf["filter_json"]) if saved_state_perf and saved_state_perf["filter_json"] else {}
     saved_state_perf_title = state_perf_config.get("title", "BTM Detailed Analysis")
     saved_state_perf_states = state_perf_config.get("states", [])
@@ -1711,6 +1826,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         comment=state_perf_comment
                     )
                     st.success("State Performance Analysis saved to dashboard!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_state_perf:
+                    if st.button("🗑️ Delete State Performance Analysis", key=f"delete_ns_state_perf_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+                        st.success("State Performance Analysis deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
                 
                 st.markdown("---")
                 st.markdown("### Battleground Summary Slide")
@@ -1718,6 +1847,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # Load existing grid data
                 saved_grid = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "Strategic Insights Grid"), None)
+                
                 grid_config = json.loads(saved_grid["filter_json"]) if saved_grid and saved_grid["filter_json"] else {}
                 saved_grid_title = grid_config.get("title", "Battleground Summary")
                 saved_grid_data = grid_config.get("grid_data", {})
@@ -1893,6 +2023,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             comment=""
                         )
                         st.success("Battleground Summary Slide saved to dashboard!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_grid:
+                    if st.button("🗑️ Delete Strategic Insights Grid", key=f"delete_ns_grid_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "NS Landscape", "Strategic Insights Grid")
+                        st.success("Strategic Insights Grid deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
     
     st.markdown("---")
     
@@ -2341,6 +2485,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 comment=""
             )
             st.success("Custom Trends View saved to dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    # Delete button next to save
+    if saved_custom_trends:
+        if st.button("🗑️ Delete Custom Trends View", key=f"delete_ns_trends_{segment['id']}", type="secondary"):
+            delete_tables_for_section(segment["id"], "NS Landscape", "Custom Trends View")
+            st.success("Custom Trends View deleted!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
 
 
 def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
@@ -5148,6 +5306,20 @@ def render_segment_trends_config(segment: Dict, df_filtered: pd.DataFrame, datas
                 comment=""
             )
             st.success("Custom Trends View saved to dashboard!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+    
+    # Delete button next to save
+    if saved_custom_trends:
+        if st.button("🗑️ Delete Custom Trends View", key=f"delete_trends_view_{segment['id']}", type="secondary"):
+            delete_tables_for_section(segment["id"], "Segment Trends", "Custom Trends View")
+            st.success("Custom Trends View deleted!")
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
 
 
 
@@ -5995,6 +6167,20 @@ def render_brand_trends_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     comment=""
                 )
                 st.success(f"Brand {view_num} saved to Brand Trends dashboard!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+        
+        # Delete button next to save
+        if saved_view:
+            if st.button(f"🗑️ Delete Brand {view_num} Summary", key=f"delete_brand_trends_view_v{view_num}_{segment['id']}", type="secondary"):
+                delete_tables_for_section(segment["id"], "Brand Trends", f"Custom Trends View {view_num}")
+                st.success(f"Brand {view_num} Summary deleted!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     
     # Save All Brands button (after all individual views)
     st.markdown("---")
@@ -6245,6 +6431,40 @@ def render_battlegrounds_jtbd_config(segment: Dict, df_filtered: pd.DataFrame, d
                     st.rerun()
                 else:
                     st.experimental_rerun()
+        
+        # Delete button next to save
+        if saved_jtbd and tab_idx < len(saved_jtbd_tabs):
+            if st.button(f"🗑️ Delete Brand {tab_idx + 1} JTBD", key=f"delete_jtbd_tab{tab_idx}_{segment['id']}", type="secondary"):
+                # Load existing config
+                existing_config = jtbd_config if jtbd_config else {}
+                existing_tabs = existing_config.get("tabs", [])
+                
+                # Remove this tab
+                if tab_idx < len(existing_tabs):
+                    existing_tabs.pop(tab_idx)
+                    
+                    # Delete and re-save without this tab
+                    delete_tables_for_section(segment["id"], "Battlegrounds", "JTBD View")
+                    
+                    if existing_tabs:  # Only save if there are remaining tabs
+                        config_json = json.dumps({
+                            "tabs": existing_tabs
+                        })
+                        save_table(
+                            name="JTBD View",
+                            section="Battlegrounds",
+                            dataset_id=dataset_id,
+                            segment_id=segment["id"],
+                            columns=["Config"],
+                            filter_json=config_json,
+                            created_by=current_user["username"]
+                        )
+                    
+                    st.success(f"Brand {tab_idx + 1} JTBD deleted!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
     
     # Save All Brands button (after all individual tabs)
     st.markdown("---")
@@ -6869,6 +7089,20 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             comment=""
                         )
                         st.success("Brand Profile Comparison table saved to dashboard!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                
+                # Delete button next to save
+                if saved_brand_profile:
+                    if st.button("🗑️ Delete Brand Profile Comparison Table", key=f"delete_brand_profile_{segment['id']}", type="secondary"):
+                        delete_tables_for_section(segment["id"], "Brand Truths", "Brand Profile Comparison")
+                        st.success("Brand Profile Comparison table deleted!")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
         
         except Exception as e:
             st.error(f"Error reading CSV: {str(e)}")
@@ -7946,6 +8180,40 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             comment=""
         )
         st.success("Strengths & Vulnerabilities saved to dashboard!")
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
+    
+    # Delete button next to save
+    if saved_brand_truths and brand_truths_config.get("strengths_vulnerabilities"):
+        if st.button("🗑️ Delete Strengths & Vulnerabilities", key=f"delete_brand_sv_{segment['id']}", type="secondary"):
+            # Get existing data
+            existing_tables = get_tables_for_segment(segment["id"])
+            saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+            
+            if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
+                existing_config = json.loads(saved_brand_truths_current["filter_json"])
+                # Remove S&V data
+                existing_config.pop("strengths_vulnerabilities", None)
+                
+                # Delete and re-save without S&V
+                delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
+                save_table(
+                    name="Brand Truths View",
+                    dataset_id=dataset_id,
+                    columns=["Config"],
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    filter_json=json.dumps(existing_config),
+                    comment=""
+                )
+                st.success("Strengths & Vulnerabilities deleted!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     
     # SWOT Analysis section - appears after S&V
     st.markdown("---")
@@ -8191,6 +8459,40 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             comment=""
         )
         st.success("SWOT Analysis saved to dashboard!")
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
+    
+    # Delete button next to save
+    if saved_brand_truths and brand_truths_config.get("swot_analysis"):
+        if st.button("🗑️ Delete SWOT Analysis", key=f"delete_brand_swot_{segment['id']}", type="secondary"):
+            # Get existing data
+            existing_tables = get_tables_for_segment(segment["id"])
+            saved_brand_truths_current = next((t for t in existing_tables if t["section"] == "Brand Truths" and t["name"] == "Brand Truths View"), None)
+            
+            if saved_brand_truths_current and saved_brand_truths_current["filter_json"]:
+                existing_config = json.loads(saved_brand_truths_current["filter_json"])
+                # Remove SWOT data
+                existing_config.pop("swot_analysis", None)
+                
+                # Delete and re-save without SWOT
+                delete_tables_for_section(segment["id"], "Brand Truths", "Brand Truths View")
+                save_table(
+                    name="Brand Truths View",
+                    dataset_id=dataset_id,
+                    columns=["Config"],
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="Brand Truths",
+                    filter_json=json.dumps(existing_config),
+                    comment=""
+                )
+                st.success("SWOT Analysis deleted!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
 
 
 def get_india_geojson_url():
