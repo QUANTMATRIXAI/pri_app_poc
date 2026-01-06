@@ -101,6 +101,9 @@ def render_header() -> None:
 
 
 def render_footer() -> None:
+    # Add spacer before footer to prevent content from being covered
+    st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
+    
     st.markdown(
         """
         <div style='

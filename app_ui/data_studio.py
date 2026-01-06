@@ -2914,11 +2914,15 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     st.markdown("#### Upload New Carousel Slides")
     st.caption("Upload multiple slides at once (will be added to existing slides)")
     
+    # Use session state to track upload counter for clearing file uploader
+    if f"carousel1_upload_counter_{segment['id']}" not in st.session_state:
+        st.session_state[f"carousel1_upload_counter_{segment['id']}"] = 0
+    
     uploaded_carousel1 = st.file_uploader(
         "Upload Slides (multiple allowed)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key=f"seg_carousel1_{segment['id']}"
+        key=f"seg_carousel1_{segment['id']}_{st.session_state[f'carousel1_upload_counter_{segment['id']}']}"
     )
     
     carousel1_configs = []
@@ -2982,6 +2986,9 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                         title=config["tab_title"]
                     )
                     saved_count += 1
+                
+                # Increment counter to clear file uploader on next render
+                st.session_state[f"carousel1_upload_counter_{segment['id']}"] += 1
                 
                 st.success(f"{saved_count} new carousel image(s) saved!")
                 st.rerun()
@@ -3054,11 +3061,15 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     st.markdown("#### Upload New Carousel Slides")
     st.caption("Upload multiple slides at once (will be added to existing slides)")
     
+    # Use session state to track upload counter for clearing file uploader
+    if f"carousel2_upload_counter_{segment['id']}" not in st.session_state:
+        st.session_state[f"carousel2_upload_counter_{segment['id']}"] = 0
+    
     uploaded_carousel2 = st.file_uploader(
         "Upload Images for Carousel 2 (multiple allowed)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key=f"seg_carousel2_{segment['id']}"
+        key=f"seg_carousel2_{segment['id']}_{st.session_state[f'carousel2_upload_counter_{segment['id']}']}"
     )
     
     carousel2_configs = []
@@ -3123,6 +3134,9 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
                     )
                     saved_count += 1
                 
+                # Increment counter to clear file uploader on next render
+                st.session_state[f"carousel2_upload_counter_{segment['id']}"] += 1
+                
                 st.success(f"{saved_count} new carousel 2 image(s) saved!")
                 st.rerun()
             except Exception as e:
@@ -3132,7 +3146,7 @@ def render_segment_truths_config(segment: Dict, df_filtered: pd.DataFrame, datas
     st.markdown("---")
     st.markdown("### Placeholder Slides")
     
-    with st.expander("📸 Upload Placeholder Slides (optional))", expanded=False):
+    with st.expander("📸 Upload Placeholder Slides (optional)", expanded=False):
         st.caption("Upload up to 5 images with titles and comments")
         
         # Show existing images if any
@@ -7371,11 +7385,15 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("#### Upload New Carousel Slides")
     st.caption("Upload multiple slides at once (will be added to existing slides)")
     
+    # Use session state to track upload counter for clearing file uploader
+    if f"brand_carousel_upload_counter_{segment['id']}" not in st.session_state:
+        st.session_state[f"brand_carousel_upload_counter_{segment['id']}"] = 0
+    
     uploaded_carousel_images = st.file_uploader(
         "Upload Slides (multiple allowed)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key=f"brand_carousel_images_{segment['id']}"
+        key=f"brand_carousel_images_{segment['id']}_{st.session_state[f'brand_carousel_upload_counter_{segment['id']}']}"
     )
     
     # Title and comment inputs for each uploaded image
@@ -7448,6 +7466,9 @@ def render_brand_truths_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             title=config["tab_title"]
                         )
                         saved_count += 1
+                    
+                    # Increment counter to clear file uploader on next render
+                    st.session_state[f"brand_carousel_upload_counter_{segment['id']}"] += 1
                     
                     st.success(f"{saved_count} new carousel image(s) saved to dashboard!")
                     st.rerun()
