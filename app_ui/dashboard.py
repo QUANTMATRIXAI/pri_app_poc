@@ -732,8 +732,8 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             a26_ytd_total = a26_ytd_pivot.sum().item() if not a26_ytd_pivot.empty else 0.0
             a25_ytd_total = a25_ytd_pivot.sum().item() if not a25_ytd_pivot.empty else 0.0
             
-            # Calculate A26 YTD Growth % for each Mfg Com
-            pivot["A26 YTD Growth %"] = 0.0
+            # Calculate A26 YTD Growth %* for each Mfg Com
+            pivot["A26 YTD Growth %*"] = 0.0
             for mfg_com in pivot.index:
                 if mfg_com == "Segment Total":
                     # Use totals for Segment Total
@@ -756,11 +756,11 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
                 # Calculate growth
                 if a25_val > 0:
                     growth = ((a26_val - a25_val) / a25_val * 100)
-                    pivot.loc[mfg_com, "A26 YTD Growth %"] = round(growth, 1)
+                    pivot.loc[mfg_com, "A26 YTD Growth %*"] = round(growth, 1)
                 else:
-                    pivot.loc[mfg_com, "A26 YTD Growth %"] = 0.0
+                    pivot.loc[mfg_com, "A26 YTD Growth %*"] = 0.0
             
-            columns_to_keep.append("A26 YTD Growth %")
+            columns_to_keep.append("A26 YTD Growth %*")
         
         # Format and sort
         pivot = pivot.reset_index()
@@ -793,7 +793,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
         
         # Add note about A26 YTD if present
         if "A26" in selected_years and has_month_col:
-            st.caption("*A26 YTD Growth % calculated as July-Oct A26 vs July-Oct A25")
+            st.caption("*A26 YTD Growth %* calculated as July-Oct A26 vs July-Oct A25")
     
     with col2:
         # Show comment in right column
@@ -1022,9 +1022,9 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             axis=1
         )
         
-        # Add A26 YTD Growth % if A26 data exists
+        # Add A26 YTD Growth %* if A26 data exists
         if has_a26 and has_month_col:
-            summary_df["A26 YTD Growth %"] = summary_df.apply(
+            summary_df["A26 YTD Growth %*"] = summary_df.apply(
                 lambda r: a26_ytd_growth_rates.get(r["Brand"], 0.0),
                 axis=1
             )
@@ -1068,7 +1068,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             
             if has_a26 and has_month_col:
                 family_row["A26"] = a26_ytd_total
-                family_row["A26 YTD Growth %"] = round(a26_ytd_growth_family, 1)
+                family_row["A26 YTD Growth %*"] = round(a26_ytd_growth_family, 1)
             
             family_summary.append(family_row)
         
@@ -1113,8 +1113,8 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         if "A25 Growth %" in combined_df.columns:
             column_order.append("A25 Growth %")
         column_order.append("2-Yr CAGR %")
-        if "A26 YTD Growth %" in combined_df.columns:
-            column_order.append("A26 YTD Growth %")  # Put at the end
+        if "A26 YTD Growth %*" in combined_df.columns:
+            column_order.append("A26 YTD Growth %*")  # Put at the end
         
         # Select and display columns
         display_df = combined_df[column_order].copy()
@@ -1125,7 +1125,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
                 display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
         
         # Format growth columns with % symbol
-        for col in ["A24 Growth %", "A25 Growth %", "A26 YTD Growth %", "2-Yr CAGR %"]:
+        for col in ["A24 Growth %", "A25 Growth %", "A26 YTD Growth %*", "2-Yr CAGR %"]:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
         
@@ -1336,8 +1336,8 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
         df = df[~df["State"].isin(excluded_states)]
         st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
     
-    # Filter for A24 and A25 (needed for growth calculations)
-    df = df[df["PRI Year"].isin(["A24", "A25"])]
+    # Filter for A24, A25, and A26 (needed for growth calculations including A26 YTD)
+    df = df[df["PRI Year"].isin(["A24", "A25", "A26"])]
     df = df[df["Brand Family"].isin(selected_families)]
     df = df[df["Brand"].isin(selected_brands)]
     
@@ -1402,7 +1402,7 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
             """, unsafe_allow_html=True)
             
             # Filter rows for this zone
-            zone_df = result[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_BTM"]].copy()
+            zone_df = result[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_BTM", f"{zone}_A26YTD"]].copy()
             
             # Apply styling to highlight brand families and color negatives
             def highlight_families(row):
@@ -1423,7 +1423,7 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
             
             # Drop Type column and rename
             display_df = zone_df.drop(columns=['Type'])
-            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "BTM"]
+            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "A25 BTM", "A26 YTD Gr*"]
             
             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
@@ -2001,8 +2001,8 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
         df = df[~df["State"].isin(excluded_states)]
         st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
     
-    # Filter for A24 and A25 (needed for growth calculations)
-    df = df[df["PRI Year"].isin(["A24", "A25"])]
+    # Filter for A24, A25, and A26 (needed for growth calculations including A26 YTD)
+    df = df[df["PRI Year"].isin(["A24", "A25", "A26"])]
     
     if df.empty:
         st.warning("No data available for selected filters.")
@@ -2096,6 +2096,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     
     # Show state deep-dives for SELECTED states only
     if selected_states:
+        from app_ui.data_studio import create_zone_state_drilldown
         result = create_zone_state_drilldown(df, selected_families, selected_brands, selected_states, zone_name, df)
         
         if result and result['state_details']:
