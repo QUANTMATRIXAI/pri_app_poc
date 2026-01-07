@@ -617,7 +617,10 @@ def render_ns_landscape_dashboard(segment: Dict, charts: List, tables: List, is_
 
 
 def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool) -> None:
-    """Render the manufacturing pivot table with YoY and CAGR - table and comment side by side"""
+    """Render the manufacturing pivot table with YoY and CAGR - table and comment side by side
+    
+    For A26: Shows YTD growth (July-Oct A26 vs July-Oct A25)
+    """
     # Get custom title from config
     filter_config = json.loads(table_row["filter_json"] if table_row["filter_json"] else "{}")
     custom_title = filter_config.get("title", "NS Overview") if isinstance(filter_config, dict) else "NS Overview"
@@ -646,16 +649,32 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             st.warning("No data available for selected filters.")
             return
         
-        # Create pivot
+        # Check if Month column exists for A26 YTD calculation
+        has_month_col = "Month" in df.columns
+        
+        # Month names for July-Oct YTD
+        ytd_months = ["July", "August", "September", "October"]
+        
+        # For A26 YTD calculation, we need July-Oct data from both A25 and A26
+        # But we should NOT mix them with full year data to avoid double counting
+        if "A26" in selected_years and has_month_col:
+            # Keep full year data for A23, A24, A25 ONLY
+            df_combined = df[df["PRI Year"].isin(["A23", "A24", "A25"])].copy()
+        else:
+            # No Month column or no A26 data - use full year data
+            df_combined = df.copy()
+        
+        # Create pivot for full year data (A23, A24, A25)
+        years_for_pivot = [y for y in ["A23", "A24", "A25"] if y in selected_years]
         pivot = pd.pivot_table(
-            df,
+            df_combined[df_combined["PRI Year"].isin(years_for_pivot)],
             index="Mfg Com",
             columns="PRI Year",
             values="NS M INR",
             aggfunc="sum",
             fill_value=0
         )
-        pivot = pivot.reindex(columns=selected_years, fill_value=0)
+        pivot = pivot.reindex(columns=years_for_pivot, fill_value=0)
         
         # Add Segment Total
         segment_total = pivot.sum(axis=0).to_frame().T
@@ -665,10 +684,10 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
         # Keep only growth columns and CAGR (no base year)
         columns_to_keep = ["Mfg Com"]
         
-        # Calculate YoY Growth
-        for i in range(1, len(selected_years)):
-            prev_year = selected_years[i-1]
-            curr_year = selected_years[i]
+        # Calculate YoY Growth for A24 and A25
+        for i in range(1, len(years_for_pivot)):
+            prev_year = years_for_pivot[i-1]
+            curr_year = years_for_pivot[i]
             col_name = f"{curr_year} Growth %"
             pivot[col_name] = ((pivot[curr_year] - pivot[prev_year]) / pivot[prev_year] * 100).replace([np.inf, -np.inf], 0).fillna(0).round(1)
             columns_to_keep.append(col_name)
@@ -683,6 +702,65 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
                 0
             ).round(1)
             columns_to_keep.append("2 Yr CAGR %")
+        
+        # Calculate A26 YTD Growth % (July-Oct A26 vs July-Oct A25)
+        if "A26" in selected_years and has_month_col:
+            # Month names for July-Oct
+            ytd_months = ["July", "August", "September", "October"]
+            
+            # Calculate A26 YTD (July-Oct) - use df, not df_combined
+            a26_ytd = df[(df["PRI Year"] == "A26") & (df["Month"].isin(ytd_months))]
+            a26_ytd_pivot = pd.pivot_table(
+                a26_ytd,
+                index="Mfg Com",
+                values="NS M INR",
+                aggfunc="sum",
+                fill_value=0
+            )
+            
+            # Calculate A25 YTD (July-Oct) for comparison - use df, not df_combined
+            a25_ytd = df[(df["PRI Year"] == "A25") & (df["Month"].isin(ytd_months))]
+            a25_ytd_pivot = pd.pivot_table(
+                a25_ytd,
+                index="Mfg Com",
+                values="NS M INR",
+                aggfunc="sum",
+                fill_value=0
+            )
+            
+            # Add Segment Total for YTD calculations
+            a26_ytd_total = a26_ytd_pivot.sum().item() if not a26_ytd_pivot.empty else 0.0
+            a25_ytd_total = a25_ytd_pivot.sum().item() if not a25_ytd_pivot.empty else 0.0
+            
+            # Calculate A26 YTD Growth % for each Mfg Com
+            pivot["A26 YTD Growth %"] = 0.0
+            for mfg_com in pivot.index:
+                if mfg_com == "Segment Total":
+                    # Use totals for Segment Total
+                    a26_val = a26_ytd_total
+                    a25_val = a25_ytd_total
+                else:
+                    # Use individual Mfg Com values - extract scalar value
+                    if mfg_com in a26_ytd_pivot.index:
+                        a26_series = a26_ytd_pivot.loc[mfg_com]
+                        a26_val = a26_series.item() if hasattr(a26_series, 'item') else float(a26_series)
+                    else:
+                        a26_val = 0.0
+                    
+                    if mfg_com in a25_ytd_pivot.index:
+                        a25_series = a25_ytd_pivot.loc[mfg_com]
+                        a25_val = a25_series.item() if hasattr(a25_series, 'item') else float(a25_series)
+                    else:
+                        a25_val = 0.0
+                
+                # Calculate growth
+                if a25_val > 0:
+                    growth = ((a26_val - a25_val) / a25_val * 100)
+                    pivot.loc[mfg_com, "A26 YTD Growth %"] = round(growth, 1)
+                else:
+                    pivot.loc[mfg_com, "A26 YTD Growth %"] = 0.0
+            
+            columns_to_keep.append("A26 YTD Growth %")
         
         # Format and sort
         pivot = pivot.reset_index()
@@ -712,6 +790,10 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
         # Display with styling
         styled_pivot = pivot_display.style.apply(highlight_segment_total, axis=1)
         st.dataframe(styled_pivot, use_container_width=True, hide_index=True)
+        
+        # Add note about A26 YTD if present
+        if "A26" in selected_years and has_month_col:
+            st.caption("*A26 YTD Growth % calculated as July-Oct A26 vs July-Oct A25")
     
     with col2:
         # Show comment in right column
@@ -731,7 +813,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
 
 
 def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool) -> None:
-    """Render the brand performance chart with NS M INR and growth rates"""
+    """Render the brand performance chart with NS M INR and growth rates (includes A26 YTD)"""
     import plotly.express as px
     
     # Get title from config or use default
@@ -754,14 +836,26 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
     excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
     
+    # Check for A26 and Month column
+    has_a26 = "A26" in selected_years
+    has_month_col = "Month" in df.columns
+    ytd_months = ["July", "August", "September", "October"]
+    
     # Apply state exclusion filter
     if excluded_states and "State" in df.columns:
         df = df[~df["State"].isin(excluded_states)]
         st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
     
-    # Apply filters
+    # Filter brands
     df = df[df["Brand"].isin(selected_brands)]
-    df = df[df["PRI Year"].isin(selected_years)]
+    
+    # For A26, filter to July-Oct only; for others, use full year
+    if has_a26 and has_month_col:
+        df_a26_ytd = df[(df["PRI Year"] == "A26") & (df["Month"].isin(ytd_months))]
+        df_full_years = df[df["PRI Year"].isin(["A23", "A24", "A25"])]
+        df = pd.concat([df_full_years, df_a26_ytd], ignore_index=True)
+    else:
+        df = df[df["PRI Year"].isin(["A23", "A24", "A25"])]
     
     if df.empty:
         st.warning("No data available for selected brands and years.")
@@ -781,11 +875,21 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     # Calculate growth rates and CAGR for each brand
     growth_rates = {}
     cagr_values = {}
+    a26_ytd_growth_rates = {}
+    
+    # Get original df for A25 YTD calculation
+    df_original = load_dataset(chart_row["dataset_id"])
+    df_original = filter_df_by_segment(df_original, segment)
+    if excluded_states and "State" in df_original.columns:
+        df_original = df_original[~df_original["State"].isin(excluded_states)]
+    df_original = df_original[df_original["Brand"].isin(selected_brands)]
+    
     for _, row in pivot_wide.iterrows():
         brand = row["Brand"]
         ns_a23 = row.get("A23", 0) or 0
         ns_a24 = row.get("A24", 0) or 0
         ns_a25 = row.get("A25", 0) or 0
+        ns_a26_ytd = row.get("A26", 0) or 0  # This is YTD (July-Oct)
         
         # A24 Growth % (YoY from A23)
         a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
@@ -796,21 +900,34 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         # 2-Year CAGR (A23 to A25)
         cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
         
+        # A26 YTD Growth % (July-Oct A26 vs July-Oct A25)
+        if has_a26 and has_month_col:
+            # Get A25 YTD (July-Oct) for comparison
+            a25_ytd_data = df_original[(df_original["Brand"] == brand) & (df_original["PRI Year"] == "A25") & (df_original["Month"].isin(ytd_months))]
+            ns_a25_ytd = a25_ytd_data["NS M INR"].sum() if not a25_ytd_data.empty else 0
+            
+            a26_ytd_growth = ((ns_a26_ytd - ns_a25_ytd) / ns_a25_ytd * 100) if ns_a25_ytd != 0 else 0
+            a26_ytd_growth_rates[brand] = round(a26_ytd_growth, 1)
+        
         growth_rates[brand] = {
             "A23": None,  # No growth for base year - don't show anything
             "A24": round(a24_growth, 1),
-            "A25": round(a25_growth, 1)
+            "A25": round(a25_growth, 1),
+            "A26": a26_ytd_growth_rates.get(brand, None)  # YTD growth
         }
         cagr_values[brand] = round(cagr_2yr, 1)
     
     # Add growth rate text - empty for A23 (no growth rate for base year)
     chart_data["Growth Text"] = chart_data.apply(
-        lambda r: f"{growth_rates[r['Brand']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+        lambda r: f"{growth_rates[r['Brand']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' and growth_rates[r['Brand']].get(r['PRI Year']) is not None else "",
         axis=1
     )
     
-    # Sort brands by Brand Family total NS, then by brand total NS
-    brand_totals = chart_data.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
+    # Remove A26 from chart display (keep only in View Data table)
+    chart_data_for_display = chart_data[chart_data["PRI Year"] != "A26"].copy()
+    
+    # Sort brands by Brand Family total NS, then by brand total NS (excluding A26)
+    brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
     brand_totals.columns = ["Brand", "Brand Family", "Total"]
     
     family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
@@ -823,16 +940,19 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     # Create ordered brand list
     brand_order = brand_totals["Brand"].tolist()
     
-    # Green color scheme - light to dark
+    # Green color scheme - light to dark (no A26 in chart)
     color_map = {
         "A23": "#90EE90",  # Light Green
         "A24": "#4CAF50",  # Medium Green
         "A25": "#1B5E20"   # Dark Green
     }
     
+    # Year order for chart (no A26)
+    year_order = ["A23", "A24", "A25"]
+    
     # Create multi-bar chart with Plotly Express
     fig = px.bar(
-        chart_data,
+        chart_data_for_display,
         x="Brand",
         y="NS M INR",
         color="PRI Year",
@@ -840,7 +960,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         text="Growth Text",
         height=500,
         color_discrete_map=color_map,
-        category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand": brand_order}
+        category_orders={"PRI Year": year_order, "Brand": brand_order}
     )
     
     # Format growth rate text on top of bars
@@ -902,6 +1022,13 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             axis=1
         )
         
+        # Add A26 YTD Growth % if A26 data exists
+        if has_a26 and has_month_col:
+            summary_df["A26 YTD Growth %"] = summary_df.apply(
+                lambda r: a26_ytd_growth_rates.get(r["Brand"], 0.0),
+                axis=1
+            )
+        
         # Calculate Brand Family totals
         family_summary = []
         for family in summary_df["Brand Family"].unique():
@@ -911,13 +1038,23 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             a23_total = family_data["A23"].sum() if "A23" in family_data.columns else 0
             a24_total = family_data["A24"].sum() if "A24" in family_data.columns else 0
             a25_total = family_data["A25"].sum() if "A25" in family_data.columns else 0
+            a26_ytd_total = family_data["A26"].sum() if "A26" in family_data.columns else 0
             
             # Calculate family-level growth rates
             a24_growth = ((a24_total - a23_total) / a23_total * 100) if a23_total != 0 else 0
             a25_growth = ((a25_total - a24_total) / a24_total * 100) if a24_total != 0 else 0
             cagr_2yr = (((a25_total / a23_total) ** 0.5 - 1) * 100) if a23_total != 0 else 0
             
-            family_summary.append({
+            # A26 YTD Growth for family
+            if has_a26 and has_month_col:
+                # Get A25 YTD for family
+                family_brands = family_data["Brand"].tolist()
+                a25_ytd_family = df_original[(df_original["Brand"].isin(family_brands)) & (df_original["PRI Year"] == "A25") & (df_original["Month"].isin(ytd_months))]["NS M INR"].sum()
+                a26_ytd_growth_family = ((a26_ytd_total - a25_ytd_family) / a25_ytd_family * 100) if a25_ytd_family != 0 else 0
+            else:
+                a26_ytd_growth_family = 0.0
+            
+            family_row = {
                 "Brand Family": family,
                 "Brand": f"📊 {family} Total",
                 "A23": a23_total,
@@ -927,7 +1064,13 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
                 "A25 Growth %": round(a25_growth, 1),
                 "2-Yr CAGR %": round(cagr_2yr, 1),
                 "is_family_total": True
-            })
+            }
+            
+            if has_a26 and has_month_col:
+                family_row["A26"] = a26_ytd_total
+                family_row["A26 YTD Growth %"] = round(a26_ytd_growth_family, 1)
+            
+            family_summary.append(family_row)
         
         # Add is_family_total flag to brand rows
         summary_df["is_family_total"] = False
@@ -950,10 +1093,12 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             rename_map["A24"] = "A24 NS M INR"
         if "A25" in combined_df.columns:
             rename_map["A25"] = "A25 NS M INR"
+        if "A26" in combined_df.columns:
+            rename_map["A26"] = "A26 YTD NS M INR"
         
         combined_df = combined_df.rename(columns=rename_map)
         
-        # Reorder columns: Brand Family, Brand, A23 NS M INR, A24 NS M INR, A25 NS M INR, A24 Growth %, A25 Growth %, 2-Yr CAGR %
+        # Reorder columns
         column_order = ["Brand Family", "Brand"]
         if "A23 NS M INR" in combined_df.columns:
             column_order.append("A23 NS M INR")
@@ -961,22 +1106,26 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             column_order.append("A24 NS M INR")
         if "A25 NS M INR" in combined_df.columns:
             column_order.append("A25 NS M INR")
+        if "A26 YTD NS M INR" in combined_df.columns:
+            column_order.append("A26 YTD NS M INR")
         if "A24 Growth %" in combined_df.columns:
             column_order.append("A24 Growth %")
         if "A25 Growth %" in combined_df.columns:
             column_order.append("A25 Growth %")
         column_order.append("2-Yr CAGR %")
+        if "A26 YTD Growth %" in combined_df.columns:
+            column_order.append("A26 YTD Growth %")  # Put at the end
         
         # Select and display columns
         display_df = combined_df[column_order].copy()
         
         # Format NS columns with commas
-        for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR"]:
+        for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR", "A26 YTD NS M INR"]:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
         
         # Format growth columns with % symbol
-        for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %"]:
+        for col in ["A24 Growth %", "A25 Growth %", "A26 YTD Growth %", "2-Yr CAGR %"]:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
         

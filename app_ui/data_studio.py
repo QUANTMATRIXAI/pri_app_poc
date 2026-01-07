@@ -144,15 +144,20 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     # Filter data by segment using DuckDB (much faster than loading entire dataset)
     excel_name = segment.get("excel_name", segment["name"])
     filter_column = segment.get("filter_column", "Segment_Col_1")
-    years = ["A23", "A24", "A25"]
+    years_with_a26 = ["A23", "A24", "A25", "A26"]  # Include A26 for Manufacturing Pivot
+    years_without_a26 = ["A23", "A24", "A25"]  # Exclude A26 for other sections
     
-    df_filtered = query_segment_filtered(upload_path, excel_name, filter_column, years)
+    # Load data with A26 included
+    df_filtered_all = query_segment_filtered(upload_path, excel_name, filter_column, years_with_a26)
     
-    if df_filtered is None or df_filtered.empty:
+    if df_filtered_all is None or df_filtered_all.empty:
         st.warning("Selected dataset is empty.")
         return
     
-    df_filtered = normalize_dataset_year(df_filtered)
+    df_filtered_all = normalize_dataset_year(df_filtered_all)
+    
+    # Create filtered version without A26 for other sections
+    df_filtered = df_filtered_all[df_filtered_all["PRI Year"].isin(years_without_a26)].copy()
     
     # Load full dataset only when needed (for All Spirits calculations)
     df = load_dataset(latest["id"])
@@ -163,7 +168,7 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
 
     # Show data info
     note = f"Using latest {'global' if using_global else 'segment'} upload: **{latest['filename']}**"
-    st.info(f"{note} | Segment rows: {len(df_filtered)} | Filter: {filter_column} = '{excel_name}' | Years: {', '.join(years)}")
+    st.info(f"{note} | Segment rows: {len(df_filtered)} | Filter: {filter_column} = '{excel_name}' | Years: {', '.join(years_without_a26)}")
 
     # Data preview in expander (closed by default)
     with st.expander("📊 Segment Data Preview", expanded=False):
@@ -181,7 +186,8 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     tabs = st.tabs(["NS Landscape", "Segment Truths", "Brand Truths", "Segment Trends", "Brand Trends", "Battlegrounds"])
     
     with tabs[0]:
-        render_ns_landscape_config(segment, df_filtered, latest["id"], current_user)
+        # Pass df_filtered_all (with A26) to NS Landscape for Manufacturing Pivot
+        render_ns_landscape_config(segment, df_filtered_all, latest["id"], current_user)
     
     with tabs[1]:
         render_segment_truths_config(segment, df_filtered, latest["id"], current_user)
@@ -201,7 +207,10 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
 
 
 def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset_id: int, current_user: Dict) -> None:
-    """Configure NS Landscape: Manufacturing Pivot Table + Brand Multi-Bar Chart"""
+    """Configure NS Landscape: Manufacturing Pivot Table + Brand Multi-Bar Chart
+    
+    Note: df_filtered includes A26 data, but we filter it out for sections after Manufacturing Pivot
+    """
 
     
     if df_filtered.empty:
@@ -235,7 +244,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
-    # 1. Manufacturing Pivot Table Configuration
+    # 1. Manufacturing Pivot Table Configuration (uses A26 if available)
     st.markdown("### Manufacturing Co. View")
     st.caption("NS YoY Growth and CAGR by Manufacturing Company")
     
@@ -247,8 +256,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         help="This title will appear on the dashboard"
     )
     
-    # Year filter - automatically use all available years
-    available_years = ["A23", "A24", "A25"]
+    # Year filter - automatically use all available years (including A26 for Manufacturing Pivot)
+    available_years = ["A23", "A24", "A25", "A26"]
     years_in_data = [y for y in available_years if y in df_filtered["PRI Year"].unique()]
     selected_years_pivot = years_in_data  # Use all available years by default
     
@@ -318,9 +327,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
-    # 2. Brand Multi-Bar Chart Configuration
+    # Keep A26 data for Brand Chart, but filter it out for sections below
+    df_filtered_with_a26 = df_filtered.copy()  # Keep A26 for Brand Chart
+    df_filtered_no_a26 = df_filtered[df_filtered["PRI Year"] != "A26"].copy()  # Remove A26 for other sections
+    
+    # 2. Brand Multi-Bar Chart Configuration (uses A26 YTD)
     st.markdown("### Brand View")
-    st.caption("NS YoY Growth and CAGR by Brands")
+    st.caption("NS YoY Growth and CAGR by Brands (includes A26 YTD)")
     
     # Parse saved chart config
     chart_config = json.loads(saved_chart["filter_json"]) if saved_chart and saved_chart["filter_json"] else {}
@@ -339,10 +352,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     )
     
     # Filters in 3 columns
-    brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+    brand_families = sorted(df_filtered_with_a26["Brand Family"].dropna().unique().tolist())
     
     # Get all states for exclusion filter
-    all_states = sorted(df_filtered["State"].dropna().unique().tolist()) if "State" in df_filtered.columns else []
+    all_states = sorted(df_filtered_with_a26["State"].dropna().unique().tolist()) if "State" in df_filtered_with_a26.columns else []
     
     # Use saved families if available, otherwise default
     default_families = saved_families if saved_families else (brand_families[:2] if len(brand_families) > 2 else brand_families)
@@ -360,7 +373,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     with col2:
         if selected_families:
             brands_in_families = sorted(
-                df_filtered[df_filtered["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
+                df_filtered_with_a26[df_filtered_with_a26["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
             )
             # Always auto-select all brands from selected families
             selected_brands = st.multiselect(
@@ -384,18 +397,32 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             help="These states will be excluded from all sections below"
         )
     
-    # Apply state exclusion filter to df_filtered for all sections below
-    if excluded_states and "State" in df_filtered.columns:
-        df_filtered = df_filtered[~df_filtered["State"].isin(excluded_states)].copy()
+    # Apply state exclusion filter
+    if excluded_states and "State" in df_filtered_with_a26.columns:
+        df_filtered_with_a26 = df_filtered_with_a26[~df_filtered_with_a26["State"].isin(excluded_states)].copy()
+        df_filtered_no_a26 = df_filtered_no_a26[~df_filtered_no_a26["State"].isin(excluded_states)].copy()
         st.info(f"🚫 Excluding {len(excluded_states)} state(s) from all sections: {', '.join(excluded_states)}")
     
     # Keep a copy of the full segment data (all brands, after state exclusion) for MS denominator calculations
-    df_full_segment = df_filtered.copy()
+    df_full_segment = df_filtered_no_a26.copy()
+    
+    # Available years for Brand Chart (includes A26)
+    available_years_chart = ["A23", "A24", "A25", "A26"]
+    years_in_data_chart = [y for y in available_years_chart if y in df_filtered_with_a26["PRI Year"].unique()]
+    has_month_col = "Month" in df_filtered_with_a26.columns
+    ytd_months = ["July", "August", "September", "October"]
     
     # Preview chart
     if selected_brands:
-        df_chart = df_filtered[df_filtered["Brand"].isin(selected_brands)]
-        df_chart = df_chart[df_chart["PRI Year"].isin(years_in_data)]
+        df_chart = df_filtered_with_a26[df_filtered_with_a26["Brand"].isin(selected_brands)]
+        
+        # For A26, filter to July-Oct only
+        if "A26" in years_in_data_chart and has_month_col:
+            df_chart_a26_ytd = df_chart[(df_chart["PRI Year"] == "A26") & (df_chart["Month"].isin(ytd_months))]
+            df_chart_full_years = df_chart[df_chart["PRI Year"].isin(["A23", "A24", "A25"])]
+            df_chart = pd.concat([df_chart_full_years, df_chart_a26_ytd], ignore_index=True)
+        else:
+            df_chart = df_chart[df_chart["PRI Year"].isin(["A23", "A24", "A25"])]
         
         if not df_chart.empty:
             st.markdown("**Preview:**")
@@ -413,11 +440,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Calculate growth rates and CAGR for each brand
             growth_rates = {}
             cagr_values = {}
+            a26_ytd_growth_rates = {}
+            
             for _, row in pivot_wide.iterrows():
                 brand = row["Brand"]
                 ns_a23 = row.get("A23", 0) or 0
                 ns_a24 = row.get("A24", 0) or 0
                 ns_a25 = row.get("A25", 0) or 0
+                ns_a26_ytd = row.get("A26", 0) or 0  # This is YTD (July-Oct)
                 
                 # A24 Growth % (YoY from A23)
                 a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
@@ -428,21 +458,34 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # 2-Year CAGR (A23 to A25)
                 cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
                 
+                # A26 YTD Growth % (July-Oct A26 vs July-Oct A25)
+                if "A26" in years_in_data_chart and has_month_col:
+                    # Get A25 YTD (July-Oct) for comparison
+                    a25_ytd_data = df_chart[(df_chart["Brand"] == brand) & (df_chart["PRI Year"] == "A25") & (df_chart["Month"].isin(ytd_months))]
+                    ns_a25_ytd = a25_ytd_data["NS M INR"].sum() if not a25_ytd_data.empty else 0
+                    
+                    a26_ytd_growth = ((ns_a26_ytd - ns_a25_ytd) / ns_a25_ytd * 100) if ns_a25_ytd != 0 else 0
+                    a26_ytd_growth_rates[brand] = round(a26_ytd_growth, 1)
+                
                 growth_rates[brand] = {
                     "A23": None,  # No growth for base year - don't show anything
                     "A24": round(a24_growth, 1),
-                    "A25": round(a25_growth, 1)
+                    "A25": round(a25_growth, 1),
+                    "A26": a26_ytd_growth_rates.get(brand, None)  # YTD growth
                 }
                 cagr_values[brand] = round(cagr_2yr, 1)
             
             # Add growth rate text - empty for A23 (no growth rate for base year)
             chart_data["Growth Text"] = chart_data.apply(
-                lambda r: f"{growth_rates[r['Brand']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
+                lambda r: f"{growth_rates[r['Brand']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' and growth_rates[r['Brand']][r['PRI Year']] is not None else "",
                 axis=1
             )
             
-            # Sort brands by Brand Family total NS, then by brand total NS
-            brand_totals = chart_data.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
+            # Remove A26 from chart display (keep only in View Data table)
+            chart_data_for_display = chart_data[chart_data["PRI Year"] != "A26"].copy()
+            
+            # Sort brands by Brand Family total NS, then by brand total NS (excluding A26)
+            brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
             brand_totals.columns = ["Brand", "Brand Family", "Total"]
             
             family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
@@ -458,15 +501,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Use Plotly Express with professional color scheme
             import plotly.express as px
             
-            # Green color scheme - light to dark
+            # Green color scheme - light to dark (no A26 in chart)
             color_map = {
                 "A23": "#90EE90",  # Light Green
                 "A24": "#4CAF50",  # Medium Green
                 "A25": "#1B5E20"   # Dark Green
             }
             
+            # Year order for chart (no A26)
+            year_order = ["A23", "A24", "A25"]
+            
             fig = px.bar(
-                chart_data,
+                chart_data_for_display,
                 x="Brand",
                 y="NS M INR",
                 color="PRI Year",
@@ -474,7 +520,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 text="Growth Text",
                 height=500,
                 color_discrete_map=color_map,
-                category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand": brand_order}
+                category_orders={"PRI Year": year_order, "Brand": brand_order}
             )
             
             # Format growth rate text on top of bars
@@ -531,6 +577,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     axis=1
                 )
                 
+                # Add A26 YTD Growth % if A26 data exists
+                if "A26" in years_in_data_chart and has_month_col:
+                    summary_df["A26 YTD Growth %"] = summary_df.apply(
+                        lambda r: a26_ytd_growth_rates.get(r["Brand"], 0.0),
+                        axis=1
+                    )
+                
                 # Calculate Brand Family totals
                 family_summary = []
                 for family in summary_df["Brand Family"].unique():
@@ -540,13 +593,23 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     a23_total = family_data["A23"].sum() if "A23" in family_data.columns else 0
                     a24_total = family_data["A24"].sum() if "A24" in family_data.columns else 0
                     a25_total = family_data["A25"].sum() if "A25" in family_data.columns else 0
+                    a26_ytd_total = family_data["A26"].sum() if "A26" in family_data.columns else 0
                     
                     # Calculate family-level growth rates
                     a24_growth = ((a24_total - a23_total) / a23_total * 100) if a23_total != 0 else 0
                     a25_growth = ((a25_total - a24_total) / a24_total * 100) if a24_total != 0 else 0
                     cagr_2yr = (((a25_total / a23_total) ** 0.5 - 1) * 100) if a23_total != 0 else 0
                     
-                    family_summary.append({
+                    # A26 YTD Growth for family
+                    if "A26" in years_in_data_chart and has_month_col:
+                        # Get A25 YTD for family
+                        family_brands = family_data["Brand"].tolist()
+                        a25_ytd_family = df_chart[(df_chart["Brand"].isin(family_brands)) & (df_chart["PRI Year"] == "A25") & (df_chart["Month"].isin(ytd_months))]["NS M INR"].sum()
+                        a26_ytd_growth_family = ((a26_ytd_total - a25_ytd_family) / a25_ytd_family * 100) if a25_ytd_family != 0 else 0
+                    else:
+                        a26_ytd_growth_family = 0.0
+                    
+                    family_row = {
                         "Brand Family": family,
                         "Brand": f"📊 {family} Total",
                         "A23": a23_total,
@@ -556,7 +619,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         "A25 Growth %": round(a25_growth, 1),
                         "2-Yr CAGR %": round(cagr_2yr, 1),
                         "is_family_total": True
-                    })
+                    }
+                    
+                    if "A26" in years_in_data_chart and has_month_col:
+                        family_row["A26"] = a26_ytd_total
+                        family_row["A26 YTD Growth %"] = round(a26_ytd_growth_family, 1)
+                    
+                    family_summary.append(family_row)
                 
                 # Add is_family_total flag to brand rows
                 summary_df["is_family_total"] = False
@@ -582,7 +651,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 combined_df = combined_df.rename(columns=rename_map)
                 
-                # Reorder columns
+                # Add A26 YTD columns if available
+                if "A26" in combined_df.columns:
+                    combined_df = combined_df.rename(columns={"A26": "A26 YTD NS M INR"})
+                
+                # Reorder columns - A26 YTD Growth % at the end
                 column_order = ["Brand Family", "Brand"]
                 if "A23 NS M INR" in combined_df.columns:
                     column_order.append("A23 NS M INR")
@@ -590,29 +663,33 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     column_order.append("A24 NS M INR")
                 if "A25 NS M INR" in combined_df.columns:
                     column_order.append("A25 NS M INR")
+                if "A26 YTD NS M INR" in combined_df.columns:
+                    column_order.append("A26 YTD NS M INR")
                 if "A24 Growth %" in combined_df.columns:
                     column_order.append("A24 Growth %")
                 if "A25 Growth %" in combined_df.columns:
                     column_order.append("A25 Growth %")
                 column_order.append("2-Yr CAGR %")
+                if "A26 YTD Growth %" in combined_df.columns:
+                    column_order.append("A26 YTD Growth %")  # Put at the end
                 
                 # Select and display columns
                 display_df = combined_df[column_order].copy()
                 
                 # Format NS columns with commas
-                for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR"]:
+                for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR", "A26 YTD NS M INR"]:
                     if col in display_df.columns:
                         display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
                 
                 # Format growth columns with % symbol
-                for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %"]:
+                for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %", "A26 YTD Growth %"]:
                     if col in display_df.columns:
                         display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
                 
                 # Apply styling to highlight family totals
                 def highlight_family_totals(row):
                     if combined_df.loc[row.name, "is_family_total"]:
-                        return ['background-color: #E3F2FD; font-weight: bold; border-top: 2px solid #2196F3'] * len(row)
+                        return ['background-color: #E8F5E9; font-weight: bold; border-top: 2px solid #4CAF50; border-bottom: 1px solid #4CAF50'] * len(row)
                     return [''] * len(row)
                 
                 styled_table = display_df.style.apply(highlight_family_totals, axis=1)
@@ -672,6 +749,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     st.markdown("---")
     
+    # From this point forward, all sections use df_filtered without A26
+    df_filtered = df_filtered_no_a26
+    
     # Brand View: Key Competitors Configuration
     st.markdown("### Brand View: Key Competitors")
     st.caption("NS YoY Growth and CAGR for Key Competitor Brand Families")
@@ -721,7 +801,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         # Brand filter (only show brands from Section 2, filtered by selected families)
         if selected_families_family:
             # Filter brands that belong to selected families
-            df_temp = df_filtered[df_filtered["Brand Family"].isin(selected_families_family)]
+            df_temp = df_filtered_no_a26[df_filtered_no_a26["Brand Family"].isin(selected_families_family)]
             available_brands_family = [b for b in selected_brands if b in df_temp["Brand"].unique()]
             
             st.markdown("**Select Brands to include:**")
@@ -738,8 +818,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Preview chart if brands are selected
     if selected_brands_family:
-        df_family_chart = df_filtered[df_filtered["Brand"].isin(selected_brands_family)]
-        df_family_chart = df_family_chart[df_family_chart["PRI Year"].isin(years_in_data)]
+        df_family_chart = df_filtered_no_a26[df_filtered_no_a26["Brand"].isin(selected_brands_family)]
+        df_family_chart = df_family_chart[df_family_chart["PRI Year"].isin(["A23", "A24", "A25"])]
         
         # Apply state exclusion from Section 2
         if excluded_states and "State" in df_family_chart.columns:
@@ -4266,7 +4346,10 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
 
 
 def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> pd.DataFrame | None:
-    """Create manufacturing pivot table with YoY growth and CAGR (no base year shown)"""
+    """Create manufacturing pivot table with YoY growth and CAGR
+    
+    For A26: Calculate YTD growth (July-Oct A26 vs July-Oct A25)
+    """
     
     # Filter to selected years
     df_years = df[df["PRI Year"].isin(selected_years)].copy()
@@ -4274,9 +4357,24 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
     if df_years.empty:
         return None
     
-    # Create pivot
+    # Check if Month column exists for A26 YTD calculation
+    has_month_col = "Month" in df_years.columns
+    
+    # Month names for July-Oct YTD
+    ytd_months = ["July", "August", "September", "October"]
+    
+    # For A26 YTD calculation, we need July-Oct data from both A25 and A26
+    # But we should NOT mix them with full year data to avoid double counting
+    if "A26" in selected_years and has_month_col:
+        # Keep full year data for A23, A24, A25 ONLY
+        df_combined = df_years[df_years["PRI Year"].isin(["A23", "A24", "A25"])].copy()
+    else:
+        # No Month column or no A26 data - use full year data
+        df_combined = df_years.copy()
+    
+    # Create pivot for full year data
     pivot = pd.pivot_table(
-        df_years,
+        df_combined[df_combined["PRI Year"].isin(["A23", "A24", "A25"])],
         index="Mfg Com",
         columns="PRI Year",
         values="NS M INR",
@@ -4284,8 +4382,9 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
         fill_value=0
     )
     
-    # Reindex to ensure year order
-    pivot = pivot.reindex(columns=selected_years, fill_value=0)
+    # Reindex to ensure year order (A23, A24, A25 only for now)
+    years_for_pivot = [y for y in ["A23", "A24", "A25"] if y in selected_years]
+    pivot = pivot.reindex(columns=years_for_pivot, fill_value=0)
     
     # Add Segment Total row
     segment_total = pivot.sum(axis=0).to_frame().T
@@ -4295,10 +4394,10 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
     # Keep only growth columns (no base year)
     columns_to_keep = ["Mfg Com"]
     
-    # Calculate YoY Growth %
-    for i in range(1, len(selected_years)):
-        prev_year = selected_years[i-1]
-        curr_year = selected_years[i]
+    # Calculate YoY Growth % for A24 and A25
+    for i in range(1, len(years_for_pivot)):
+        prev_year = years_for_pivot[i-1]
+        curr_year = years_for_pivot[i]
         if prev_year in pivot.columns and curr_year in pivot.columns:
             col_name = f"{curr_year} Growth %"
             pivot[col_name] = ((pivot[curr_year] - pivot[prev_year]) / pivot[prev_year] * 100).replace([np.inf, -np.inf], 0).fillna(0).round(1)
@@ -4314,6 +4413,65 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
             0
         ).round(1)
         columns_to_keep.append("2 Yr CAGR %")
+    
+    # Calculate A26 YTD Growth % (July-Oct A26 vs July-Oct A25)
+    if "A26" in selected_years and has_month_col:
+        # Month names for July-Oct
+        ytd_months = ["July", "August", "September", "October"]
+        
+        # Calculate A26 YTD (July-Oct) - use df_years, not df_combined
+        a26_ytd = df_years[(df_years["PRI Year"] == "A26") & (df_years["Month"].isin(ytd_months))]
+        a26_ytd_pivot = pd.pivot_table(
+            a26_ytd,
+            index="Mfg Com",
+            values="NS M INR",
+            aggfunc="sum",
+            fill_value=0
+        )
+        
+        # Calculate A25 YTD (July-Oct) for comparison - use df_years, not df_combined
+        a25_ytd = df_years[(df_years["PRI Year"] == "A25") & (df_years["Month"].isin(ytd_months))]
+        a25_ytd_pivot = pd.pivot_table(
+            a25_ytd,
+            index="Mfg Com",
+            values="NS M INR",
+            aggfunc="sum",
+            fill_value=0
+        )
+        
+        # Add Segment Total for YTD calculations
+        a26_ytd_total = a26_ytd_pivot.sum().item() if not a26_ytd_pivot.empty else 0.0
+        a25_ytd_total = a25_ytd_pivot.sum().item() if not a25_ytd_pivot.empty else 0.0
+        
+        # Calculate A26 YTD Growth % for each Mfg Com
+        pivot["A26 YTD Growth %"] = 0.0
+        for mfg_com in pivot.index:
+            if mfg_com == "Segment Total":
+                # Use totals for Segment Total
+                a26_val = a26_ytd_total
+                a25_val = a25_ytd_total
+            else:
+                # Use individual Mfg Com values - extract scalar value
+                if mfg_com in a26_ytd_pivot.index:
+                    a26_series = a26_ytd_pivot.loc[mfg_com]
+                    a26_val = a26_series.item() if hasattr(a26_series, 'item') else float(a26_series)
+                else:
+                    a26_val = 0.0
+                
+                if mfg_com in a25_ytd_pivot.index:
+                    a25_series = a25_ytd_pivot.loc[mfg_com]
+                    a25_val = a25_series.item() if hasattr(a25_series, 'item') else float(a25_series)
+                else:
+                    a25_val = 0.0
+            
+            # Calculate growth
+            if a25_val > 0:
+                growth = ((a26_val - a25_val) / a25_val * 100)
+                pivot.loc[mfg_com, "A26 YTD Growth %"] = round(growth, 1)
+            else:
+                pivot.loc[mfg_com, "A26 YTD Growth %"] = 0.0
+        
+        columns_to_keep.append("A26 YTD Growth %")
     
     # Reset index to make Mfg Com a column
     pivot = pivot.reset_index()
