@@ -1079,11 +1079,18 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         family_df = pd.DataFrame(family_summary)
         combined_df = pd.concat([family_df, summary_df], ignore_index=True)
         
-        # Sort by Brand Family, then by is_family_total (True first), then by Brand
+        # Sort brand families by A25 NS (biggest first), then by is_family_total (True first), then by Brand
+        # First, create a family order based on A25 totals
+        family_order = family_df.sort_values("A25", ascending=False)["Brand Family"].tolist()
+        combined_df["family_order"] = combined_df["Brand Family"].map({fam: idx for idx, fam in enumerate(family_order)})
+        
         combined_df = combined_df.sort_values(
-            by=["Brand Family", "is_family_total", "Brand"],
+            by=["family_order", "is_family_total", "Brand"],
             ascending=[True, False, True]
         ).reset_index(drop=True)
+        
+        # Drop the helper column
+        combined_df = combined_df.drop(columns=["family_order"])
         
         # Rename NS columns to include "NS M INR"
         rename_map = {}
