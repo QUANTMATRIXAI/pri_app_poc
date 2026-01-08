@@ -1844,20 +1844,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             name='States'
                         ))
                         
-                        # Add reference lines
-                        fig.add_hline(y=ai_salience, line_dash="dash", line_color="#9B59B6", line_width=2,
-                                      annotation_text=f"A25 Seg. Sal. ({ai_salience:.1f}%) All India",
-                                      annotation_position="top left",
-                                      annotation=dict(font=dict(size=11, color="#9B59B6")))
-                        
-                        fig.add_vline(x=ai_ms, line_dash="dash", line_color="#E74C3C", line_width=2,
-                                      annotation_text=f"A25 Brand Fam MS ({ai_ms:.1f}%) All India",
-                                      annotation_position="top",
-                                      annotation=dict(font=dict(size=11, color="#E74C3C")))
+                        # Add reference lines (without annotation_text, we'll add them separately)
+                        fig.add_hline(y=ai_salience, line_dash="dash", line_color="#9B59B6", line_width=2)
+                        fig.add_vline(x=ai_ms, line_dash="dash", line_color="#E74C3C", line_width=2)
                         
                         fig.update_layout(
-                            xaxis_title="X-Axis: State Segment Salience (Brand FAM A25 MS %)",
-                            yaxis_title="Y-Axis: State Segment Salience Gr (LY)",
+                            xaxis_title="X-Axis: Brand Fam A25 MS",
+                            yaxis_title="Y-Axis: Segment Salience to TBA A25",
                             height=600,
                             showlegend=False,
                             hovermode='closest',
@@ -1878,6 +1871,40 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                 title_font=dict(size=13, color='#2C3E50')
                             ),
                             font=dict(family="Arial, sans-serif", size=12, color='#2C3E50')
+                        )
+                        
+                        # Add all annotations together
+                        fig.add_annotation(
+                            text=f"A25 Seg. Sal. ({ai_salience:.1f}%) All India",
+                            xref="paper",
+                            yref="y",
+                            x=0.98,
+                            y=ai_salience,
+                            showarrow=False,
+                            font=dict(size=11, color="#9B59B6", family="Arial"),
+                            xanchor='right',
+                            yanchor='bottom'
+                        )
+                        
+                        fig.add_annotation(
+                            text=f"A25 Brand Fam MS ({ai_ms:.1f}%) All India",
+                            xref="x", yref="paper",
+                            x=ai_ms, y=1.02,
+                            showarrow=False,
+                            font=dict(size=11, color="#E74C3C", family="Arial"),
+                            xanchor='center',
+                            yanchor='bottom'
+                        )
+                        
+                        fig.add_annotation(
+                            text="Bubble Size: Segment Contribution to All India",
+                            xref="paper",
+                            yref="paper",
+                            x=0.01,
+                            y=-0.15,
+                            showarrow=False,
+                            font=dict(size=12, color='#2C3E50'),
+                            xanchor='left'
                         )
                         
                         st.plotly_chart(fig, use_container_width=True)
