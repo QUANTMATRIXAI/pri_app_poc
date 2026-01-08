@@ -8,12 +8,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from app_core.charts import delete_charts_for_section, get_charts_for_segment, save_chart
+from app_core.charts import delete_charts_for_section, get_charts_for_segment, save_chart, check_chart_needs_refresh, update_chart_dataset, update_chart_config
 from app_core.constants import SECTIONS
 from app_core.database import get_connection
 from app_core.filters import apply_filters
 from app_core.media import delete_media_for_section, save_media_upload
-from app_core.tables import delete_tables_for_section, get_tables_for_segment, save_table
+from app_core.tables import delete_tables_for_section, get_tables_for_segment, save_table, check_table_needs_refresh, update_table_dataset, get_table_by_id
 from app_ui.battlegrounds import render_battleground_notes_editor
 from app_core.uploads import (
     delete_upload,
@@ -27,6 +27,34 @@ from app_core.uploads import (
 )
 
 from .charts import plot_chart
+
+
+def get_refresh_status(segment_id: int, current_dataset_id: int) -> dict:
+    """Get count of items needing refresh vs already up-to-date for a segment."""
+    tables = get_tables_for_segment(segment_id)
+    charts = get_charts_for_segment(segment_id)
+    
+    needs_refresh = 0
+    up_to_date = 0
+    
+    for table in tables:
+        if table["dataset_id"] != current_dataset_id:
+            needs_refresh += 1
+        else:
+            up_to_date += 1
+    
+    for chart in charts:
+        if chart["dataset_id"] != current_dataset_id:
+            needs_refresh += 1
+        else:
+            up_to_date += 1
+    
+    total = needs_refresh + up_to_date
+    return {
+        "needs_refresh": needs_refresh,
+        "up_to_date": up_to_date,
+        "total": total
+    }
 
 
 def format_comment_preview(text: str) -> str:
@@ -170,6 +198,45 @@ def render_data_upload(current_user: Dict, segment: Dict) -> None:
     note = f"Using latest {'global' if using_global else 'segment'} upload: **{latest['filename']}**"
     st.info(f"{note} | Segment rows: {len(df_filtered)} | Filter: {filter_column} = '{excel_name}' | Years: {', '.join(years_without_a26)}")
 
+    # Sidebar: Refresh Status with better styling
+    refresh_status = get_refresh_status(segment["id"], latest["id"])
+    
+    # Create a nice styled section header
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📊 Data Status")
+    
+    if refresh_status['total'] == 0:
+        st.sidebar.info("No saved items yet.")
+    else:
+        # Use HTML for better visibility
+        if refresh_status['needs_refresh'] > 0:
+            st.sidebar.markdown(f"""
+                <div style='background: linear-gradient(135deg, #FFF3CD 0%, #FFE082 100%); padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; border-left: 4px solid #FFA000;'>
+                    <div style='font-size: 0.85rem; color: #856404; font-weight: 600;'>⚠️ PENDING REFRESH</div>
+                    <div style='font-size: 2rem; font-weight: bold; color: #E65100;'>{refresh_status['needs_refresh']}</div>
+                    <div style='font-size: 0.75rem; color: #856404;'>item(s) need update</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.sidebar.markdown(f"""
+            <div style='background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%); padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; border-left: 4px solid #4CAF50;'>
+                <div style='font-size: 0.85rem; color: #2E7D32; font-weight: 600;'>✅ UP TO DATE</div>
+                <div style='font-size: 2rem; font-weight: bold; color: #1B5E20;'>{refresh_status['up_to_date']}</div>
+                <div style='font-size: 0.75rem; color: #2E7D32;'>item(s) current</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Progress bar style indicator
+        if refresh_status['total'] > 0:
+            progress = refresh_status['up_to_date'] / refresh_status['total']
+            st.sidebar.progress(progress)
+            st.sidebar.caption(f"{refresh_status['up_to_date']}/{refresh_status['total']} items synced")
+        
+        if refresh_status['needs_refresh'] > 0:
+            st.sidebar.warning("Scroll down to find items with 🔄 Refresh & Verify button")
+    
+    st.sidebar.markdown("---")
+
     # Data preview in expander (closed by default)
     with st.expander("📊 Segment Data Preview", expanded=False):
         if df_filtered.empty:
@@ -248,6 +315,19 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### Manufacturing Co. View")
     st.caption("NS YoY Growth and CAGR by Manufacturing Company")
     
+    # Re-fetch saved_pivot to get the latest dataset_id (in case it was just updated)
+    existing_tables_fresh = get_tables_for_segment(segment["id"])
+    saved_pivot_fresh = next((t for t in existing_tables_fresh if t["section"] == "NS Landscape" and t["name"] == "Manufacturing Pivot"), None)
+    
+    # Check if saved pivot needs refresh (uses outdated dataset)
+    needs_refresh_pivot = False
+    if saved_pivot_fresh is not None:
+        saved_dataset_id = saved_pivot_fresh["dataset_id"]
+        needs_refresh_pivot = saved_dataset_id != dataset_id
+    
+    if needs_refresh_pivot:
+        st.warning("⚠️ **New data detected!** The saved Manufacturing Pivot uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
+    
     # Editable title - pre-populated with saved value
     pivot_title = st.text_input(
         "Slide Title",
@@ -287,43 +367,84 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=120
     )
     
-    if st.button("Save Manufacturing Pivot to Dashboard", key=f"save_ns_pivot_{segment['id']}"):
-        if not selected_years_pivot:
-            st.error("Please select at least one year.")
-        else:
-            # Delete existing pivot for this section
-            delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
-            
-            # Save configuration with title
-            filter_config = json.dumps({
-                "years": selected_years_pivot,
-                "title": pivot_title
-            })
-            save_table(
-                name="Manufacturing Pivot",
-                dataset_id=dataset_id,
-                columns=["Mfg Com", "PRI Year", "NS M INR"],  # Will be pivoted
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="NS Landscape",
-                filter_json=filter_config,
-                comment=pivot_comment
-            )
-            st.success("Manufacturing Pivot saved to dashboard!")
-            if hasattr(st, "rerun"):
-                st.rerun()
+    # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+    if needs_refresh_pivot:
+        col_btn1, col_btn2 = st.columns([1, 1])
+        with col_btn1:
+            if st.button("🔄 Refresh & Verify", key=f"refresh_ns_pivot_{segment['id']}", type="primary"):
+                if not selected_years_pivot:
+                    st.error("Please select at least one year.")
+                else:
+                    # Delete existing pivot for this section
+                    delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
+                    
+                    # Save configuration with current UI selections + latest dataset
+                    filter_config = json.dumps({
+                        "years": selected_years_pivot,
+                        "title": pivot_title
+                    })
+                    save_table(
+                        name="Manufacturing Pivot",
+                        dataset_id=dataset_id,
+                        columns=["Mfg Com", "PRI Year", "NS M INR"],
+                        created_by=current_user["username"],
+                        segment_id=segment["id"],
+                        section="NS Landscape",
+                        filter_json=filter_config,
+                        comment=pivot_comment
+                    )
+                    st.success("✅ Manufacturing Pivot refreshed with latest data!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+        with col_btn2:
+            if saved_pivot:
+                if st.button("🗑️ Delete Manufacturing Pivot", key=f"delete_ns_pivot_{segment['id']}", type="secondary"):
+                    delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
+                    st.success("Manufacturing Pivot deleted!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+    else:
+        if st.button("Save Manufacturing Pivot to Dashboard", key=f"save_ns_pivot_{segment['id']}"):
+            if not selected_years_pivot:
+                st.error("Please select at least one year.")
             else:
-                st.experimental_rerun()
-    
-    # Delete button next to save
-    if saved_pivot:
-        if st.button("🗑️ Delete Manufacturing Pivot", key=f"delete_ns_pivot_{segment['id']}", type="secondary"):
-            delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
-            st.success("Manufacturing Pivot deleted!")
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
+                # Delete existing pivot for this section
+                delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
+                
+                # Save configuration with title
+                filter_config = json.dumps({
+                    "years": selected_years_pivot,
+                    "title": pivot_title
+                })
+                save_table(
+                    name="Manufacturing Pivot",
+                    dataset_id=dataset_id,
+                    columns=["Mfg Com", "PRI Year", "NS M INR"],
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    filter_json=filter_config,
+                    comment=pivot_comment
+                )
+                st.success("Manufacturing Pivot saved to dashboard!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+        
+        # Delete button next to save
+        if saved_pivot:
+            if st.button("🗑️ Delete Manufacturing Pivot", key=f"delete_ns_pivot_{segment['id']}", type="secondary"):
+                delete_tables_for_section(segment["id"], "NS Landscape", "Manufacturing Pivot")
+                st.success("Manufacturing Pivot deleted!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     
     st.markdown("---")
     
@@ -335,6 +456,19 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### Brand View")
     st.caption("NS YoY Growth and CAGR by Brands (includes A26 YTD)")
     
+    # Re-fetch saved_chart to get the latest dataset_id
+    existing_charts_fresh = get_charts_for_segment(segment["id"])
+    saved_chart_fresh = next((c for c in existing_charts_fresh if c["section"] == "NS Landscape" and c["name"] == "Brand Performance"), None)
+    
+    # Check if saved chart needs refresh (uses outdated dataset)
+    needs_refresh_chart = False
+    if saved_chart_fresh is not None:
+        saved_chart_dataset_id = saved_chart_fresh["dataset_id"]
+        needs_refresh_chart = saved_chart_dataset_id != dataset_id
+    
+    if needs_refresh_chart:
+        st.warning("⚠️ **New data detected!** The saved Brand Performance chart uses an older dataset. Update your selections below if needed, then click 'Refresh & Verify' to save to dashboard.")
+    
     # Parse saved chart config
     chart_config = json.loads(saved_chart["filter_json"]) if saved_chart and saved_chart["filter_json"] else {}
     saved_families = chart_config.get("brand_families", [])
@@ -342,6 +476,33 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     saved_excluded_states = chart_config.get("excluded_states", [])
     saved_chart_title = chart_config.get("title", "Brand Performance")
     saved_chart_comment = saved_chart["comment"] if saved_chart else ""
+    
+    # Filters in 3 columns
+    brand_families = sorted(df_filtered_with_a26["Brand Family"].dropna().unique().tolist())
+    
+    # Get all states for exclusion filter
+    all_states = sorted(df_filtered_with_a26["State"].dropna().unique().tolist()) if "State" in df_filtered_with_a26.columns else []
+    
+    # Check for missing saved items and show warnings
+    if saved_families:
+        missing_families = [f for f in saved_families if f not in brand_families]
+        if missing_families:
+            st.error(f"⚠️ **Missing Brand Families in new data:** {', '.join(missing_families)}. These were in your saved config but no longer exist.")
+    
+    if saved_brands:
+        all_brands_in_data = df_filtered_with_a26["Brand"].dropna().unique().tolist()
+        missing_brands = [b for b in saved_brands if b not in all_brands_in_data]
+        if missing_brands:
+            st.error(f"⚠️ **Missing Brands in new data:** {', '.join(missing_brands)}. These were in your saved config but no longer exist.")
+    
+    if saved_excluded_states:
+        missing_excluded = [s for s in saved_excluded_states if s not in all_states]
+        if missing_excluded:
+            st.warning(f"⚠️ **Missing excluded states in new data:** {', '.join(missing_excluded)}. These exclusions will be ignored.")
+    
+    # Use saved families if available (filter to only valid ones), otherwise default
+    valid_saved_families = [f for f in saved_families if f in brand_families] if saved_families else []
+    default_families = valid_saved_families if valid_saved_families else (brand_families[:2] if len(brand_families) > 2 else brand_families)
     
     # Editable title - pre-populated with saved value
     chart_title = st.text_input(
@@ -356,9 +517,6 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Get all states for exclusion filter
     all_states = sorted(df_filtered_with_a26["State"].dropna().unique().tolist()) if "State" in df_filtered_with_a26.columns else []
-    
-    # Use saved families if available, otherwise default
-    default_families = saved_families if saved_families else (brand_families[:2] if len(brand_families) > 2 else brand_families)
     
     col1, col2, col3 = st.columns(3)
     
@@ -711,48 +869,94 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=120
     )
     
-    if st.button("Save Chart to Dashboard", key=f"save_ns_chart_{segment['id']}"):
-        if not selected_families or not selected_brands:
-            st.error("Please select Brand Families and at least one Brand.")
-        else:
-            # Delete existing chart for this section
-            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
-            
-            # Save configuration with title
-            filter_config = json.dumps({
-                "brand_families": selected_families,
-                "brands": selected_brands,
-                "excluded_states": excluded_states,
-                "years": years_in_data,
-                "title": chart_title
-            })
-            save_chart(
-                name="Brand Performance",
-                chart_type="bar",
-                x_col="Brand",
-                y_cols=["NS M INR"],
-                dataset_id=dataset_id,
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="NS Landscape",
-                filter_json=filter_config,
-                comment=chart_comment
-            )
-            st.success("Brand Performance Chart saved to dashboard!")
-            if hasattr(st, "rerun"):
-                st.rerun()
+    # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+    if needs_refresh_chart:
+        col_btn1, col_btn2 = st.columns([1, 1])
+        with col_btn1:
+            if st.button("🔄 Refresh & Verify", key=f"refresh_ns_chart_{segment['id']}", type="primary"):
+                if not selected_families or not selected_brands:
+                    st.error("Please select Brand Families and at least one Brand.")
+                else:
+                    # Delete existing chart for this section
+                    delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
+                    
+                    # Save configuration with current UI selections + latest dataset
+                    filter_config = json.dumps({
+                        "brand_families": selected_families,
+                        "brands": selected_brands,
+                        "excluded_states": excluded_states,
+                        "years": years_in_data,
+                        "title": chart_title
+                    })
+                    save_chart(
+                        name="Brand Performance",
+                        chart_type="bar",
+                        x_col="Brand",
+                        y_cols=["NS M INR"],
+                        dataset_id=dataset_id,
+                        created_by=current_user["username"],
+                        segment_id=segment["id"],
+                        section="NS Landscape",
+                        filter_json=filter_config,
+                        comment=chart_comment
+                    )
+                    st.success("✅ Brand Performance Chart refreshed with latest data!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+        with col_btn2:
+            if saved_chart:
+                if st.button("🗑️ Delete Brand Performance Chart", key=f"delete_ns_chart_{segment['id']}", type="secondary"):
+                    delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
+                    st.success("Brand Performance Chart deleted!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+    else:
+        if st.button("Save Chart to Dashboard", key=f"save_ns_chart_{segment['id']}"):
+            if not selected_families or not selected_brands:
+                st.error("Please select Brand Families and at least one Brand.")
             else:
-                st.experimental_rerun()
-    
-    # Delete button next to save
-    if saved_chart:
-        if st.button("🗑️ Delete Brand Performance Chart", key=f"delete_ns_chart_{segment['id']}", type="secondary"):
-            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
-            st.success("Brand Performance Chart deleted!")
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
+                # Delete existing chart for this section
+                delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
+                
+                # Save configuration with title
+                filter_config = json.dumps({
+                    "brand_families": selected_families,
+                    "brands": selected_brands,
+                    "excluded_states": excluded_states,
+                    "years": years_in_data,
+                    "title": chart_title
+                })
+                save_chart(
+                    name="Brand Performance",
+                    chart_type="bar",
+                    x_col="Brand",
+                    y_cols=["NS M INR"],
+                    dataset_id=dataset_id,
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    filter_json=filter_config,
+                    comment=chart_comment
+                )
+                st.success("Brand Performance Chart saved to dashboard!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+        
+        # Delete button next to save
+        if saved_chart:
+            if st.button("🗑️ Delete Brand Performance Chart", key=f"delete_ns_chart_{segment['id']}", type="secondary"):
+                delete_charts_for_section(segment["id"], "NS Landscape", "Brand Performance")
+                st.success("Brand Performance Chart deleted!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     
     st.markdown("---")
     
@@ -763,10 +967,19 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### Brand View: Key Competitors")
     st.caption("NS YoY Growth and CAGR for Key Competitor Brand Families")
     
-    # Load existing saved chart
-    existing_charts = get_charts_for_segment(segment["id"])
-    saved_family_chart = next((c for c in existing_charts if c["section"] == "NS Landscape" and c["name"] == "Brand Family Performance"), None)
+    # Load existing saved chart (fresh fetch for accurate dataset_id check)
+    existing_charts_family = get_charts_for_segment(segment["id"])
+    saved_family_chart = next((c for c in existing_charts_family if c["section"] == "NS Landscape" and c["name"] == "Brand Family Performance"), None)
     saved_family_comment = saved_family_chart["comment"] if saved_family_chart else ""
+    
+    # Check if saved chart needs refresh (uses outdated dataset)
+    needs_refresh_family_chart = False
+    if saved_family_chart is not None:
+        saved_family_dataset_id = saved_family_chart["dataset_id"]
+        needs_refresh_family_chart = saved_family_dataset_id != dataset_id
+    
+    if needs_refresh_family_chart:
+        st.warning("⚠️ **New data detected!** The saved Key Competitors chart uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
     
     # Parse saved config
     if saved_family_chart and saved_family_chart["filter_json"]:
@@ -946,53 +1159,111 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         height=120
     )
     
-    if st.button("Save Chart to Dashboard", key=f"save_family_chart_{segment['id']}"):
-        if not selected_families_family or not selected_brands_family:
-            st.error("Please select Brand Families and Brands.")
-        else:
-            # Delete existing chart
-            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
-            
-            # Save configuration with Section 2.5 filters (use Section 2 state exclusions)
-            filter_config = json.dumps({
-                "brand_families": selected_families_family,
-                "brands": selected_brands_family,
-                "excluded_states": excluded_states,  # Use Section 2 state exclusions
-                "years": years_in_data,
-                "title": family_chart_title
-            })
-            save_chart(
-                name="Brand Family Performance",
-                chart_type="bar",
-                x_col="Brand Family",
-                y_cols=["NS M INR"],
-                dataset_id=dataset_id,
-                created_by=current_user["username"],
-                segment_id=segment["id"],
-                section="NS Landscape",
-                filter_json=filter_config,
-                comment=family_chart_comment
-            )
-            st.success("Brand Family Performance Chart saved to dashboard!")
-            if hasattr(st, "rerun"):
-                st.rerun()
+    # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+    if needs_refresh_family_chart:
+        col_btn1, col_btn2 = st.columns([1, 1])
+        with col_btn1:
+            if st.button("🔄 Refresh & Verify", key=f"refresh_family_chart_{segment['id']}", type="primary"):
+                if not selected_families_family or not selected_brands_family:
+                    st.error("Please select Brand Families and Brands.")
+                else:
+                    # Delete existing chart
+                    delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
+                    
+                    # Save configuration with current UI selections + latest dataset
+                    filter_config = json.dumps({
+                        "brand_families": selected_families_family,
+                        "brands": selected_brands_family,
+                        "excluded_states": excluded_states,
+                        "years": years_in_data,
+                        "title": family_chart_title
+                    })
+                    save_chart(
+                        name="Brand Family Performance",
+                        chart_type="bar",
+                        x_col="Brand Family",
+                        y_cols=["NS M INR"],
+                        dataset_id=dataset_id,
+                        created_by=current_user["username"],
+                        segment_id=segment["id"],
+                        section="NS Landscape",
+                        filter_json=filter_config,
+                        comment=family_chart_comment
+                    )
+                    st.success("✅ Key Competitors Chart refreshed with latest data!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+        with col_btn2:
+            if saved_family_chart:
+                if st.button("🗑️ Delete Key Competitors Chart", key=f"delete_ns_family_chart_{segment['id']}", type="secondary"):
+                    delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
+                    st.success("Key Competitors Chart deleted!")
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
+    else:
+        if st.button("Save Chart to Dashboard", key=f"save_family_chart_{segment['id']}"):
+            if not selected_families_family or not selected_brands_family:
+                st.error("Please select Brand Families and Brands.")
             else:
-                st.experimental_rerun()
-    
-    # Delete button next to save
-    if saved_family_chart:
-        if st.button("🗑️ Delete Brand Family Performance Chart", key=f"delete_ns_family_chart_{segment['id']}", type="secondary"):
-            delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
-            st.success("Brand Family Performance Chart deleted!")
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
+                # Delete existing chart
+                delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
+                
+                # Save configuration with Section 2.5 filters (use Section 2 state exclusions)
+                filter_config = json.dumps({
+                    "brand_families": selected_families_family,
+                    "brands": selected_brands_family,
+                    "excluded_states": excluded_states,  # Use Section 2 state exclusions
+                    "years": years_in_data,
+                    "title": family_chart_title
+                })
+                save_chart(
+                    name="Brand Family Performance",
+                    chart_type="bar",
+                    x_col="Brand Family",
+                    y_cols=["NS M INR"],
+                    dataset_id=dataset_id,
+                    created_by=current_user["username"],
+                    segment_id=segment["id"],
+                    section="NS Landscape",
+                    filter_json=filter_config,
+                    comment=family_chart_comment
+                )
+                st.success("Brand Family Performance Chart saved to dashboard!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+        
+        # Delete button next to save
+        if saved_family_chart:
+            if st.button("🗑️ Delete Key Competitors Chart", key=f"delete_ns_family_chart_{segment['id']}", type="secondary"):
+                delete_charts_for_section(segment["id"], "NS Landscape", "Brand Family Performance")
+                st.success("Key Competitors Chart deleted!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
     
     st.markdown("---")
     # 3. Zonal Pivot Table Configuration
     st.markdown("### Zonal View")
     st.caption("Market share, salience, growth rates and BTM for each zone")
+    
+    # Re-fetch saved_zonal to get the latest dataset_id
+    existing_tables_zonal = get_tables_for_segment(segment["id"])
+    saved_zonal_fresh = next((t for t in existing_tables_zonal if t["section"] == "NS Landscape" and t["name"] == "Zonal Pivot"), None)
+    
+    # Check if saved zonal needs refresh
+    needs_refresh_zonal = False
+    if saved_zonal_fresh is not None:
+        needs_refresh_zonal = saved_zonal_fresh["dataset_id"] != dataset_id
+    
+    if needs_refresh_zonal:
+        st.warning("⚠️ **New data detected!** The saved Zonal View uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
     
     # Parse saved zonal config
     zonal_config = json.loads(saved_zonal["filter_json"]) if saved_zonal and saved_zonal["filter_json"] else {}
@@ -1100,43 +1371,84 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=120
                 )
                 
-                if st.button("Save Zonal Table to Dashboard", key=f"save_ns_zonal_{segment['id']}"):
-                    # Delete existing zonal table
-                    delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
-                    
-                    # Save configuration with title
-                    filter_config = json.dumps({
-                        "brand_families": selected_families,
-                        "brands": selected_brands,
-                        "excluded_states": excluded_states,
-                        "year": "A25",
-                        "title": zonal_title
-                    })
-                    save_table(
-                        name="Zonal Pivot",
-                        dataset_id=dataset_id,
-                        columns=["Brand Family", "Brand", "Zone", "NS M INR"],
-                        created_by=current_user["username"],
-                        segment_id=segment["id"],
-                        section="NS Landscape",
-                        filter_json=filter_config,
-                        comment=zonal_comment
-                    )
-                    st.success("Zonal Pivot Table saved to dashboard!")
-                    if hasattr(st, "rerun"):
-                        st.rerun()
-                    else:
-                        st.experimental_rerun()
-                
-                # Delete button next to save
-                if saved_zonal:
-                    if st.button("🗑️ Delete Zonal Pivot", key=f"delete_ns_zonal_{segment['id']}", type="secondary"):
+                # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+                if needs_refresh_zonal:
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("🔄 Refresh & Verify", key=f"refresh_ns_zonal_{segment['id']}", type="primary"):
+                            # Delete existing zonal table
+                            delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
+                            
+                            # Save configuration with current UI selections + latest dataset
+                            filter_config = json.dumps({
+                                "brand_families": selected_families,
+                                "brands": selected_brands,
+                                "excluded_states": excluded_states,
+                                "year": "A25",
+                                "title": zonal_title
+                            })
+                            save_table(
+                                name="Zonal Pivot",
+                                dataset_id=dataset_id,
+                                columns=["Brand Family", "Brand", "Zone", "NS M INR"],
+                                created_by=current_user["username"],
+                                segment_id=segment["id"],
+                                section="NS Landscape",
+                                filter_json=filter_config,
+                                comment=zonal_comment
+                            )
+                            st.success("✅ Zonal Pivot Table refreshed with latest data!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+                    with col_btn2:
+                        if saved_zonal:
+                            if st.button("🗑️ Delete Zonal Pivot", key=f"delete_ns_zonal_{segment['id']}", type="secondary"):
+                                delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
+                                st.success("Zonal Pivot deleted!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                else:
+                    if st.button("Save Zonal Table to Dashboard", key=f"save_ns_zonal_{segment['id']}"):
+                        # Delete existing zonal table
                         delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
-                        st.success("Zonal Pivot deleted!")
+                        
+                        # Save configuration with title
+                        filter_config = json.dumps({
+                            "brand_families": selected_families,
+                            "brands": selected_brands,
+                            "excluded_states": excluded_states,
+                            "year": "A25",
+                            "title": zonal_title
+                        })
+                        save_table(
+                            name="Zonal Pivot",
+                            dataset_id=dataset_id,
+                            columns=["Brand Family", "Brand", "Zone", "NS M INR"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=zonal_comment
+                        )
+                        st.success("Zonal Pivot Table saved to dashboard!")
                         if hasattr(st, "rerun"):
                             st.rerun()
                         else:
                             st.experimental_rerun()
+                    
+                    # Delete button next to save
+                    if saved_zonal:
+                        if st.button("🗑️ Delete Zonal Pivot", key=f"delete_ns_zonal_{segment['id']}", type="secondary"):
+                            delete_tables_for_section(segment["id"], "NS Landscape", "Zonal Pivot")
+                            st.success("Zonal Pivot deleted!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
             else:
                 st.info("No data available for A25 with selected brands.")
     else:
@@ -1148,6 +1460,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 4. NORTH Zone State Drill-Down
     st.markdown("### North Zone")
     st.caption("Performance of key states within the zone")
+    
+    # Re-fetch saved_north to get the latest dataset_id
+    existing_tables_north = get_tables_for_segment(segment["id"])
+    saved_north_fresh = next((t for t in existing_tables_north if t["section"] == "NS Landscape" and t["name"] == "NORTH State Drill-Down"), None)
+    
+    # Check if saved north needs refresh
+    needs_refresh_north = False
+    if saved_north_fresh is not None:
+        needs_refresh_north = saved_north_fresh["dataset_id"] != dataset_id
+    
+    if needs_refresh_north:
+        st.warning("⚠️ **New data detected!** The saved North Zone uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
     
     # Parse saved NORTH config
     north_config = json.loads(saved_north["filter_json"]) if saved_north and saved_north["filter_json"] else {}
@@ -1220,6 +1544,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 available_states = sorted_states if preview_all_states else states_in_north
                 # Filter saved states to only include those still available (after exclusion)
                 valid_saved_states = [s for s in saved_north_states if s in available_states] if saved_north_states else []
+                
+                # Show warning for missing saved states
+                if saved_north_states:
+                    missing_states = [s for s in saved_north_states if s not in available_states]
+                    if missing_states:
+                        st.error(f"⚠️ **Missing states in new data:** {', '.join(missing_states)}. These were in your saved config but no longer exist in North Zone.")
+                
                 default_north_states = valid_saved_states if valid_saved_states else (available_states[:4] if len(available_states) > 4 else available_states)
                 selected_states = st.multiselect(
                     "Select Key States",
@@ -1296,53 +1627,87 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                if st.button("Save North Zone to Dashboard", key=f"save_ns_north_{segment['id']}"):
-                    if not selected_states:
-                        st.error("Please select at least one state for deep-dive.")
-                    else:
-                        # Delete existing
-                        delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
-                        
-                        # Combine both comments into a JSON structure
-                        comments_json = json.dumps({
-                            "top": north_comment_top,
-                            "bottom": north_comment_bottom
-                        })
-                        
-                        # Save configuration with title
-                        filter_config = json.dumps({
-                            "brand_families": selected_families,
-                            "brands": selected_brands,
-                            "excluded_states": excluded_states,
-                            "states": selected_states,
-                            "zone": "North Zone",
-                            "title": north_title
-                        })
-                        save_table(
-                            name="NORTH State Drill-Down",
-                            dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
-                            created_by=current_user["username"],
-                            segment_id=segment["id"],
-                            section="NS Landscape",
-                            filter_json=filter_config,
-                            comment=comments_json
-                        )
-                        st.success("NORTH Zone Drill-Down saved to dashboard!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
+                # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+                if needs_refresh_north:
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("🔄 Refresh & Verify", key=f"refresh_ns_north_{segment['id']}", type="primary"):
+                            if not selected_states:
+                                st.error("Please select at least one state for deep-dive.")
+                            else:
+                                delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
+                                comments_json = json.dumps({"top": north_comment_top, "bottom": north_comment_bottom})
+                                filter_config = json.dumps({
+                                    "brand_families": selected_families,
+                                    "brands": selected_brands,
+                                    "excluded_states": excluded_states,
+                                    "states": selected_states,
+                                    "zone": "North Zone",
+                                    "title": north_title
+                                })
+                                save_table(
+                                    name="NORTH State Drill-Down",
+                                    dataset_id=dataset_id,
+                                    columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                    created_by=current_user["username"],
+                                    segment_id=segment["id"],
+                                    section="NS Landscape",
+                                    filter_json=filter_config,
+                                    comment=comments_json
+                                )
+                                st.success("✅ NORTH Zone Drill-Down refreshed with latest data!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                    with col_btn2:
+                        if saved_north:
+                            if st.button("🗑️ Delete NORTH Zone Drill-Down", key=f"delete_ns_north_{segment['id']}", type="secondary"):
+                                delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
+                                st.success("NORTH Zone Drill-Down deleted!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                else:
+                    if st.button("Save North Zone to Dashboard", key=f"save_ns_north_{segment['id']}"):
+                        if not selected_states:
+                            st.error("Please select at least one state for deep-dive.")
                         else:
-                            st.experimental_rerun()
-                
-                # Delete button next to save
-                if saved_north:
-                    if st.button("🗑️ Delete NORTH Zone Drill-Down", key=f"delete_ns_north_{segment['id']}", type="secondary"):
-                        delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
-                        st.success("NORTH Zone Drill-Down deleted!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
-                        else:
-                            st.experimental_rerun()
+                            delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
+                            comments_json = json.dumps({"top": north_comment_top, "bottom": north_comment_bottom})
+                            filter_config = json.dumps({
+                                "brand_families": selected_families,
+                                "brands": selected_brands,
+                                "excluded_states": excluded_states,
+                                "states": selected_states,
+                                "zone": "North Zone",
+                                "title": north_title
+                            })
+                            save_table(
+                                name="NORTH State Drill-Down",
+                                dataset_id=dataset_id,
+                                columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                created_by=current_user["username"],
+                                segment_id=segment["id"],
+                                section="NS Landscape",
+                                filter_json=filter_config,
+                                comment=comments_json
+                            )
+                            st.success("NORTH Zone Drill-Down saved to dashboard!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+                    
+                    if saved_north:
+                        if st.button("🗑️ Delete NORTH Zone Drill-Down", key=f"delete_ns_north_{segment['id']}", type="secondary"):
+                            delete_tables_for_section(segment["id"], "NS Landscape", "NORTH State Drill-Down")
+                            st.success("NORTH Zone Drill-Down deleted!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1351,6 +1716,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 5. WEST+CSD Zone State Drill-Down
     st.markdown("### West + CSD Zone")
     st.caption("Performance of key states within the zone")
+    
+    # Re-fetch saved_west to get the latest dataset_id
+    existing_tables_west = get_tables_for_segment(segment["id"])
+    saved_west_fresh = next((t for t in existing_tables_west if t["section"] == "NS Landscape" and t["name"] == "WEST+CSD State Drill-Down"), None)
+    
+    # Check if saved west needs refresh
+    needs_refresh_west = False
+    if saved_west_fresh is not None:
+        needs_refresh_west = saved_west_fresh["dataset_id"] != dataset_id
+    
+    if needs_refresh_west:
+        st.warning("⚠️ **New data detected!** The saved West+CSD Zone uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
     
     # Parse saved WEST config
     west_config = json.loads(saved_west["filter_json"]) if saved_west and saved_west["filter_json"] else {}
@@ -1404,6 +1781,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 available_states_west = sorted_states_west if preview_all_west else states_in_west
                 # Filter saved states to only include those still available (after exclusion)
                 valid_saved_west = [s for s in saved_west_states if s in available_states_west] if saved_west_states else []
+                
+                # Show warning for missing saved states
+                if saved_west_states:
+                    missing_states_west = [s for s in saved_west_states if s not in available_states_west]
+                    if missing_states_west:
+                        st.error(f"⚠️ **Missing states in new data:** {', '.join(missing_states_west)}. These were in your saved config but no longer exist in West+CSD Zone.")
+                
                 default_west_states = valid_saved_west if valid_saved_west else (available_states_west[:4] if len(available_states_west) > 4 else available_states_west)
                 selected_states_west = st.multiselect(
                     "Select Key States",
@@ -1429,46 +1813,87 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                if st.button("Save West + CSD Zone to Dashboard", key=f"save_ns_west_{segment['id']}"):
-                    if not selected_states_west:
-                        st.error("Please select at least one state for deep-dive.")
-                    else:
-                        delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
-                        
-                        comments_json = json.dumps({"top": west_comment_top, "bottom": west_comment_bottom})
-                        filter_config = json.dumps({
-                            "brand_families": selected_families,
-                            "brands": selected_brands,
-                            "excluded_states": excluded_states,
-                            "states": selected_states_west,
-                            "zone": "West+CSD Zone",
-                            "title": west_title
-                        })
-                        save_table(
-                            name="WEST+CSD State Drill-Down",
-                            dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
-                            created_by=current_user["username"],
-                            segment_id=segment["id"],
-                            section="NS Landscape",
-                            filter_json=filter_config,
-                            comment=comments_json
-                        )
-                        st.success("WEST+CSD Zone Drill-Down saved to dashboard!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
+                # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+                if needs_refresh_west:
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("🔄 Refresh & Verify", key=f"refresh_ns_west_{segment['id']}", type="primary"):
+                            if not selected_states_west:
+                                st.error("Please select at least one state for deep-dive.")
+                            else:
+                                delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
+                                comments_json = json.dumps({"top": west_comment_top, "bottom": west_comment_bottom})
+                                filter_config = json.dumps({
+                                    "brand_families": selected_families,
+                                    "brands": selected_brands,
+                                    "excluded_states": excluded_states,
+                                    "states": selected_states_west,
+                                    "zone": "West+CSD Zone",
+                                    "title": west_title
+                                })
+                                save_table(
+                                    name="WEST+CSD State Drill-Down",
+                                    dataset_id=dataset_id,
+                                    columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                    created_by=current_user["username"],
+                                    segment_id=segment["id"],
+                                    section="NS Landscape",
+                                    filter_json=filter_config,
+                                    comment=comments_json
+                                )
+                                st.success("✅ WEST+CSD Zone Drill-Down refreshed with latest data!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                    with col_btn2:
+                        if saved_west:
+                            if st.button("🗑️ Delete WEST+CSD Zone Drill-Down", key=f"delete_ns_west_{segment['id']}", type="secondary"):
+                                delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
+                                st.success("WEST+CSD Zone Drill-Down deleted!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                else:
+                    if st.button("Save West + CSD Zone to Dashboard", key=f"save_ns_west_{segment['id']}"):
+                        if not selected_states_west:
+                            st.error("Please select at least one state for deep-dive.")
                         else:
-                            st.experimental_rerun()
-                
-                # Delete button next to save
-                if saved_west:
-                    if st.button("🗑️ Delete WEST+CSD Zone Drill-Down", key=f"delete_ns_west_{segment['id']}", type="secondary"):
-                        delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
-                        st.success("WEST+CSD Zone Drill-Down deleted!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
-                        else:
-                            st.experimental_rerun()
+                            delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
+                            comments_json = json.dumps({"top": west_comment_top, "bottom": west_comment_bottom})
+                            filter_config = json.dumps({
+                                "brand_families": selected_families,
+                                "brands": selected_brands,
+                                "excluded_states": excluded_states,
+                                "states": selected_states_west,
+                                "zone": "West+CSD Zone",
+                                "title": west_title
+                            })
+                            save_table(
+                                name="WEST+CSD State Drill-Down",
+                                dataset_id=dataset_id,
+                                columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                created_by=current_user["username"],
+                                segment_id=segment["id"],
+                                section="NS Landscape",
+                                filter_json=filter_config,
+                                comment=comments_json
+                            )
+                            st.success("WEST+CSD Zone Drill-Down saved to dashboard!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+                    
+                    if saved_west:
+                        if st.button("🗑️ Delete WEST+CSD Zone Drill-Down", key=f"delete_ns_west_{segment['id']}", type="secondary"):
+                            delete_tables_for_section(segment["id"], "NS Landscape", "WEST+CSD State Drill-Down")
+                            st.success("WEST+CSD Zone Drill-Down deleted!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1477,6 +1902,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 6. EAST Zone State Drill-Down
     st.markdown("### East Zone")
     st.caption("Performance of key states within the zone")
+    
+    # Re-fetch saved_east to get the latest dataset_id
+    existing_tables_east = get_tables_for_segment(segment["id"])
+    saved_east_fresh = next((t for t in existing_tables_east if t["section"] == "NS Landscape" and t["name"] == "EAST State Drill-Down"), None)
+    
+    # Check if saved east needs refresh
+    needs_refresh_east = False
+    if saved_east_fresh is not None:
+        needs_refresh_east = saved_east_fresh["dataset_id"] != dataset_id
+    
+    if needs_refresh_east:
+        st.warning("⚠️ **New data detected!** The saved East Zone uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
     
     # Parse saved EAST config
     east_config = json.loads(saved_east["filter_json"]) if saved_east and saved_east["filter_json"] else {}
@@ -1530,6 +1967,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 available_states_east = sorted_states_east if preview_all_east else states_in_east
                 # Filter saved states to only include those still available (after exclusion)
                 valid_saved_east = [s for s in saved_east_states if s in available_states_east] if saved_east_states else []
+                
+                # Show warning for missing saved states
+                if saved_east_states:
+                    missing_states_east = [s for s in saved_east_states if s not in available_states_east]
+                    if missing_states_east:
+                        st.error(f"⚠️ **Missing states in new data:** {', '.join(missing_states_east)}. These were in your saved config but no longer exist in East Zone.")
+                
                 default_east_states = valid_saved_east if valid_saved_east else (available_states_east[:4] if len(available_states_east) > 4 else available_states_east)
                 selected_states_east = st.multiselect(
                     "Select Key States",
@@ -1555,46 +1999,87 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                if st.button("Save East Zone to Dashboard", key=f"save_ns_east_{segment['id']}"):
-                    if not selected_states_east:
-                        st.error("Please select at least one state for deep-dive.")
-                    else:
-                        delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
-                        
-                        comments_json = json.dumps({"top": east_comment_top, "bottom": east_comment_bottom})
-                        filter_config = json.dumps({
-                            "brand_families": selected_families,
-                            "brands": selected_brands,
-                            "excluded_states": excluded_states,
-                            "states": selected_states_east,
-                            "zone": "East Zone",
-                            "title": east_title
-                        })
-                        save_table(
-                            name="EAST State Drill-Down",
-                            dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
-                            created_by=current_user["username"],
-                            segment_id=segment["id"],
-                            section="NS Landscape",
-                            filter_json=filter_config,
-                            comment=comments_json
-                        )
-                        st.success("EAST Zone Drill-Down saved to dashboard!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
+                # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+                if needs_refresh_east:
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("🔄 Refresh & Verify", key=f"refresh_ns_east_{segment['id']}", type="primary"):
+                            if not selected_states_east:
+                                st.error("Please select at least one state for deep-dive.")
+                            else:
+                                delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
+                                comments_json = json.dumps({"top": east_comment_top, "bottom": east_comment_bottom})
+                                filter_config = json.dumps({
+                                    "brand_families": selected_families,
+                                    "brands": selected_brands,
+                                    "excluded_states": excluded_states,
+                                    "states": selected_states_east,
+                                    "zone": "East Zone",
+                                    "title": east_title
+                                })
+                                save_table(
+                                    name="EAST State Drill-Down",
+                                    dataset_id=dataset_id,
+                                    columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                    created_by=current_user["username"],
+                                    segment_id=segment["id"],
+                                    section="NS Landscape",
+                                    filter_json=filter_config,
+                                    comment=comments_json
+                                )
+                                st.success("✅ EAST Zone Drill-Down refreshed with latest data!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                    with col_btn2:
+                        if saved_east:
+                            if st.button("🗑️ Delete EAST Zone Drill-Down", key=f"delete_ns_east_{segment['id']}", type="secondary"):
+                                delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
+                                st.success("EAST Zone Drill-Down deleted!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                else:
+                    if st.button("Save East Zone to Dashboard", key=f"save_ns_east_{segment['id']}"):
+                        if not selected_states_east:
+                            st.error("Please select at least one state for deep-dive.")
                         else:
-                            st.experimental_rerun()
-                
-                # Delete button next to save
-                if saved_east:
-                    if st.button("🗑️ Delete EAST Zone Drill-Down", key=f"delete_ns_east_{segment['id']}", type="secondary"):
-                        delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
-                        st.success("EAST Zone Drill-Down deleted!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
-                        else:
-                            st.experimental_rerun()
+                            delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
+                            comments_json = json.dumps({"top": east_comment_top, "bottom": east_comment_bottom})
+                            filter_config = json.dumps({
+                                "brand_families": selected_families,
+                                "brands": selected_brands,
+                                "excluded_states": excluded_states,
+                                "states": selected_states_east,
+                                "zone": "East Zone",
+                                "title": east_title
+                            })
+                            save_table(
+                                name="EAST State Drill-Down",
+                                dataset_id=dataset_id,
+                                columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                created_by=current_user["username"],
+                                segment_id=segment["id"],
+                                section="NS Landscape",
+                                filter_json=filter_config,
+                                comment=comments_json
+                            )
+                            st.success("EAST Zone Drill-Down saved to dashboard!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+                    
+                    if saved_east:
+                        if st.button("🗑️ Delete EAST Zone Drill-Down", key=f"delete_ns_east_{segment['id']}", type="secondary"):
+                            delete_tables_for_section(segment["id"], "NS Landscape", "EAST State Drill-Down")
+                            st.success("EAST Zone Drill-Down deleted!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1603,6 +2088,18 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     # 7. SOUTH Zone State Drill-Down
     st.markdown("### South Zone")
     st.caption("Performance of key states within the zone")
+    
+    # Re-fetch saved_south to get the latest dataset_id
+    existing_tables_south = get_tables_for_segment(segment["id"])
+    saved_south_fresh = next((t for t in existing_tables_south if t["section"] == "NS Landscape" and t["name"] == "SOUTH State Drill-Down"), None)
+    
+    # Check if saved south needs refresh
+    needs_refresh_south = False
+    if saved_south_fresh is not None:
+        needs_refresh_south = saved_south_fresh["dataset_id"] != dataset_id
+    
+    if needs_refresh_south:
+        st.warning("⚠️ **New data detected!** The saved South Zone uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
     
     # Parse saved SOUTH config
     south_config = json.loads(saved_south["filter_json"]) if saved_south and saved_south["filter_json"] else {}
@@ -1656,6 +2153,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 available_states_south = sorted_states_south if preview_all_south else states_in_south
                 # Filter saved states to only include those still available (after exclusion)
                 valid_saved_south = [s for s in saved_south_states if s in available_states_south] if saved_south_states else []
+                
+                # Show warning for missing saved states
+                if saved_south_states:
+                    missing_states_south = [s for s in saved_south_states if s not in available_states_south]
+                    if missing_states_south:
+                        st.error(f"⚠️ **Missing states in new data:** {', '.join(missing_states_south)}. These were in your saved config but no longer exist in South Zone.")
+                
                 default_south_states = valid_saved_south if valid_saved_south else (available_states_south[:4] if len(available_states_south) > 4 else available_states_south)
                 selected_states_south = st.multiselect(
                     "Select Key States",
@@ -1681,46 +2185,87 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=100
                 )
                 
-                if st.button("Save South Zone to Dashboard", key=f"save_ns_south_{segment['id']}"):
-                    if not selected_states_south:
-                        st.error("Please select at least one state for deep-dive.")
-                    else:
-                        delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
-                        
-                        comments_json = json.dumps({"top": south_comment_top, "bottom": south_comment_bottom})
-                        filter_config = json.dumps({
-                            "brand_families": selected_families,
-                            "brands": selected_brands,
-                            "excluded_states": excluded_states,
-                            "states": selected_states_south,
-                            "zone": "South Zone",
-                            "title": south_title
-                        })
-                        save_table(
-                            name="SOUTH State Drill-Down",
-                            dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
-                            created_by=current_user["username"],
-                            segment_id=segment["id"],
-                            section="NS Landscape",
-                            filter_json=filter_config,
-                            comment=comments_json
-                        )
-                        st.success("SOUTH Zone Drill-Down saved to dashboard!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
+                # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+                if needs_refresh_south:
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("🔄 Refresh & Verify", key=f"refresh_ns_south_{segment['id']}", type="primary"):
+                            if not selected_states_south:
+                                st.error("Please select at least one state for deep-dive.")
+                            else:
+                                delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
+                                comments_json = json.dumps({"top": south_comment_top, "bottom": south_comment_bottom})
+                                filter_config = json.dumps({
+                                    "brand_families": selected_families,
+                                    "brands": selected_brands,
+                                    "excluded_states": excluded_states,
+                                    "states": selected_states_south,
+                                    "zone": "South Zone",
+                                    "title": south_title
+                                })
+                                save_table(
+                                    name="SOUTH State Drill-Down",
+                                    dataset_id=dataset_id,
+                                    columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                    created_by=current_user["username"],
+                                    segment_id=segment["id"],
+                                    section="NS Landscape",
+                                    filter_json=filter_config,
+                                    comment=comments_json
+                                )
+                                st.success("✅ SOUTH Zone Drill-Down refreshed with latest data!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                    with col_btn2:
+                        if saved_south:
+                            if st.button("🗑️ Delete SOUTH Zone Drill-Down", key=f"delete_ns_south_{segment['id']}", type="secondary"):
+                                delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
+                                st.success("SOUTH Zone Drill-Down deleted!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                else:
+                    if st.button("Save South Zone to Dashboard", key=f"save_ns_south_{segment['id']}"):
+                        if not selected_states_south:
+                            st.error("Please select at least one state for deep-dive.")
                         else:
-                            st.experimental_rerun()
-                
-                # Delete button next to save
-                if saved_south:
-                    if st.button("🗑️ Delete SOUTH Zone Drill-Down", key=f"delete_ns_south_{segment['id']}", type="secondary"):
-                        delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
-                        st.success("SOUTH Zone Drill-Down deleted!")
-                        if hasattr(st, "rerun"):
-                            st.rerun()
-                        else:
-                            st.experimental_rerun()
+                            delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
+                            comments_json = json.dumps({"top": south_comment_top, "bottom": south_comment_bottom})
+                            filter_config = json.dumps({
+                                "brand_families": selected_families,
+                                "brands": selected_brands,
+                                "excluded_states": excluded_states,
+                                "states": selected_states_south,
+                                "zone": "South Zone",
+                                "title": south_title
+                            })
+                            save_table(
+                                name="SOUTH State Drill-Down",
+                                dataset_id=dataset_id,
+                                columns=["State", "Brand Family", "Brand", "NS M INR"],
+                                created_by=current_user["username"],
+                                segment_id=segment["id"],
+                                section="NS Landscape",
+                                filter_json=filter_config,
+                                comment=comments_json
+                            )
+                            st.success("SOUTH Zone Drill-Down saved to dashboard!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+                    
+                    if saved_south:
+                        if st.button("🗑️ Delete SOUTH Zone Drill-Down", key=f"delete_ns_south_{segment['id']}", type="secondary"):
+                            delete_tables_for_section(segment["id"], "NS Landscape", "SOUTH State Drill-Down")
+                            st.success("SOUTH Zone Drill-Down deleted!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
     else:
         st.info("Configure Brand Families and Brands in section 2 first.")
     
@@ -1731,8 +2276,17 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     st.markdown("### BTM Detailed Analysis")
     st.caption("Select states and brand family to view detailed performance metrics")
     
-    # Load existing saved configuration
-    saved_state_perf = next((t for t in existing_tables if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
+    # Re-fetch saved_state_perf to get the latest dataset_id
+    existing_tables_btm = get_tables_for_segment(segment["id"])
+    saved_state_perf = next((t for t in existing_tables_btm if t["section"] == "NS Landscape" and t["name"] == "State Performance Analysis"), None)
+    
+    # Check if saved BTM needs refresh
+    needs_refresh_btm = False
+    if saved_state_perf is not None:
+        needs_refresh_btm = saved_state_perf["dataset_id"] != dataset_id
+    
+    if needs_refresh_btm:
+        st.warning("⚠️ **New data detected!** The saved BTM Analysis uses an older dataset. Update your config below if needed, then click 'Refresh & Verify' to save to dashboard.")
     
     state_perf_config = json.loads(saved_state_perf["filter_json"]) if saved_state_perf and saved_state_perf["filter_json"] else {}
     saved_state_perf_title = state_perf_config.get("title", "BTM Detailed Analysis")
@@ -1753,8 +2307,21 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         st.warning("State and Brand Family columns required for this analysis.")
     else:
         # Get available states and brand families (INDEPENDENT from Section 2)
-        all_states = sorted(df_filtered["State"].dropna().unique().tolist())
-        all_brand_families = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+        all_states_btm = sorted(df_filtered["State"].dropna().unique().tolist())
+        all_brand_families_btm = sorted(df_filtered["Brand Family"].dropna().unique().tolist())
+        
+        # Check for missing saved items and show warnings
+        if saved_state_perf_states:
+            missing_btm_states = [s for s in saved_state_perf_states if s not in all_states_btm]
+            if missing_btm_states:
+                st.error(f"⚠️ **Missing states in new data:** {', '.join(missing_btm_states)}. These were in your saved BTM config but no longer exist.")
+        
+        if saved_state_perf_family and saved_state_perf_family not in all_brand_families_btm:
+            st.error(f"⚠️ **Missing Brand Family in new data:** {saved_state_perf_family}. This was in your saved BTM config but no longer exists.")
+        
+        # Filter saved states to only valid ones
+        valid_btm_states = [s for s in saved_state_perf_states if s in all_states_btm] if saved_state_perf_states else []
+        default_btm_states = valid_btm_states if valid_btm_states else all_states_btm[:5]
         
         col1, col2 = st.columns(2)
         
@@ -1762,8 +2329,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Multiselect for states
             selected_states_perf = st.multiselect(
                 "Select States",
-                options=all_states,
-                default=saved_state_perf_states if saved_state_perf_states else all_states[:5],  # Default to first 5 states
+                options=all_states_btm,
+                default=default_btm_states,
                 key=f"ns_state_perf_states_{segment['id']}"
             )
         
@@ -1771,8 +2338,8 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Independent brand family selection
             selected_family = st.selectbox(
                 "Select Brand Family (select one PRI brand)",
-                options=all_brand_families,
-                index=all_brand_families.index(saved_state_perf_family) if saved_state_perf_family in all_brand_families else 0,
+                options=all_brand_families_btm,
+                index=all_brand_families_btm.index(saved_state_perf_family) if saved_state_perf_family in all_brand_families_btm else 0,
                 key=f"ns_state_perf_family_{segment['id']}"
             )
         
@@ -1919,41 +2486,73 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     height=120
                 )
                 
-                if st.button("Save Table and Chart to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
-                    # Delete existing table
-                    delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
-                    
-                    # Save configuration (independent from Section 2)
-                    filter_config = json.dumps({
-                        "states": selected_states_perf,
-                        "brand_family": selected_family,
-                        "title": state_perf_title
-                    })
-                    save_table(
-                        name="State Performance Analysis",
-                        dataset_id=dataset_id,
-                        columns=["State", "Brand Family", "Metrics"],
-                        created_by=current_user["username"],
-                        segment_id=segment["id"],
-                        section="NS Landscape",
-                        filter_json=filter_config,
-                        comment=state_perf_comment
-                    )
-                    st.success("State Performance Analysis saved to dashboard!")
-                    if hasattr(st, "rerun"):
-                        st.rerun()
-                    else:
-                        st.experimental_rerun()
-                
-                # Delete button next to save
-                if saved_state_perf:
-                    if st.button("🗑️ Delete State Performance Analysis", key=f"delete_ns_state_perf_{segment['id']}", type="secondary"):
+                # Show Refresh & Verify button if data is outdated, otherwise show normal Save button
+                if needs_refresh_btm:
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("🔄 Refresh & Verify", key=f"refresh_ns_state_perf_{segment['id']}", type="primary"):
+                            delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+                            filter_config = json.dumps({
+                                "states": selected_states_perf,
+                                "brand_family": selected_family,
+                                "title": state_perf_title
+                            })
+                            save_table(
+                                name="State Performance Analysis",
+                                dataset_id=dataset_id,
+                                columns=["State", "Brand Family", "Metrics"],
+                                created_by=current_user["username"],
+                                segment_id=segment["id"],
+                                section="NS Landscape",
+                                filter_json=filter_config,
+                                comment=state_perf_comment
+                            )
+                            st.success("✅ BTM Analysis refreshed with latest data!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+                    with col_btn2:
+                        if saved_state_perf:
+                            if st.button("🗑️ Delete BTM Analysis", key=f"delete_ns_state_perf_{segment['id']}", type="secondary"):
+                                delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+                                st.success("State Performance Analysis deleted!")
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
+                else:
+                    if st.button("Save Table and Chart to Dashboard", key=f"save_ns_state_perf_{segment['id']}"):
                         delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
-                        st.success("State Performance Analysis deleted!")
+                        filter_config = json.dumps({
+                            "states": selected_states_perf,
+                            "brand_family": selected_family,
+                            "title": state_perf_title
+                        })
+                        save_table(
+                            name="State Performance Analysis",
+                            dataset_id=dataset_id,
+                            columns=["State", "Brand Family", "Metrics"],
+                            created_by=current_user["username"],
+                            segment_id=segment["id"],
+                            section="NS Landscape",
+                            filter_json=filter_config,
+                            comment=state_perf_comment
+                        )
+                        st.success("State Performance Analysis saved to dashboard!")
                         if hasattr(st, "rerun"):
                             st.rerun()
                         else:
                             st.experimental_rerun()
+                    
+                    if saved_state_perf:
+                        if st.button("🗑️ Delete BTM Analysis", key=f"delete_ns_state_perf_{segment['id']}", type="secondary"):
+                            delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
+                            st.success("State Performance Analysis deleted!")
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
                 
                 st.markdown("---")
                 st.markdown("### Battleground Summary Slide")

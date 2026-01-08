@@ -159,24 +159,28 @@ def main() -> None:
     if current_user["role"] == "editor":
         uploaded_global = st.sidebar.file_uploader("Upload data file (CSV/XLSX)", type=["csv", "xlsx", "xls"])
         if uploaded_global:
-            spinner_slot = st.sidebar.empty()
-            try:
-                with spinner_slot, st.spinner("Preparing file..."):
-                    if uploaded_global.name.endswith(".csv"):
-                        df_global = pd.read_csv(uploaded_global)
-                    else:
-                        df_global = pd.read_excel(uploaded_global)
-                    # Coerce object columns to string to avoid parquet type errors
-                    for col in df_global.select_dtypes(include=["object"]).columns:
-                        df_global[col] = df_global[col].astype("string")
-                    save_upload(uploaded_global.name, df_global, current_user["username"])
-                spinner_slot.empty()
-                st.sidebar.success(
-                    f"Saved {uploaded_global.name} for all segments (rows: {len(df_global)}, cols: {len(df_global.columns)})."
-                )
-            except Exception as exc:  # noqa: BLE001
-                spinner_slot.empty()
-                st.sidebar.error(f"Failed to process file: {exc}")
+            # Track uploaded file to prevent duplicate uploads on rerun
+            file_key = f"{uploaded_global.name}_{uploaded_global.size}"
+            if st.session_state.get("last_uploaded_file") != file_key:
+                spinner_slot = st.sidebar.empty()
+                try:
+                    with spinner_slot, st.spinner("Preparing file..."):
+                        if uploaded_global.name.endswith(".csv"):
+                            df_global = pd.read_csv(uploaded_global)
+                        else:
+                            df_global = pd.read_excel(uploaded_global)
+                        # Coerce object columns to string to avoid parquet type errors
+                        for col in df_global.select_dtypes(include=["object"]).columns:
+                            df_global[col] = df_global[col].astype("string")
+                        save_upload(uploaded_global.name, df_global, current_user["username"])
+                    spinner_slot.empty()
+                    st.session_state["last_uploaded_file"] = file_key
+                    st.sidebar.success(
+                        f"Saved {uploaded_global.name} for all segments (rows: {len(df_global)}, cols: {len(df_global.columns)})."
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    spinner_slot.empty()
+                    st.sidebar.error(f"Failed to process file: {exc}")
     else:
         if st.sidebar.button("Refresh dashboard"):
             trigger_rerun()

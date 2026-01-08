@@ -4,6 +4,33 @@ import json
 from .database import get_connection
 
 
+def check_chart_needs_refresh(chart_row, current_dataset_id: int) -> bool:
+    """Check if a saved chart uses an outdated dataset and needs refresh."""
+    if chart_row is None:
+        return False
+    return chart_row["dataset_id"] != current_dataset_id
+
+
+def update_chart_dataset(chart_id: int, new_dataset_id: int) -> None:
+    """Update a chart's dataset_id to point to the new dataset."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE charts SET dataset_id = ? WHERE id = ?",
+            (new_dataset_id, chart_id),
+        )
+        conn.commit()
+
+
+def update_chart_config(chart_id: int, new_dataset_id: int, new_filter_json: str) -> None:
+    """Update a chart's dataset_id and filter_json together."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE charts SET dataset_id = ?, filter_json = ? WHERE id = ?",
+            (new_dataset_id, new_filter_json, chart_id),
+        )
+        conn.commit()
+
+
 def save_chart(
     name: str,
     chart_type: str,

@@ -8,6 +8,32 @@ from .database import get_connection
 from .uploads import load_dataset
 
 
+def check_table_needs_refresh(table_row, current_dataset_id: int) -> bool:
+    """Check if a saved table uses an outdated dataset and needs refresh."""
+    if table_row is None:
+        return False
+    return table_row["dataset_id"] != current_dataset_id
+
+
+def update_table_dataset(table_id: int, new_dataset_id: int) -> None:
+    """Update a table's dataset_id to point to the new dataset."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE tables SET dataset_id = ? WHERE id = ?",
+            (new_dataset_id, table_id),
+        )
+        conn.commit()
+
+
+def get_table_by_id(table_id: int):
+    """Get a single table by ID to verify updates."""
+    with get_connection() as conn:
+        return conn.execute(
+            "SELECT id, name, dataset_id FROM tables WHERE id = ?",
+            (table_id,),
+        ).fetchone()
+
+
 def save_table(
     name: str,
     dataset_id: int,
