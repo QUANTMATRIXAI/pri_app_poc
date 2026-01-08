@@ -1,5 +1,7 @@
 # Git Workflow Guide
 
+> **Production Version:** Last updated for stable release.
+
 ## Repository Information
 
 **Production Repository:** https://github.com/QUANTMATRIXAI/pri_app.git  
