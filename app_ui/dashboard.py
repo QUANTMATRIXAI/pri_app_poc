@@ -1183,6 +1183,11 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
     excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
     
+    # CRITICAL: Remove A26 from selected_years - Brand Chart should ONLY show A23, A24, A25
+    selected_years = [y for y in selected_years if y != "A26"]
+    if not selected_years:
+        selected_years = ["A23", "A24", "A25"]
+    
     # Apply state exclusion filter
     if excluded_states and "State" in df.columns:
         df = df[~df["State"].isin(excluded_states)]
