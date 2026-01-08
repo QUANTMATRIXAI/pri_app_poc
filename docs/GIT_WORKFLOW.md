@@ -1,5 +1,7 @@
 # Git Workflow Guide
 
+> **Note from Migration Branch:** This guide is being updated with smart file migration features.
+
 ## Repository Information
 
 **Production Repository:** https://github.com/QUANTMATRIXAI/pri_app.git  
