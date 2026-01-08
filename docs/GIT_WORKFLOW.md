@@ -1,6 +1,6 @@
 # Git Workflow Guide
 
-> **Production Version:** Last updated for stable release.
+> **Note from Migration Branch:** This guide is being updated with smart file migration features.
 
 ## Repository Information
 
