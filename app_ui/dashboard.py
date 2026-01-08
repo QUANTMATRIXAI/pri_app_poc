@@ -1349,22 +1349,19 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
         st.caption(f"🚫 Excluding {len(excluded_states)} state(s): {', '.join(excluded_states)}")
     
     # Filter for A24, A25, and A26 (needed for growth calculations including A26 YTD)
+    # IMPORTANT: Don't filter by brand/family yet - pass ALL brands so MS calculation is correct
     df = df[df["PRI Year"].isin(["A24", "A25", "A26"])]
-    df = df[df["Brand Family"].isin(selected_families)]
-    df = df[df["Brand"].isin(selected_brands)]
     
     if df.empty:
         st.warning("No data available for selected filters.")
-
         return
     
     # Check if Zone column exists
     if "Zone" not in df.columns:
         st.warning("Zone column not found in dataset.")
-
         return
     
-    # Use the same function as preview
+    # Use the same function as preview (function will filter to selected brands internally)
     from app_ui.data_studio import create_zonal_pivot
     result = create_zonal_pivot(df, selected_families, selected_brands)
     

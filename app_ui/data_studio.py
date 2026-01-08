@@ -1015,12 +1015,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         else:
             # Filter data for A24, A25, and A26 (needed for growth calculations)
             # Use df_filtered_with_a26 which has A26 data
+            # IMPORTANT: Pass ALL brands in segment (don't filter yet) so MS calculation is correct
             df_zonal = df_filtered_with_a26[df_filtered_with_a26["PRI Year"].isin(["A24", "A25", "A26"])].copy()
-            df_zonal = df_zonal[df_zonal["Brand Family"].isin(selected_families)]
-            df_zonal = df_zonal[df_zonal["Brand"].isin(selected_brands)]
             
             if not df_zonal.empty:
-                # Preview zonal table
+                # Preview zonal table (function will filter to selected brands internally)
                 preview_zonal = create_zonal_pivot(df_zonal, selected_families, selected_brands)
                 if preview_zonal is not None:
                     st.markdown("**Preview:**")
@@ -4292,7 +4291,26 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     # Need A24, A25, and A26 data for growth calculation
     df_all = df.copy()
     
-    # Filter to selected brands and families
+    # CRITICAL: Calculate segment totals from ALL brands (not just selected ones)
+    # This ensures MS shows true market share vs entire segment
+    df_a25_all_brands = df_all[df_all["PRI Year"] == "A25"].copy()
+    df_a24_all_brands = df_all[df_all["PRI Year"] == "A24"].copy()
+    
+    # Get all zones
+    zones = sorted(df_a25_all_brands["Zone"].unique().tolist())
+    
+    # Level 3: Zone only (segment totals per zone) - FROM ALL BRANDS
+    segment_zone_a25 = df_a25_all_brands.groupby("Zone")["NS M INR"].sum().to_dict()
+    segment_zone_a24 = df_a24_all_brands.groupby("Zone")["NS M INR"].sum().to_dict()
+    
+    # Calculate segment growth for each zone (from ALL brands)
+    segment_growth = {}
+    for zone in zones:
+        a25_total = segment_zone_a25.get(zone, 0)
+        a24_total = segment_zone_a24.get(zone, 0)
+        segment_growth[zone] = ((a25_total / a24_total) - 1) * 100 if a24_total > 0 else 0
+    
+    # NOW filter to selected brands and families for the table rows
     df_a25 = df_all[(df_all["PRI Year"] == "A25") & 
                     (df_all["Brand Family"].isin(selected_families)) & 
                     (df_all["Brand"].isin(selected_brands))].copy()
@@ -4315,10 +4333,7 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     if "Month" in df_a25_ytd.columns:
         df_a25_ytd = df_a25_ytd[df_a25_ytd["Month"].isin(["July", "August", "September", "October"])]
     
-    # Get all zones
-    zones = sorted(df_a25["Zone"].unique().tolist())
-    
-    # THREE LEVELS OF AGGREGATION FOR A25:
+    # THREE LEVELS OF AGGREGATION FOR SELECTED BRANDS:
     
     # Level 1: Zone × Brand Family × Brand (most granular)
     brand_zone_a25 = df_a25.groupby(["Zone", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
@@ -4331,17 +4346,6 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     family_zone_a24 = df_a24.groupby(["Zone", "Brand Family"])["NS M INR"].sum().reset_index()
     family_zone_a26_ytd = df_a26_ytd.groupby(["Zone", "Brand Family"])["NS M INR"].sum().reset_index()
     family_zone_a25_ytd = df_a25_ytd.groupby(["Zone", "Brand Family"])["NS M INR"].sum().reset_index()
-    
-    # Level 3: Zone only (segment totals per zone)
-    segment_zone_a25 = df_a25.groupby("Zone")["NS M INR"].sum().to_dict()
-    segment_zone_a24 = df_a24.groupby("Zone")["NS M INR"].sum().to_dict()
-    
-    # Calculate segment growth for each zone
-    segment_growth = {}
-    for zone in zones:
-        a25_total = segment_zone_a25.get(zone, 0)
-        a24_total = segment_zone_a24.get(zone, 0)
-        segment_growth[zone] = ((a25_total / a24_total) - 1) * 100 if a24_total > 0 else 0
     
     # Build unified table
     rows = []
