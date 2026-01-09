@@ -9104,6 +9104,9 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
         st.warning("No data available for A24 and A25")
         return
     
+    # Ensure Revised NS is numeric
+    df_calc["Revised NS"] = pd.to_numeric(df_calc["Revised NS"], errors="coerce").fillna(0)
+    
     # Calculate All India segment metrics (using ALL brands in the segment)
     # This is correct - df_calc is already segment-filtered
     all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["Revised NS"].sum()

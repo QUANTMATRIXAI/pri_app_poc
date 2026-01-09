@@ -4643,9 +4643,12 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
     if df_calc.empty:
         return
     
+    # Ensure Revised NS is numeric
+    df_calc["Revised NS"] = pd.to_numeric(df_calc["Revised NS"], errors="coerce").fillna(0)
+    
     # Calculate All India segment metrics
-    all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
-    all_india_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["Revised NS"].sum()
+    all_india_a25 = df_calc[df_calc["PRI Year"] == "A25"]["Revised NS"].sum()
     all_india_growth = ((all_india_a25 - all_india_a24) / all_india_a24 * 100) if all_india_a24 > 0 else 0
     
     # Show comment if exists
@@ -4683,8 +4686,8 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
             continue
         
         # SEGMENT-LEVEL CALCULATIONS
-        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
-        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
+        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["Revised NS"].sum()
+        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["Revised NS"].sum()
         
         segment_ms = (state_segment_a25 / all_india_a25 * 100) if all_india_a25 > 0 else 0
         segment_growth = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
@@ -4730,8 +4733,8 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
                 if df_brand.empty:
                     continue
                 
-                brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["NS M INR"].sum()
-                brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["NS M INR"].sum()
+                brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["Revised NS"].sum()
+                brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["Revised NS"].sum()
                 
                 brand_ms = (brand_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
                 brand_growth = ((brand_a25 - brand_a24) / brand_a24 * 100) if brand_a24 > 0 else 0
