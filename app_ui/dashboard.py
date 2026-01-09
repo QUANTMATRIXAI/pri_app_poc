@@ -410,7 +410,7 @@ def render_segment_ns_pivot(segment: Dict) -> bool:
         df,
         index="Mfg Com",
         columns="PRI Year",
-        values="NS M INR",
+        values="Revised NS",
         aggfunc="sum",
         fill_value=0,
     )
@@ -649,6 +649,9 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             st.warning("No data available for selected filters.")
             return
         
+        # Ensure Revised NS is numeric
+        df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+        
         # Check if Month column exists for A26 YTD calculation
         has_month_col = "Month" in df.columns
         
@@ -670,7 +673,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             df_combined[df_combined["PRI Year"].isin(years_for_pivot)],
             index="Mfg Com",
             columns="PRI Year",
-            values="NS M INR",
+            values="Revised NS",
             aggfunc="sum",
             fill_value=0
         )
@@ -713,7 +716,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             a26_ytd_pivot = pd.pivot_table(
                 a26_ytd,
                 index="Mfg Com",
-                values="NS M INR",
+                values="Revised NS",
                 aggfunc="sum",
                 fill_value=0
             )
@@ -723,7 +726,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             a25_ytd_pivot = pd.pivot_table(
                 a25_ytd,
                 index="Mfg Com",
-                values="NS M INR",
+                values="Revised NS",
                 aggfunc="sum",
                 fill_value=0
             )
@@ -861,14 +864,17 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         st.warning("No data available for selected brands and years.")
         return
     
+    # Ensure Revised NS is numeric
+    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    
     # Aggregate data
-    chart_data = df.groupby(["Brand", "Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+    chart_data = df.groupby(["Brand", "Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
     
     # Create pivot to calculate growth rates
     pivot_wide = chart_data.pivot_table(
         index=["Brand", "Brand Family"],
         columns="PRI Year",
-        values="NS M INR",
+        values="Revised NS",
         aggfunc="sum"
     ).reset_index()
     
@@ -883,13 +889,15 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     if excluded_states and "State" in df_original.columns:
         df_original = df_original[~df_original["State"].isin(excluded_states)]
     df_original = df_original[df_original["Brand"].isin(selected_brands)]
+    # Ensure Revised NS is numeric in df_original
+    df_original["Revised NS"] = pd.to_numeric(df_original["Revised NS"], errors="coerce").fillna(0)
     
     for _, row in pivot_wide.iterrows():
         brand = row["Brand"]
-        ns_a23 = row.get("A23", 0) or 0
-        ns_a24 = row.get("A24", 0) or 0
-        ns_a25 = row.get("A25", 0) or 0
-        ns_a26_ytd = row.get("A26", 0) or 0  # This is YTD (July-Oct)
+        ns_a23 = float(row.get("A23", 0) if pd.notna(row.get("A23", 0)) else 0)
+        ns_a24 = float(row.get("A24", 0) if pd.notna(row.get("A24", 0)) else 0)
+        ns_a25 = float(row.get("A25", 0) if pd.notna(row.get("A25", 0)) else 0)
+        ns_a26_ytd = float(row.get("A26", 0) if pd.notna(row.get("A26", 0)) else 0)  # This is YTD (July-Oct)
         
         # A24 Growth % (YoY from A23)
         a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
@@ -904,7 +912,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         if has_a26 and has_month_col:
             # Get A25 YTD (July-Oct) for comparison
             a25_ytd_data = df_original[(df_original["Brand"] == brand) & (df_original["PRI Year"] == "A25") & (df_original["Month"].isin(ytd_months))]
-            ns_a25_ytd = a25_ytd_data["NS M INR"].sum() if not a25_ytd_data.empty else 0
+            ns_a25_ytd = a25_ytd_data["Revised NS"].sum() if not a25_ytd_data.empty else 0
             
             a26_ytd_growth = ((ns_a26_ytd - ns_a25_ytd) / ns_a25_ytd * 100) if ns_a25_ytd != 0 else 0
             a26_ytd_growth_rates[brand] = round(a26_ytd_growth, 1)
@@ -927,7 +935,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     chart_data_for_display = chart_data[chart_data["PRI Year"] != "A26"].copy()
     
     # Sort brands by Brand Family total NS, then by brand total NS (excluding A26)
-    brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
+    brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["Revised NS"].sum().reset_index()
     brand_totals.columns = ["Brand", "Brand Family", "Total"]
     
     family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
@@ -954,7 +962,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     fig = px.bar(
         chart_data_for_display,
         x="Brand",
-        y="NS M INR",
+        y="Revised NS",
         color="PRI Year",
         barmode="group",
         text="Growth Text",
@@ -967,7 +975,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
     
     # Get max Y value for positioning CAGR boxes
-    max_y = chart_data["NS M INR"].max()
+    max_y = chart_data["Revised NS"].max()
     
     # Add CAGR boxes above each brand with neutral styling
     annotations = []
@@ -991,7 +999,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     
     fig.update_layout(
         xaxis_title="Brand",
-        yaxis_title="NS M INR",
+        yaxis_title="NS",
         legend_title="PRI Year",
         annotations=annotations,
         yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
@@ -1008,17 +1016,22 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         # Create summary table with NS values and growth rates
         summary_df = pivot_wide.copy()
         
+        # Helper function to safely get numeric value
+        def safe_get(row, col, default=0):
+            val = row.get(col, default)
+            return float(val) if pd.notna(val) else default
+        
         # Calculate growth rates for each brand
         summary_df["A24 Growth %"] = summary_df.apply(
-            lambda r: round(((r.get("A24", 0) or 0) - (r.get("A23", 0) or 0)) / (r.get("A23", 0) or 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+            lambda r: round(((safe_get(r, "A24") - safe_get(r, "A23")) / safe_get(r, "A23", 1)) * 100, 1) if safe_get(r, "A23") != 0 else 0, 
             axis=1
         )
         summary_df["A25 Growth %"] = summary_df.apply(
-            lambda r: round(((r.get("A25", 0) or 0) - (r.get("A24", 0) or 0)) / (r.get("A24", 0) or 1) * 100, 1) if (r.get("A24", 0) or 0) != 0 else 0, 
+            lambda r: round(((safe_get(r, "A25") - safe_get(r, "A24")) / safe_get(r, "A24", 1)) * 100, 1) if safe_get(r, "A24") != 0 else 0, 
             axis=1
         )
         summary_df["2-Yr CAGR %"] = summary_df.apply(
-            lambda r: round((((r.get("A25", 0) or 0) / (r.get("A23", 0) or 1)) ** 0.5 - 1) * 100, 1) if (r.get("A23", 0) or 0) != 0 else 0, 
+            lambda r: round(((safe_get(r, "A25") / safe_get(r, "A23", 1)) ** 0.5 - 1) * 100, 1) if safe_get(r, "A23") != 0 else 0, 
             axis=1
         )
         
@@ -1049,7 +1062,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             if has_a26 and has_month_col:
                 # Get A25 YTD for family
                 family_brands = family_data["Brand"].tolist()
-                a25_ytd_family = df_original[(df_original["Brand"].isin(family_brands)) & (df_original["PRI Year"] == "A25") & (df_original["Month"].isin(ytd_months))]["NS M INR"].sum()
+                a25_ytd_family = df_original[(df_original["Brand"].isin(family_brands)) & (df_original["PRI Year"] == "A25") & (df_original["Month"].isin(ytd_months))]["Revised NS"].sum()
                 a26_ytd_growth_family = ((a26_ytd_total - a25_ytd_family) / a25_ytd_family * 100) if a25_ytd_family != 0 else 0
             else:
                 a26_ytd_growth_family = 0.0
@@ -1095,26 +1108,26 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         # Rename NS columns to include "NS M INR"
         rename_map = {}
         if "A23" in combined_df.columns:
-            rename_map["A23"] = "A23 NS M INR"
+            rename_map["A23"] = "A23 NS"
         if "A24" in combined_df.columns:
-            rename_map["A24"] = "A24 NS M INR"
+            rename_map["A24"] = "A24 NS"
         if "A25" in combined_df.columns:
-            rename_map["A25"] = "A25 NS M INR"
+            rename_map["A25"] = "A25 NS"
         if "A26" in combined_df.columns:
-            rename_map["A26"] = "A26 YTD NS M INR"
+            rename_map["A26"] = "A26 YTD NS"
         
         combined_df = combined_df.rename(columns=rename_map)
         
         # Reorder columns
         column_order = ["Brand Family", "Brand"]
-        if "A23 NS M INR" in combined_df.columns:
-            column_order.append("A23 NS M INR")
-        if "A24 NS M INR" in combined_df.columns:
-            column_order.append("A24 NS M INR")
-        if "A25 NS M INR" in combined_df.columns:
-            column_order.append("A25 NS M INR")
-        if "A26 YTD NS M INR" in combined_df.columns:
-            column_order.append("A26 YTD NS M INR")
+        if "A23 NS" in combined_df.columns:
+            column_order.append("A23 NS")
+        if "A24 NS" in combined_df.columns:
+            column_order.append("A24 NS")
+        if "A25 NS" in combined_df.columns:
+            column_order.append("A25 NS")
+        if "A26 YTD NS" in combined_df.columns:
+            column_order.append("A26 YTD NS")
         if "A24 Growth %" in combined_df.columns:
             column_order.append("A24 Growth %")
         if "A25 Growth %" in combined_df.columns:
@@ -1127,7 +1140,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         display_df = combined_df[column_order].copy()
         
         # Format NS columns with commas
-        for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR", "A26 YTD NS M INR"]:
+        for col in ["A23 NS", "A24 NS", "A25 NS", "A26 YTD NS"]:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
         
@@ -1201,14 +1214,17 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
         st.warning("No data available for selected brands and years.")
         return
     
+    # Ensure Revised NS is numeric
+    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    
     # Aggregate by Brand Family and Year
-    chart_data = df.groupby(["Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+    chart_data = df.groupby(["Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
     
     # Create pivot to calculate growth rates
     pivot_wide = chart_data.pivot_table(
         index="Brand Family",
         columns="PRI Year",
-        values="NS M INR",
+        values="Revised NS",
         aggfunc="sum"
     ).reset_index()
     
@@ -1244,7 +1260,7 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     )
     
     # Sort families by total NS
-    family_totals = chart_data.groupby("Brand Family")["NS M INR"].sum().reset_index()
+    family_totals = chart_data.groupby("Brand Family")["Revised NS"].sum().reset_index()
     family_totals.columns = ["Brand Family", "Total"]
     family_totals = family_totals.sort_values("Total", ascending=False)
     family_order = family_totals["Brand Family"].tolist()
@@ -1260,7 +1276,7 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     fig = px.bar(
         chart_data,
         x="Brand Family",
-        y="NS M INR",
+        y="Revised NS",
         color="PRI Year",
         barmode="group",
         text="Growth Text",
@@ -1273,7 +1289,7 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
     
     # Get max Y value for positioning CAGR boxes
-    max_y = chart_data["NS M INR"].max()
+    max_y = chart_data["Revised NS"].max()
     
     # Add CAGR boxes above each brand family
     annotations = []
@@ -1297,7 +1313,7 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     
     fig.update_layout(
         xaxis_title="Brand Family",
-        yaxis_title="NS M INR",
+        yaxis_title="NS",
         legend_title="PRI Year",
         annotations=annotations,
         yaxis=dict(range=[0, max_y * 1.25])
@@ -5374,3 +5390,5 @@ def render_battlegrounds_dashboard(segment: Dict, tables: List, is_editor: bool)
     st.markdown("---")
     st.markdown("---")
     render_battlegrounds_jtbd_dashboard(segment, tables, is_editor)
+
+

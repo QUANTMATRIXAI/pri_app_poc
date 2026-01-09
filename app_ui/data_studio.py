@@ -218,7 +218,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         return
     
     # Check required columns
-    required_cols = ["PRI Year", "Mfg Com", "NS M INR", "Brand Family", "Brand"]
+    required_cols = ["PRI Year", "Mfg Com", "Revised NS", "Brand Family", "Brand"]
     missing_cols = [col for col in required_cols if col not in df_filtered.columns]
     if missing_cols:
         st.error(f"Missing required columns: {', '.join(missing_cols)}")
@@ -302,7 +302,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             save_table(
                 name="Manufacturing Pivot",
                 dataset_id=dataset_id,
-                columns=["Mfg Com", "PRI Year", "NS M INR"],  # Will be pivoted
+                columns=["Mfg Com", "PRI Year", "Revised NS"],  # Will be pivoted
                 created_by=current_user["username"],
                 segment_id=segment["id"],
                 section="NS Landscape",
@@ -426,14 +426,17 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         
         if not df_chart.empty:
             st.markdown("**Preview:**")
+            # Ensure Revised NS is numeric
+            df_chart["Revised NS"] = pd.to_numeric(df_chart["Revised NS"], errors="coerce").fillna(0)
+            
             # Create data for chart - aggregate NS by Brand and Year
-            chart_data = df_chart.groupby(["Brand", "Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+            chart_data = df_chart.groupby(["Brand", "Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
             
             # Create pivot to calculate growth rates
             pivot_wide = chart_data.pivot_table(
                 index=["Brand", "Brand Family"],
                 columns="PRI Year",
-                values="NS M INR",
+                values="Revised NS",
                 aggfunc="sum"
             ).reset_index()
             
@@ -462,7 +465,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if "A26" in years_in_data_chart and has_month_col:
                     # Get A25 YTD (July-Oct) for comparison
                     a25_ytd_data = df_chart[(df_chart["Brand"] == brand) & (df_chart["PRI Year"] == "A25") & (df_chart["Month"].isin(ytd_months))]
-                    ns_a25_ytd = a25_ytd_data["NS M INR"].sum() if not a25_ytd_data.empty else 0
+                    ns_a25_ytd = a25_ytd_data["Revised NS"].sum() if not a25_ytd_data.empty else 0
                     
                     a26_ytd_growth = ((ns_a26_ytd - ns_a25_ytd) / ns_a25_ytd * 100) if ns_a25_ytd != 0 else 0
                     a26_ytd_growth_rates[brand] = round(a26_ytd_growth, 1)
@@ -485,7 +488,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             chart_data_for_display = chart_data[chart_data["PRI Year"] != "A26"].copy()
             
             # Sort brands by Brand Family total NS, then by brand total NS (excluding A26)
-            brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["NS M INR"].sum().reset_index()
+            brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["Revised NS"].sum().reset_index()
             brand_totals.columns = ["Brand", "Brand Family", "Total"]
             
             family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
@@ -514,7 +517,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             fig = px.bar(
                 chart_data_for_display,
                 x="Brand",
-                y="NS M INR",
+                y="Revised NS",
                 color="PRI Year",
                 barmode="group",
                 text="Growth Text",
@@ -527,7 +530,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
             
             # Get max Y value for positioning CAGR boxes
-            max_y = chart_data["NS M INR"].max()
+            max_y = chart_data["Revised NS"].max()
             
             # Add CAGR boxes above each brand with neutral styling
             annotations = []
@@ -551,7 +554,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             
             fig.update_layout(
                 xaxis_title="Brand",
-                yaxis_title="NS M INR",
+                yaxis_title="NS",
                 legend_title="PRI Year",
                 annotations=annotations,
                 yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
@@ -604,7 +607,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     if "A26" in years_in_data_chart and has_month_col:
                         # Get A25 YTD for family
                         family_brands = family_data["Brand"].tolist()
-                        a25_ytd_family = df_chart[(df_chart["Brand"].isin(family_brands)) & (df_chart["PRI Year"] == "A25") & (df_chart["Month"].isin(ytd_months))]["NS M INR"].sum()
+                        a25_ytd_family = df_chart[(df_chart["Brand"].isin(family_brands)) & (df_chart["PRI Year"] == "A25") & (df_chart["Month"].isin(ytd_months))]["Revised NS"].sum()
                         a26_ytd_growth_family = ((a26_ytd_total - a25_ytd_family) / a25_ytd_family * 100) if a25_ytd_family != 0 else 0
                     else:
                         a26_ytd_growth_family = 0.0
@@ -650,28 +653,28 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # Rename NS columns to include "NS M INR"
                 rename_map = {}
                 if "A23" in combined_df.columns:
-                    rename_map["A23"] = "A23 NS M INR"
+                    rename_map["A23"] = "A23 NS"
                 if "A24" in combined_df.columns:
-                    rename_map["A24"] = "A24 NS M INR"
+                    rename_map["A24"] = "A24 NS"
                 if "A25" in combined_df.columns:
-                    rename_map["A25"] = "A25 NS M INR"
+                    rename_map["A25"] = "A25 NS"
                 
                 combined_df = combined_df.rename(columns=rename_map)
                 
                 # Add A26 YTD columns if available
                 if "A26" in combined_df.columns:
-                    combined_df = combined_df.rename(columns={"A26": "A26 YTD NS M INR"})
+                    combined_df = combined_df.rename(columns={"A26": "A26 YTD NS"})
                 
                 # Reorder columns - A26 YTD Growth %* at the end
                 column_order = ["Brand Family", "Brand"]
-                if "A23 NS M INR" in combined_df.columns:
-                    column_order.append("A23 NS M INR")
-                if "A24 NS M INR" in combined_df.columns:
-                    column_order.append("A24 NS M INR")
-                if "A25 NS M INR" in combined_df.columns:
-                    column_order.append("A25 NS M INR")
-                if "A26 YTD NS M INR" in combined_df.columns:
-                    column_order.append("A26 YTD NS M INR")
+                if "A23 NS" in combined_df.columns:
+                    column_order.append("A23 NS")
+                if "A24 NS" in combined_df.columns:
+                    column_order.append("A24 NS")
+                if "A25 NS" in combined_df.columns:
+                    column_order.append("A25 NS")
+                if "A26 YTD NS" in combined_df.columns:
+                    column_order.append("A26 YTD NS")
                 if "A24 Growth %" in combined_df.columns:
                     column_order.append("A24 Growth %")
                 if "A25 Growth %" in combined_df.columns:
@@ -684,7 +687,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 display_df = combined_df[column_order].copy()
                 
                 # Format NS columns with commas
-                for col in ["A23 NS M INR", "A24 NS M INR", "A25 NS M INR", "A26 YTD NS M INR"]:
+                for col in ["A23 NS", "A24 NS", "A25 NS", "A26 YTD NS"]:
                     if col in display_df.columns:
                         display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
                 
@@ -730,7 +733,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 name="Brand Performance",
                 chart_type="bar",
                 x_col="Brand",
-                y_cols=["NS M INR"],
+                y_cols=["Revised NS"],
                 dataset_id=dataset_id,
                 created_by=current_user["username"],
                 segment_id=segment["id"],
@@ -835,14 +838,17 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         
         if not df_family_chart.empty:
             st.markdown("**Preview:**")
+            # Ensure Revised NS is numeric
+            df_family_chart["Revised NS"] = pd.to_numeric(df_family_chart["Revised NS"], errors="coerce").fillna(0)
+            
             # Aggregate by Brand Family and Year
-            family_chart_data = df_family_chart.groupby(["Brand Family", "PRI Year"])["NS M INR"].sum().reset_index()
+            family_chart_data = df_family_chart.groupby(["Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
             
             # Create pivot to calculate growth rates and CAGR
             family_pivot = family_chart_data.pivot_table(
                 index="Brand Family",
                 columns="PRI Year",
-                values="NS M INR",
+                values="Revised NS",
                 aggfunc="sum"
             ).reset_index()
             
@@ -878,7 +884,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             )
             
             # Sort families by total NS
-            family_totals = family_chart_data.groupby("Brand Family")["NS M INR"].sum().reset_index()
+            family_totals = family_chart_data.groupby("Brand Family")["Revised NS"].sum().reset_index()
             family_totals.columns = ["Brand Family", "Total"]
             family_totals = family_totals.sort_values("Total", ascending=False)
             family_order = family_totals["Brand Family"].tolist()
@@ -893,7 +899,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             fig = px.bar(
                 family_chart_data,
                 x="Brand Family",
-                y="NS M INR",
+                y="Revised NS",
                 color="PRI Year",
                 barmode="group",
                 text="Growth Text",
@@ -906,7 +912,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
             
             # Get max Y value for positioning CAGR boxes
-            max_y = family_chart_data["NS M INR"].max()
+            max_y = family_chart_data["Revised NS"].max()
             
             # Add CAGR boxes above each brand family
             annotations = []
@@ -930,7 +936,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             
             fig.update_layout(
                 xaxis_title="Brand Family",
-                yaxis_title="NS M INR",
+                yaxis_title="NS",
                 legend_title="PRI Year",
                 annotations=annotations,
                 yaxis=dict(range=[0, max_y * 1.25])
@@ -965,7 +971,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 name="Brand Family Performance",
                 chart_type="bar",
                 x_col="Brand Family",
-                y_cols=["NS M INR"],
+                y_cols=["Revised NS"],
                 dataset_id=dataset_id,
                 created_by=current_user["username"],
                 segment_id=segment["id"],
@@ -1115,7 +1121,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     save_table(
                         name="Zonal Pivot",
                         dataset_id=dataset_id,
-                        columns=["Brand Family", "Brand", "Zone", "NS M INR"],
+                        columns=["Brand Family", "Brand", "Zone", "Revised NS"],
                         created_by=current_user["username"],
                         segment_id=segment["id"],
                         section="NS Landscape",
@@ -1321,7 +1327,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         save_table(
                             name="NORTH State Drill-Down",
                             dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            columns=["State", "Brand Family", "Brand", "Revised NS"],
                             created_by=current_user["username"],
                             segment_id=segment["id"],
                             section="NS Landscape",
@@ -1447,7 +1453,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         save_table(
                             name="WEST+CSD State Drill-Down",
                             dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            columns=["State", "Brand Family", "Brand", "Revised NS"],
                             created_by=current_user["username"],
                             segment_id=segment["id"],
                             section="NS Landscape",
@@ -1573,7 +1579,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         save_table(
                             name="EAST State Drill-Down",
                             dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            columns=["State", "Brand Family", "Brand", "Revised NS"],
                             created_by=current_user["username"],
                             segment_id=segment["id"],
                             section="NS Landscape",
@@ -1699,7 +1705,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         save_table(
                             name="SOUTH State Drill-Down",
                             dataset_id=dataset_id,
-                            columns=["State", "Brand Family", "Brand", "NS M INR"],
+                            columns=["State", "Brand Family", "Brand", "Revised NS"],
                             created_by=current_user["username"],
                             segment_id=segment["id"],
                             section="NS Landscape",
@@ -3606,9 +3612,16 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     if df_segment.empty:
         return None
     
+    # Ensure Revised NS is numeric
+    df_segment["Revised NS"] = pd.to_numeric(df_segment["Revised NS"], errors="coerce").fillna(0)
+    
     # Filter for A24 and A25 data
     df_calc = df_segment[df_segment["PRI Year"].isin(["A24", "A25"])].copy()
     df_full_calc = df_full[df_full["PRI Year"].isin(["A24", "A25"])].copy() if df_full is not None and not df_full.empty else df_calc
+    
+    # Ensure Revised NS is numeric in df_full_calc
+    if df_full_calc is not df_calc:
+        df_full_calc["Revised NS"] = pd.to_numeric(df_full_calc["Revised NS"], errors="coerce").fillna(0)
     
     if df_calc.empty:
         return None
@@ -3617,15 +3630,15 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     segment_name = segment.get("name", "")
     
     # Calculate ACTUAL All India (AI) values from ALL STATES (not affected by selected states)
-    ai_segment_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
-    ai_segment_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    ai_segment_a24 = df_calc[df_calc["PRI Year"] == "A24"]["Revised NS"].sum()
+    ai_segment_a25 = df_calc[df_calc["PRI Year"] == "A25"]["Revised NS"].sum()
     
-    ai_family_a24 = df_calc[(df_calc["PRI Year"] == "A24") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
-    ai_family_a25 = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Brand Family"] == selected_family)]["NS M INR"].sum()
+    ai_family_a24 = df_calc[(df_calc["PRI Year"] == "A24") & (df_calc["Brand Family"] == selected_family)]["Revised NS"].sum()
+    ai_family_a25 = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Brand Family"] == selected_family)]["Revised NS"].sum()
     
     # Calculate All Spirits from ALL STATES (all segments from unfiltered data)
-    ai_all_spirits_a24 = df_full_calc[df_full_calc["PRI Year"] == "A24"]["NS M INR"].sum()
-    ai_all_spirits_a25 = df_full_calc[df_full_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    ai_all_spirits_a24 = df_full_calc[df_full_calc["PRI Year"] == "A24"]["Revised NS"].sum()
+    ai_all_spirits_a25 = df_full_calc[df_full_calc["PRI Year"] == "A25"]["Revised NS"].sum()
     
     # AI Growth rates (based on actual All India, not selected states)
     ai_segment_gr = ((ai_segment_a25 - ai_segment_a24) / ai_segment_a24 * 100) if ai_segment_a24 > 0 else 0
@@ -3642,15 +3655,15 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
             continue
         
         # State-level segment values (current segment only)
-        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
-        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
+        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["Revised NS"].sum()
+        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["Revised NS"].sum()
         
         # State-level brand family values
-        state_family_a24 = df_state[(df_state["PRI Year"] == "A24") & (df_state["Brand Family"] == selected_family)]["NS M INR"].sum()
-        state_family_a25 = df_state[(df_state["PRI Year"] == "A25") & (df_state["Brand Family"] == selected_family)]["NS M INR"].sum()
+        state_family_a24 = df_state[(df_state["PRI Year"] == "A24") & (df_state["Brand Family"] == selected_family)]["Revised NS"].sum()
+        state_family_a25 = df_state[(df_state["PRI Year"] == "A25") & (df_state["Brand Family"] == selected_family)]["Revised NS"].sum()
         
         # State all spirits (all segments in this state from unfiltered data)
-        state_all_spirits_a25 = df_state_full[df_state_full["PRI Year"] == "A25"]["NS M INR"].sum()
+        state_all_spirits_a25 = df_state_full[df_state_full["PRI Year"] == "A25"]["Revised NS"].sum()
         
         # 1. BP FAM A25 MS (State Level) - Brand Family Market Share within Segment
         bp_fam_ms = (state_family_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
@@ -3684,10 +3697,10 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
             "BP FAM\nA25 MS": bp_fam_ms,
             "Segment\nSalience to\nAll Spirits": segment_salience,
             "State\nContribution\nto AI": state_contribution,
-            "PW A25\nNS Gr": pw_gr,
+            "Seg A25\nNS Gr": pw_gr,
             "BP FAM\nA25 NS Gr": bp_fam_gr,
             "BP FAM\nBTM": btm,
-            "PW Gr\nIndexed\nto AI": pw_gr_index,
+            "Seg Gr\nIndexed\nto AI": pw_gr_index,
             "BP Gr\nIndexed\nto AI": bp_fam_gr_index,
             "BP Gr\nIndexed to\nAI BP Gr": bp_fam_efficiency,
             "MS\nRANK": 0,
@@ -3712,10 +3725,10 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         "BP FAM\nA25 MS": (ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0,
         "Segment\nSalience to\nAll Spirits": (ai_segment_a25 / ai_all_spirits_a25 * 100) if ai_all_spirits_a25 > 0 else 0,
         "State\nContribution\nto AI": 100.0,
-        "PW A25\nNS Gr": ai_segment_gr,
+        "Seg A25\nNS Gr": ai_segment_gr,
         "BP FAM\nA25 NS Gr": ai_family_gr,
         "BP FAM\nBTM": ai_family_gr - ai_segment_gr,
-        "PW Gr\nIndexed\nto AI": 100.0,
+        "Seg Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed to\nAI BP Gr": (ai_family_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0,
         "MS\nRANK": "",
@@ -3891,9 +3904,9 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
         {"group": "State aggregated to AI", "group_color": "#E8F5E9", "text_color": "#1B5E20", 
          "columns": ["Brand FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"], "colspan": 3},
         {"group": "NS Growth Data", "group_color": "#FFF3E0", "text_color": "#E65100", 
-         "columns": ["PW A25\nNS Gr", "Brand FAM\nA25 NS Gr", "Brand FAM\nBTM"], "colspan": 3},
+         "columns": ["Seg A25\nNS Gr", "Brand FAM\nA25 NS Gr", "Brand FAM\nBTM"], "colspan": 3},
         {"group": "Growth Indexation", "group_color": "#F3E5F5", "text_color": "#4A148C", 
-         "columns": ["PW Gr\nIndexed\nto AI", "Brand Gr\nIndexed\nto AI", "Brand Gr\nIndexed to\nAI Brand Gr"], "colspan": 3},
+         "columns": ["Seg Gr\nIndexed\nto AI", "Brand Gr\nIndexed\nto AI", "Brand Gr\nIndexed to\nAI Brand Gr"], "colspan": 3},
         {"group": "Salience & Contribution RANKS", "group_color": "#FCE4EC", "text_color": "#880E4F", 
          "columns": ["MS\nRANK", "Salience\nRANK", "Contribution\nRANK"], "colspan": 3}
     ]
@@ -3985,7 +3998,7 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
             """
         
         # NS Growth Data columns
-        for col in ["PW A25\nNS Gr", "BP FAM\nA25 NS Gr", "BP FAM\nBTM"]:
+        for col in ["Seg A25\nNS Gr", "BP FAM\nA25 NS Gr", "BP FAM\nBTM"]:
             value = row[col]
             display_value = f"{value:+.0f}%" if isinstance(value, (int, float)) else value
             color = "#2E7D32" if isinstance(value, (int, float)) and value > 0 else ("#D32F2F" if isinstance(value, (int, float)) and value < 0 else "#424242")
@@ -4000,10 +4013,10 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
                 '>{display_value}</td>
             """
         
-        # Growth Indexation columns
-        for col in ["PW Gr\nIndexed\nto AI", "BP Gr\nIndexed\nto AI", "BP Gr\nIndexed to\nAI BP Gr"]:
+        # Growth Indexation columns (no % sign, already multiplied by 100)
+        for col in ["Seg Gr\nIndexed\nto AI", "BP Gr\nIndexed\nto AI", "BP Gr\nIndexed to\nAI BP Gr"]:
             value = row[col]
-            display_value = f"{value:.0f}%" if isinstance(value, (int, float)) else value
+            display_value = f"{value:.0f}" if isinstance(value, (int, float)) else value
             html += f"""
                 <td style='
                     padding: 0.7rem 0.5rem;
@@ -4056,8 +4069,13 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     if df.empty:
         return None
     
+    # Ensure Revised NS is numeric
+    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    
     # Use full segment data if provided, otherwise fall back to filtered data
     df_for_denominator = df_full_segment if df_full_segment is not None and not df_full_segment.empty else df
+    if df_for_denominator is not df:
+        df_for_denominator["Revised NS"] = pd.to_numeric(df_for_denominator["Revised NS"], errors="coerce").fillna(0)
     
     # Filter for specified zone and selected brands/families
     df_zone = df[df["Zone"] == zone_name].copy()
@@ -4083,20 +4101,20 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     
     # Calculate All India totals (for the segment with selected brands)
     df_all = df[df["Brand Family"].isin(selected_families) & df["Brand"].isin(selected_brands)].copy()
-    ai_a25_total = df_all[df_all["PRI Year"] == "A25"]["NS M INR"].sum()
-    ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_a25_total = df_all[df_all["PRI Year"] == "A25"]["Revised NS"].sum()
+    ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["Revised NS"].sum()
     ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
     
     # ===== STATE SUMMARY TABLE =====
-    state_a25 = df_a25.groupby("State")["NS M INR"].sum().to_dict()
-    state_a24 = df_a24.groupby("State")["NS M INR"].sum().to_dict()
-    state_a26_ytd = df_a26_ytd.groupby("State")["NS M INR"].sum().to_dict()
-    state_a25_ytd = df_a25_ytd.groupby("State")["NS M INR"].sum().to_dict()
+    state_a25 = df_a25.groupby("State")["Revised NS"].sum().to_dict()
+    state_a24 = df_a24.groupby("State")["Revised NS"].sum().to_dict()
+    state_a26_ytd = df_a26_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    state_a25_ytd = df_a25_ytd.groupby("State")["Revised NS"].sum().to_dict()
     
     # Calculate segment totals for ALL brands in each state (for MS denominator)
     df_segment_full = df_for_denominator[df_for_denominator["Zone"] == zone_name].copy()  # All brands in segment in this zone
-    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["NS M INR"].sum().to_dict()
-    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["NS M INR"].sum().to_dict()
+    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["Revised NS"].sum().to_dict()
+    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["Revised NS"].sum().to_dict()
     
     # Calculate zone totals
     zone_a25 = sum(state_a25.values())
@@ -4155,10 +4173,10 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     state_summary = pd.DataFrame(summary_rows)
     
     # ===== STATE DEEP-DIVE TABLES =====
-    brand_state_a25 = df_a25.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_state_a24 = df_a24.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_state_a26_ytd = df_a26_ytd.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
+    brand_state_a25 = df_a25.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_state_a24 = df_a24.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_state_a26_ytd = df_a26_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     
     state_details = {}
     
@@ -4185,16 +4203,16 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
             # Family total row
             family_a25 = brand_state_a25[
                 (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             family_a24 = brand_state_a24[
                 (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             family_a26_ytd = brand_state_a26_ytd[
                 (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             family_a25_ytd = brand_state_a25_ytd[
                 (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             
             if family_a25 == 0 and family_a24 == 0:
                 detail_rows.append({
@@ -4243,10 +4261,10 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                     (brand_state_a25_ytd["Brand"] == brand)
                 ]
                 
-                brand_a25 = brand_data_a25["NS M INR"].sum() if not brand_data_a25.empty else 0
-                brand_a24 = brand_data_a24["NS M INR"].sum() if not brand_data_a24.empty else 0
-                brand_a26_ytd = brand_data_a26_ytd["NS M INR"].sum() if not brand_data_a26_ytd.empty else 0
-                brand_a25_ytd = brand_data_a25_ytd["NS M INR"].sum() if not brand_data_a25_ytd.empty else 0
+                brand_a25 = brand_data_a25["Revised NS"].sum() if not brand_data_a25.empty else 0
+                brand_a24 = brand_data_a24["Revised NS"].sum() if not brand_data_a24.empty else 0
+                brand_a26_ytd = brand_data_a26_ytd["Revised NS"].sum() if not brand_data_a26_ytd.empty else 0
+                brand_a25_ytd = brand_data_a25_ytd["Revised NS"].sum() if not brand_data_a25_ytd.empty else 0
                 
                 if brand_a25 == 0 and brand_a24 == 0:
                     detail_rows.append({
@@ -4288,6 +4306,9 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     if df.empty:
         return None
     
+    # Ensure Revised NS is numeric
+    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    
     # Need A24, A25, and A26 data for growth calculation
     df_all = df.copy()
     
@@ -4300,8 +4321,8 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     zones = sorted(df_a25_all_brands["Zone"].unique().tolist())
     
     # Level 3: Zone only (segment totals per zone) - FROM ALL BRANDS
-    segment_zone_a25 = df_a25_all_brands.groupby("Zone")["NS M INR"].sum().to_dict()
-    segment_zone_a24 = df_a24_all_brands.groupby("Zone")["NS M INR"].sum().to_dict()
+    segment_zone_a25 = df_a25_all_brands.groupby("Zone")["Revised NS"].sum().to_dict()
+    segment_zone_a24 = df_a24_all_brands.groupby("Zone")["Revised NS"].sum().to_dict()
     
     # Calculate segment growth for each zone (from ALL brands)
     segment_growth = {}
@@ -4336,16 +4357,16 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     # THREE LEVELS OF AGGREGATION FOR SELECTED BRANDS:
     
     # Level 1: Zone × Brand Family × Brand (most granular)
-    brand_zone_a25 = df_a25.groupby(["Zone", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_zone_a24 = df_a24.groupby(["Zone", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_zone_a26_ytd = df_a26_ytd.groupby(["Zone", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_zone_a25_ytd = df_a25_ytd.groupby(["Zone", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
+    brand_zone_a25 = df_a25.groupby(["Zone", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_zone_a24 = df_a24.groupby(["Zone", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_zone_a26_ytd = df_a26_ytd.groupby(["Zone", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_zone_a25_ytd = df_a25_ytd.groupby(["Zone", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     
     # Level 2: Zone × Brand Family (family totals per zone)
-    family_zone_a25 = df_a25.groupby(["Zone", "Brand Family"])["NS M INR"].sum().reset_index()
-    family_zone_a24 = df_a24.groupby(["Zone", "Brand Family"])["NS M INR"].sum().reset_index()
-    family_zone_a26_ytd = df_a26_ytd.groupby(["Zone", "Brand Family"])["NS M INR"].sum().reset_index()
-    family_zone_a25_ytd = df_a25_ytd.groupby(["Zone", "Brand Family"])["NS M INR"].sum().reset_index()
+    family_zone_a25 = df_a25.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_zone_a24 = df_a24.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_zone_a26_ytd = df_a26_ytd.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_zone_a25_ytd = df_a25_ytd.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
     
     # Build unified table
     rows = []
@@ -4362,15 +4383,15 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
         family_row = {"Brand": f"{family} FAM", "Type": "family"}
         
         # Calculate family total across all zones for salience
-        family_total_all_zones = family_zone_a25[family_zone_a25["Brand Family"] == family]["NS M INR"].sum()
+        family_total_all_zones = family_zone_a25[family_zone_a25["Brand Family"] == family]["Revised NS"].sum()
         
         for zone in zones:
             # Get family totals for this zone
             family_zone_data_a25 = family_zone_a25[(family_zone_a25["Zone"] == zone) & (family_zone_a25["Brand Family"] == family)]
-            family_sum_a25 = family_zone_data_a25["NS M INR"].sum() if not family_zone_data_a25.empty else 0
+            family_sum_a25 = family_zone_data_a25["Revised NS"].sum() if not family_zone_data_a25.empty else 0
             
             family_zone_data_a24 = family_zone_a24[(family_zone_a24["Zone"] == zone) & (family_zone_a24["Brand Family"] == family)]
-            family_sum_a24 = family_zone_data_a24["NS M INR"].sum() if not family_zone_data_a24.empty else 0
+            family_sum_a24 = family_zone_data_a24["Revised NS"].sum() if not family_zone_data_a24.empty else 0
             
             # MS = Family share in this zone (vs segment total in zone)
             segment_total_zone = segment_zone_a25.get(zone, 0)
@@ -4384,10 +4405,10 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
             
             # A26 YTD Growth = (July-Oct A26 - July-Oct A25) / July-Oct A25
             family_zone_data_a26_ytd = family_zone_a26_ytd[(family_zone_a26_ytd["Zone"] == zone) & (family_zone_a26_ytd["Brand Family"] == family)]
-            family_sum_a26_ytd = family_zone_data_a26_ytd["NS M INR"].sum() if not family_zone_data_a26_ytd.empty else 0
+            family_sum_a26_ytd = family_zone_data_a26_ytd["Revised NS"].sum() if not family_zone_data_a26_ytd.empty else 0
             
             family_zone_data_a25_ytd = family_zone_a25_ytd[(family_zone_a25_ytd["Zone"] == zone) & (family_zone_a25_ytd["Brand Family"] == family)]
-            family_sum_a25_ytd = family_zone_data_a25_ytd["NS M INR"].sum() if not family_zone_data_a25_ytd.empty else 0
+            family_sum_a25_ytd = family_zone_data_a25_ytd["Revised NS"].sum() if not family_zone_data_a25_ytd.empty else 0
             
             family_a26_ytd_growth = ((family_sum_a26_ytd / family_sum_a25_ytd) - 1) * 100 if family_sum_a25_ytd > 0 else 0
             
@@ -4407,19 +4428,19 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
             
             # Calculate brand total across all zones for salience
             brand_total_all_zones = brand_zone_a25[(brand_zone_a25["Brand Family"] == family) & 
-                                                     (brand_zone_a25["Brand"] == brand)]["NS M INR"].sum()
+                                                     (brand_zone_a25["Brand"] == brand)]["Revised NS"].sum()
             
             for zone in zones:
                 # Get brand data for this zone
                 brand_zone_data_a25 = brand_zone_a25[(brand_zone_a25["Zone"] == zone) & 
                                                        (brand_zone_a25["Brand Family"] == family) & 
                                                        (brand_zone_a25["Brand"] == brand)]
-                a25_val = brand_zone_data_a25["NS M INR"].sum() if not brand_zone_data_a25.empty else 0
+                a25_val = brand_zone_data_a25["Revised NS"].sum() if not brand_zone_data_a25.empty else 0
                 
                 brand_zone_data_a24 = brand_zone_a24[(brand_zone_a24["Zone"] == zone) & 
                                                        (brand_zone_a24["Brand Family"] == family) & 
                                                        (brand_zone_a24["Brand"] == brand)]
-                a24_val = brand_zone_data_a24["NS M INR"].sum() if not brand_zone_data_a24.empty else 0
+                a24_val = brand_zone_data_a24["Revised NS"].sum() if not brand_zone_data_a24.empty else 0
                 
                 # MS = Brand share in this zone (vs segment total in zone)
                 segment_total_zone = segment_zone_a25.get(zone, 0)
@@ -4435,12 +4456,12 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
                 brand_zone_data_a26_ytd = brand_zone_a26_ytd[(brand_zone_a26_ytd["Zone"] == zone) & 
                                                                (brand_zone_a26_ytd["Brand Family"] == family) & 
                                                                (brand_zone_a26_ytd["Brand"] == brand)]
-                a26_ytd_val = brand_zone_data_a26_ytd["NS M INR"].sum() if not brand_zone_data_a26_ytd.empty else 0
+                a26_ytd_val = brand_zone_data_a26_ytd["Revised NS"].sum() if not brand_zone_data_a26_ytd.empty else 0
                 
                 brand_zone_data_a25_ytd = brand_zone_a25_ytd[(brand_zone_a25_ytd["Zone"] == zone) & 
                                                                (brand_zone_a25_ytd["Brand Family"] == family) & 
                                                                (brand_zone_a25_ytd["Brand"] == brand)]
-                a25_ytd_val = brand_zone_data_a25_ytd["NS M INR"].sum() if not brand_zone_data_a25_ytd.empty else 0
+                a25_ytd_val = brand_zone_data_a25_ytd["Revised NS"].sum() if not brand_zone_data_a25_ytd.empty else 0
                 
                 a26_ytd_growth = ((a26_ytd_val / a25_ytd_val) - 1) * 100 if a25_ytd_val > 0 else 0
                 
@@ -4484,6 +4505,9 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
     if df_years.empty:
         return None
     
+    # Ensure Revised NS is numeric
+    df_years["Revised NS"] = pd.to_numeric(df_years["Revised NS"], errors="coerce").fillna(0)
+    
     # Check if Month column exists for A26 YTD calculation
     has_month_col = "Month" in df_years.columns
     
@@ -4504,7 +4528,7 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
         df_combined[df_combined["PRI Year"].isin(["A23", "A24", "A25"])],
         index="Mfg Com",
         columns="PRI Year",
-        values="NS M INR",
+        values="Revised NS",
         aggfunc="sum",
         fill_value=0
     )
@@ -4551,7 +4575,7 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
         a26_ytd_pivot = pd.pivot_table(
             a26_ytd,
             index="Mfg Com",
-            values="NS M INR",
+            values="Revised NS",
             aggfunc="sum",
             fill_value=0
         )
@@ -4561,7 +4585,7 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
         a25_ytd_pivot = pd.pivot_table(
             a25_ytd,
             index="Mfg Com",
-            values="NS M INR",
+            values="Revised NS",
             aggfunc="sum",
             fill_value=0
         )
@@ -4643,8 +4667,13 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     if df.empty:
         return None
     
+    # Ensure Revised NS is numeric
+    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    
     # Use full segment data if provided, otherwise fall back to filtered data
     df_for_denominator = df_full_segment if df_full_segment is not None and not df_full_segment.empty else df
+    if df_for_denominator is not df:
+        df_for_denominator["Revised NS"] = pd.to_numeric(df_for_denominator["Revised NS"], errors="coerce").fillna(0)
     
     # Filter for NORTH zone and selected brands/families
     df_north = df[df["Zone"] == "North Zone"].copy()
@@ -4670,21 +4699,21 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     
     # Calculate All India totals (for the segment with selected brands)
     df_all = df[df["Brand Family"].isin(selected_families) & df["Brand"].isin(selected_brands)].copy()
-    ai_a25_total = df_all[df_all["PRI Year"] == "A25"]["NS M INR"].sum()
-    ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["NS M INR"].sum()
+    ai_a25_total = df_all[df_all["PRI Year"] == "A25"]["Revised NS"].sum()
+    ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["Revised NS"].sum()
     ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
     
     # ===== STATE SUMMARY TABLE =====
     # Aggregate by state for segment totals (selected brands only for summary)
-    state_a25 = df_a25.groupby("State")["NS M INR"].sum().to_dict()
-    state_a24 = df_a24.groupby("State")["NS M INR"].sum().to_dict()
-    state_a26_ytd = df_a26_ytd.groupby("State")["NS M INR"].sum().to_dict()
-    state_a25_ytd = df_a25_ytd.groupby("State")["NS M INR"].sum().to_dict()
+    state_a25 = df_a25.groupby("State")["Revised NS"].sum().to_dict()
+    state_a24 = df_a24.groupby("State")["Revised NS"].sum().to_dict()
+    state_a26_ytd = df_a26_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    state_a25_ytd = df_a25_ytd.groupby("State")["Revised NS"].sum().to_dict()
     
     # Calculate segment totals for ALL brands in each state (for MS denominator)
     df_segment_full = df_for_denominator[df_for_denominator["Zone"] == "North Zone"].copy()  # All brands in segment in North Zone
-    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["NS M INR"].sum().to_dict()
-    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["NS M INR"].sum().to_dict()
+    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["Revised NS"].sum().to_dict()
+    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["Revised NS"].sum().to_dict()
     
     # Calculate NORTH zone totals (sum of all states in North Zone)
     north_zone_a25 = sum(state_a25.values())
@@ -4750,10 +4779,10 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     
     # ===== STATE DEEP-DIVE TABLES =====
     # Brand-level data by state
-    brand_state_a25 = df_a25.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_state_a24 = df_a24.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_state_a26_ytd = df_a26_ytd.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
-    brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["NS M INR"].sum().reset_index()
+    brand_state_a25 = df_a25.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_state_a24 = df_a24.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_state_a26_ytd = df_a26_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     
     state_details = {}
     
@@ -4783,16 +4812,16 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
             # Family total row - sum across all brands in family for this state
             family_a25 = brand_state_a25[
                 (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             family_a24 = brand_state_a24[
                 (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             family_a26_ytd = brand_state_a26_ytd[
                 (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             family_a25_ytd = brand_state_a25_ytd[
                 (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
-            ]["NS M INR"].sum()
+            ]["Revised NS"].sum()
             
             # If family has no sales in this state, show "-"
             if family_a25 == 0 and family_a24 == 0:
@@ -4843,10 +4872,10 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
                 ]
                 
                 # Always show brand, even if 0
-                brand_a25 = brand_data_a25["NS M INR"].sum() if not brand_data_a25.empty else 0
-                brand_a24 = brand_data_a24["NS M INR"].sum() if not brand_data_a24.empty else 0
-                brand_a26_ytd = brand_data_a26_ytd["NS M INR"].sum() if not brand_data_a26_ytd.empty else 0
-                brand_a25_ytd = brand_data_a25_ytd["NS M INR"].sum() if not brand_data_a25_ytd.empty else 0
+                brand_a25 = brand_data_a25["Revised NS"].sum() if not brand_data_a25.empty else 0
+                brand_a24 = brand_data_a24["Revised NS"].sum() if not brand_data_a24.empty else 0
+                brand_a26_ytd = brand_data_a26_ytd["Revised NS"].sum() if not brand_data_a26_ytd.empty else 0
+                brand_a25_ytd = brand_data_a25_ytd["Revised NS"].sum() if not brand_data_a25_ytd.empty else 0
                 
                 # If brand has no sales in this state (both A25 and A24 are 0), show "-"
                 if brand_a25 == 0 and brand_a24 == 0:
@@ -9077,8 +9106,8 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
     
     # Calculate All India segment metrics (using ALL brands in the segment)
     # This is correct - df_calc is already segment-filtered
-    all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["NS M INR"].sum()
-    all_india_a25 = df_calc[df_calc["PRI Year"] == "A25"]["NS M INR"].sum()
+    all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["Revised NS"].sum()
+    all_india_a25 = df_calc[df_calc["PRI Year"] == "A25"]["Revised NS"].sum()
     all_india_growth = ((all_india_a25 - all_india_a24) / all_india_a24 * 100) if all_india_a24 > 0 else 0
     
     st.markdown(f"**All India Segment Growth (A25):** {all_india_growth:+.1f}%")
@@ -9103,8 +9132,8 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
             continue
         
         # SEGMENT-LEVEL CALCULATIONS (ALL BRANDS)
-        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["NS M INR"].sum()
-        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["NS M INR"].sum()
+        state_segment_a24 = df_state[df_state["PRI Year"] == "A24"]["Revised NS"].sum()
+        state_segment_a25 = df_state[df_state["PRI Year"] == "A25"]["Revised NS"].sum()
         
         # Segment MS (State share of All India)
         segment_ms = (state_segment_a25 / all_india_a25 * 100) if all_india_a25 > 0 else 0
@@ -9152,8 +9181,8 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
             if df_brand.empty:
                 continue
             
-            brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["NS M INR"].sum()
-            brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["NS M INR"].sum()
+            brand_a24 = df_brand[df_brand["PRI Year"] == "A24"]["Revised NS"].sum()
+            brand_a25 = df_brand[df_brand["PRI Year"] == "A25"]["Revised NS"].sum()
             
             # Brand MS (brand share of state segment - denominator uses ALL brands)
             brand_ms = (brand_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
@@ -9758,3 +9787,5 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
     st.markdown("---")
     st.markdown("---")
     render_battlegrounds_jtbd_config(segment, df_filtered, dataset_id, current_user)
+
+
