@@ -19,6 +19,43 @@ from app_core.uploads import count_uploads_for_segment, overwrite_dataset, get_u
 from .charts import plot_chart
 
 
+def clean_numeric_column(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+    """
+    Clean and convert a numeric column, handling accounting format negatives like (123.45).
+    
+    Args:
+        df: DataFrame containing the column
+        column_name: Name of the column to clean
+        
+    Returns:
+        DataFrame with cleaned numeric column
+    """
+    def clean_value(val):
+        """Clean individual numeric value"""
+        if pd.isna(val):
+            return 0
+        
+        # Convert to string and strip whitespace
+        val_str = str(val).strip()
+        
+        # Handle accounting format negatives: (123.45) -> -123.45
+        if val_str.startswith('(') and val_str.endswith(')'):
+            val_str = '-' + val_str[1:-1].strip()
+        
+        # Remove currency symbols and commas
+        val_str = val_str.replace('₹', '').replace('$', '').replace(',', '').strip()
+        
+        # Try to convert to float
+        try:
+            return float(val_str)
+        except (ValueError, TypeError):
+            return 0
+    
+    # Apply cleaning function
+    df[column_name] = df[column_name].apply(clean_value)
+    return df
+
+
 def draw_dashboard(segment: Dict, charts, tables, is_editor: bool = False) -> None:
     st.subheader(f"Segment: {segment['name']}")
     
@@ -650,7 +687,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             return
         
         # Ensure Revised NS is numeric
-        df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+        df = clean_numeric_column(df, "Revised NS")
         
         # Check if Month column exists for A26 YTD calculation
         has_month_col = "Month" in df.columns
@@ -865,7 +902,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         return
     
     # Ensure Revised NS is numeric
-    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    df = clean_numeric_column(df, "Revised NS")
     
     # Aggregate data
     chart_data = df.groupby(["Brand", "Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
@@ -890,7 +927,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         df_original = df_original[~df_original["State"].isin(excluded_states)]
     df_original = df_original[df_original["Brand"].isin(selected_brands)]
     # Ensure Revised NS is numeric in df_original
-    df_original["Revised NS"] = pd.to_numeric(df_original["Revised NS"], errors="coerce").fillna(0)
+    df_original = clean_numeric_column(df_original, "Revised NS")
     
     for _, row in pivot_wide.iterrows():
         brand = row["Brand"]
@@ -1215,7 +1252,7 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
         return
     
     # Ensure Revised NS is numeric
-    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    df = clean_numeric_column(df, "Revised NS")
     
     # Aggregate by Brand Family and Year
     chart_data = df.groupby(["Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
@@ -4644,7 +4681,7 @@ def render_battlegrounds_calculations(segment: Dict, tab_config: Dict, segment_i
         return
     
     # Ensure Revised NS is numeric
-    df_calc["Revised NS"] = pd.to_numeric(df_calc["Revised NS"], errors="coerce").fillna(0)
+    df_calc = clean_numeric_column(df_calc, "Revised NS")
     
     # Calculate All India segment metrics
     all_india_a24 = df_calc[df_calc["PRI Year"] == "A24"]["Revised NS"].sum()

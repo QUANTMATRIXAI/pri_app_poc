@@ -29,6 +29,43 @@ from app_core.uploads import (
 from .charts import plot_chart
 
 
+def clean_numeric_column(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+    """
+    Clean and convert a numeric column, handling accounting format negatives like (123.45).
+    
+    Args:
+        df: DataFrame containing the column
+        column_name: Name of the column to clean
+        
+    Returns:
+        DataFrame with cleaned numeric column
+    """
+    def clean_value(val):
+        """Clean individual numeric value"""
+        if pd.isna(val):
+            return 0
+        
+        # Convert to string and strip whitespace
+        val_str = str(val).strip()
+        
+        # Handle accounting format negatives: (123.45) -> -123.45
+        if val_str.startswith('(') and val_str.endswith(')'):
+            val_str = '-' + val_str[1:-1].strip()
+        
+        # Remove currency symbols and commas
+        val_str = val_str.replace('₹', '').replace('$', '').replace(',', '').strip()
+        
+        # Try to convert to float
+        try:
+            return float(val_str)
+        except (ValueError, TypeError):
+            return 0
+    
+    # Apply cleaning function
+    df[column_name] = df[column_name].apply(clean_value)
+    return df
+
+
 def format_comment_preview(text: str) -> str:
     """Format comment text with bold, underline, italic, headings, and bullets for preview"""
     import re
@@ -427,7 +464,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         if not df_chart.empty:
             st.markdown("**Preview:**")
             # Ensure Revised NS is numeric
-            df_chart["Revised NS"] = pd.to_numeric(df_chart["Revised NS"], errors="coerce").fillna(0)
+            df_chart = clean_numeric_column(df_chart, "Revised NS")
             
             # Create data for chart - aggregate NS by Brand and Year
             chart_data = df_chart.groupby(["Brand", "Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
@@ -839,7 +876,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         if not df_family_chart.empty:
             st.markdown("**Preview:**")
             # Ensure Revised NS is numeric
-            df_family_chart["Revised NS"] = pd.to_numeric(df_family_chart["Revised NS"], errors="coerce").fillna(0)
+            df_family_chart = clean_numeric_column(df_family_chart, "Revised NS")
             
             # Aggregate by Brand Family and Year
             family_chart_data = df_family_chart.groupby(["Brand Family", "PRI Year"])["Revised NS"].sum().reset_index()
@@ -3613,7 +3650,7 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         return None
     
     # Ensure Revised NS is numeric
-    df_segment["Revised NS"] = pd.to_numeric(df_segment["Revised NS"], errors="coerce").fillna(0)
+    df_segment = clean_numeric_column(df_segment, "Revised NS")
     
     # Filter for A24 and A25 data
     df_calc = df_segment[df_segment["PRI Year"].isin(["A24", "A25"])].copy()
@@ -3621,7 +3658,7 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     
     # Ensure Revised NS is numeric in df_full_calc
     if df_full_calc is not df_calc:
-        df_full_calc["Revised NS"] = pd.to_numeric(df_full_calc["Revised NS"], errors="coerce").fillna(0)
+        df_full_calc = clean_numeric_column(df_full_calc, "Revised NS")
     
     if df_calc.empty:
         return None
@@ -4070,12 +4107,12 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
         return None
     
     # Ensure Revised NS is numeric
-    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    df = clean_numeric_column(df, "Revised NS")
     
     # Use full segment data if provided, otherwise fall back to filtered data
     df_for_denominator = df_full_segment if df_full_segment is not None and not df_full_segment.empty else df
     if df_for_denominator is not df:
-        df_for_denominator["Revised NS"] = pd.to_numeric(df_for_denominator["Revised NS"], errors="coerce").fillna(0)
+        df_for_denominator = clean_numeric_column(df_for_denominator, "Revised NS")
     
     # Filter for specified zone and selected brands/families
     df_zone = df[df["Zone"] == zone_name].copy()
@@ -4307,7 +4344,7 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
         return None
     
     # Ensure Revised NS is numeric
-    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    df = clean_numeric_column(df, "Revised NS")
     
     # Need A24, A25, and A26 data for growth calculation
     df_all = df.copy()
@@ -4506,7 +4543,30 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
         return None
     
     # Ensure Revised NS is numeric
-    df_years["Revised NS"] = pd.to_numeric(df_years["Revised NS"], errors="coerce").fillna(0)
+    # Clean and convert Revised NS column
+    def clean_numeric_value(val):
+        """Clean numeric values including accounting format negatives like (123.45)"""
+        if pd.isna(val):
+            return 0
+        
+        # Convert to string and strip whitespace
+        val_str = str(val).strip()
+        
+        # Handle accounting format negatives: (123.45) -> -123.45
+        if val_str.startswith('(') and val_str.endswith(')'):
+            val_str = '-' + val_str[1:-1].strip()
+        
+        # Remove currency symbols and commas
+        val_str = val_str.replace('₹', '').replace('$', '').replace(',', '').strip()
+        
+        # Try to convert to float
+        try:
+            return float(val_str)
+        except (ValueError, TypeError):
+            return 0
+    
+    # Apply cleaning function
+    df_years["Revised NS"] = df_years["Revised NS"].apply(clean_numeric_value)
     
     # Check if Month column exists for A26 YTD calculation
     has_month_col = "Month" in df_years.columns
@@ -4668,12 +4728,12 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
         return None
     
     # Ensure Revised NS is numeric
-    df["Revised NS"] = pd.to_numeric(df["Revised NS"], errors="coerce").fillna(0)
+    df = clean_numeric_column(df, "Revised NS")
     
     # Use full segment data if provided, otherwise fall back to filtered data
     df_for_denominator = df_full_segment if df_full_segment is not None and not df_full_segment.empty else df
     if df_for_denominator is not df:
-        df_for_denominator["Revised NS"] = pd.to_numeric(df_for_denominator["Revised NS"], errors="coerce").fillna(0)
+        df_for_denominator = clean_numeric_column(df_for_denominator, "Revised NS")
     
     # Filter for NORTH zone and selected brands/families
     df_north = df[df["Zone"] == "North Zone"].copy()
@@ -9105,7 +9165,7 @@ def render_battlegrounds_calc_preview(df_segment: pd.DataFrame, segment: Dict, s
         return
     
     # Ensure Revised NS is numeric
-    df_calc["Revised NS"] = pd.to_numeric(df_calc["Revised NS"], errors="coerce").fillna(0)
+    df_calc = clean_numeric_column(df_calc, "Revised NS")
     
     # Calculate All India segment metrics (using ALL brands in the segment)
     # This is correct - df_calc is already segment-filtered
