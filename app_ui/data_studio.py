@@ -412,11 +412,12 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             brands_in_families = sorted(
                 df_filtered_with_a26[df_filtered_with_a26["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
             )
-            # Always auto-select all brands from selected families
+            # Use saved brands if available, otherwise default to all brands in selected families
+            default_brands = [b for b in saved_brands if b in brands_in_families] if saved_brands else brands_in_families
             selected_brands = st.multiselect(
                 "Select Brands",
                 options=brands_in_families,
-                default=brands_in_families,
+                default=default_brands,
                 key=f"ns_chart_brands_{segment['id']}"
             )
         else:
