@@ -1663,6 +1663,9 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
     
+    # Info message at the end (only once for all zones)
+    st.info("📌 Manufacturing company data for all brands")
+    
     # Show comment box BELOW the zone tables
     comment = table_row["comment"] if table_row["comment"] else ""
     if comment:
@@ -2306,6 +2309,8 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
         with col1:
             summary_styled = result_all['state_summary'].style.apply(highlight_zone_row, axis=1).applymap(color_negatives_summary)
             st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+            # Info message for state summary
+            st.info("📌 Data for all brands in the segment")
         with col2:
             st.markdown(f"""
                 <div style='
@@ -2331,6 +2336,8 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     else:
         summary_styled = result_all['state_summary'].style.apply(highlight_zone_row, axis=1).applymap(color_negatives_summary)
         st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+        # Info message for state summary
+        st.info("📌 Data for all brands in the segment")
     
     # Show state deep-dives for SELECTED states only
     if selected_states:
@@ -2386,13 +2393,13 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
                             display_df = state_df.drop(columns=['Type'])
                             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
-                            
-                            # Info message below table
-                            st.info("📌 Data for all brands within the manufacturing company")
                 
                 # Add spacing between rows if there are more states
                 if row_start + states_per_row < len(selected_states):
                     st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+            
+            # Info message at the end (only once for all states)
+            st.info("📌 Manufacturing company data for all brands")
     
     # Show bottom comment box BELOW the deep-dive tables
     if bottom_comment:

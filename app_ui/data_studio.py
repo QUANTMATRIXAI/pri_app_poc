@@ -1279,6 +1279,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
                 
+                # Info message at the end (only once for all zones)
+                st.info("📌 Manufacturing company data for all brands")
+                
                 # Comment box AFTER zonal preview - pre-populated with saved value
                 zonal_comment = st.text_area(
                     "Add Comment",
@@ -1390,6 +1393,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     summary_styled = preview_all_states['state_summary'].style.apply(highlight_zone_row, axis=1).applymap(color_negatives_summary)
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
                     
+                    # Info message for state summary
+                    st.info("📌 Data for all brands in the segment")
+                    
                     # Get sorted states from summary (excluding NORTH zone row)
                     sorted_states = preview_all_states['state_summary'][preview_all_states['state_summary']['State'] != 'NORTH']['State'].tolist()
                 
@@ -1472,13 +1478,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                         display_df = state_df.drop(columns=['Type'])
                                         styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                                         st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
-                                        
-                                        # Info message below table
-                                        st.info("📌 Data for all brands within the manufacturing company")
                             
                             # Add spacing between rows if there are more states
                             if row_start + states_per_row < len(selected_states):
                                 st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+                
+                # Info message at the end of zone (only once)
+                st.info("📌 Manufacturing company data for all brands")
                 
                 # Comment for brand deep-dive AFTER preview - pre-populated with saved value
                 st.markdown("---")
@@ -1579,6 +1585,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if preview_all_west:
                     summary_styled = style_state_summary(preview_all_west['state_summary'])
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Info message for state summary
+                    st.info("📌 Data for all brands in the segment")
                     
                     # Get sorted states from summary (excluding zone row)
                     sorted_states_west = preview_all_west['state_summary'][preview_all_west['state_summary']['State'] != 'WEST+CSD']['State'].tolist()
@@ -1706,6 +1715,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     summary_styled = style_state_summary(preview_all_east['state_summary'])
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
                     
+                    # Info message for state summary
+                    st.info("📌 Data for all brands in the segment")
+                    
                     # Get sorted states from summary (excluding zone row)
                     sorted_states_east = preview_all_east['state_summary'][preview_all_east['state_summary']['State'] != 'EAST']['State'].tolist()
                 
@@ -1831,6 +1843,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if preview_all_south:
                     summary_styled = style_state_summary(preview_all_south['state_summary'])
                     st.dataframe(summary_styled, use_container_width=True, hide_index=True)
+                    
+                    # Info message for state summary
+                    st.info("📌 Data for all brands in the segment")
                     
                     # Get sorted states from summary (excluding zone row)
                     sorted_states_south = preview_all_south['state_summary'][preview_all_south['state_summary']['State'] != 'SOUTH']['State'].tolist()
@@ -3899,9 +3914,9 @@ def render_state_drilldown_preview(preview_data: Dict, selected_states: List[str
                 display_df = state_df.drop(columns=['Type'])
                 styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
-                
-                # Info message below table
-                st.info("📌 Data for all brands within the manufacturing company")
+    
+    # Info message at the end (only once for all states)
+    st.info("📌 Manufacturing company data for all brands")
 
 
 def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.DataFrame, selected_states: List[str], selected_family: str, segment: Dict) -> pd.DataFrame | None:
