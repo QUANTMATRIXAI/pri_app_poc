@@ -10108,10 +10108,14 @@ def render_battlegrounds_config(segment: Dict, df_filtered: pd.DataFrame, datase
             # Available states = all states minus those selected in previous tabs
             available_states_for_tab = [s for s in all_states if s not in used_states or s in saved_tab.get("states", [])]
             
+            # Filter saved states to only include those that exist in available options
+            saved_states_for_tab = saved_tab.get("states", [])
+            valid_saved_states = [s for s in saved_states_for_tab if s in available_states_for_tab]
+            
             selected_states = st.multiselect(
                 f"Select states for {tab_name}",
                 options=available_states_for_tab,
-                default=saved_tab.get("states", []),
+                default=valid_saved_states,
                 key=f"bg_tab{i}_states_{segment['id']}",
                 help="States can only be assigned to one tab"
             )
