@@ -470,9 +470,9 @@ def render_segment_ns_pivot(segment: Dict) -> bool:
         start = pivot_mfs["A23"]
         end = pivot_mfs["A25"]
         cagr_vals = np.where(start > 0, ((end / start) ** 0.5 - 1) * 100, np.nan)
-        cagr_series = pd.Series(cagr_vals, index=pivot_mfs.index, name="2 Yr CAGR %").round(2)
+        cagr_series = pd.Series(cagr_vals, index=pivot_mfs.index, name="2 Yr CAGR % (A23-A25)").round(2)
     else:
-        cagr_series = pd.Series([np.nan] * len(pivot_mfs), index=pivot_mfs.index, name="2 Yr CAGR %")
+        cagr_series = pd.Series([np.nan] * len(pivot_mfs), index=pivot_mfs.index, name="2 Yr CAGR % (A23-A25)")
 
     # Formatting
     pivot_fmt = pivot_mfs[selected_years].applymap(lambda x: f"{x:.0f}" if pd.notnull(x) else "")
@@ -492,10 +492,10 @@ def render_segment_ns_pivot(segment: Dict) -> bool:
     growth_rows = final_table[final_table["Mfg Com"].isin(custom_order)].copy()
     if not growth_rows.empty:
         growth_rows["Mfg Com"] = growth_rows["Mfg Com"].replace({"Segment Total": "Segment"})
-        growth_cols = [col for col in ["A24 Growth %", "A25 Growth %", "2 Yr CAGR %"] if col in growth_rows.columns]
+        growth_cols = [col for col in ["A24 Growth %", "A25 Growth %", "2 Yr CAGR % (A23-A25)"] if col in growth_rows.columns]
         if growth_cols:
             growth_display = growth_rows[["Mfg Com"] + growth_cols].copy()
-            rename_map = {"Mfg Com": "Segment", "A24 Growth %": "A24", "A25 Growth %": "A25", "2 Yr CAGR %": "2Yr CAGR"}
+            rename_map = {"Mfg Com": "Segment", "A24 Growth %": "A24", "A25 Growth %": "A25", "2 Yr CAGR % (A23-A25)": "2Yr CAGR"}
             growth_display = growth_display.rename(columns={k: v for k, v in rename_map.items() if k in growth_display.columns})
             st.markdown(f"#### {segment['name']} growth summary")
             st.table(growth_display)
@@ -736,12 +736,12 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
         if "A23" in selected_years and "A25" in selected_years:
             start = pivot["A23"]
             end = pivot["A25"]
-            pivot["2 Yr CAGR %"] = np.where(
+            pivot["2 Yr CAGR % (A23-A25)"] = np.where(
                 start > 0,
                 ((end / start) ** 0.5 - 1) * 100,
                 0
             ).round(1)
-            columns_to_keep.append("2 Yr CAGR %")
+            columns_to_keep.append("2 Yr CAGR % (A23-A25)")
         
         # Calculate A26 YTD Growth % (July-Oct A26 vs July-Oct A25)
         if "A26" in selected_years and has_month_col:
@@ -802,7 +802,7 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
             
             columns_to_keep.append("A26 YTD Growth %*")
         
-        # Format and sort
+        # Format and sort FIRST
         pivot = pivot.reset_index()
         pivot = pivot.rename(columns={"index": "Mfg Com"})
         
@@ -810,14 +810,77 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
         pivot["sort_key"] = pivot["Mfg Com"].apply(lambda x: custom_order.index(x) if x in custom_order else 999)
         pivot = pivot.sort_values("sort_key").drop(columns=["sort_key"]).reset_index(drop=True)
         
-        # Select only required columns
-        final_columns = [col for col in columns_to_keep if col in pivot.columns]
+        # Calculate A25 BTM (Beat The Market) - Company A25 Growth vs Segment Total A25 Growth
+        if "A25 Growth %" in pivot.columns:
+            # Get Segment Total A25 Growth (All India benchmark) - it's the first row after sorting
+            segment_row = pivot[pivot["Mfg Com"] == "Segment Total"]
+            if not segment_row.empty:
+                segment_a25_growth = segment_row["A25 Growth %"].iloc[0]
+            else:
+                segment_a25_growth = 0.0
+            
+            # Calculate BTM for each Mfg Com
+            pivot["A25 BTM"] = 0.0
+            for idx in range(len(pivot)):
+                mfg_com = pivot.loc[idx, "Mfg Com"]
+                if mfg_com == "Segment Total":
+                    # Segment Total BTM is 0 (comparing to itself)
+                    pivot.loc[idx, "A25 BTM"] = 0.0
+                else:
+                    # BTM = Company Growth - Segment Growth
+                    company_growth = pivot.loc[idx, "A25 Growth %"]
+                    btm = company_growth - segment_a25_growth
+                    pivot.loc[idx, "A25 BTM"] = round(btm, 1)
+            
+            columns_to_keep.append("A25 BTM")
+        
+        # Calculate A26 YTD BTM - Company A26 YTD Growth vs Segment Total A26 YTD Growth
+        if "A26 YTD Growth %*" in pivot.columns:
+            # Get Segment Total A26 YTD Growth (All India benchmark)
+            segment_row = pivot[pivot["Mfg Com"] == "Segment Total"]
+            if not segment_row.empty:
+                segment_a26_ytd_growth = segment_row["A26 YTD Growth %*"].iloc[0]
+            else:
+                segment_a26_ytd_growth = 0.0
+            
+            # Calculate BTM for each Mfg Com
+            pivot["A26 YTD BTM*"] = 0.0
+            for idx in range(len(pivot)):
+                mfg_com = pivot.loc[idx, "Mfg Com"]
+                if mfg_com == "Segment Total":
+                    # Segment Total BTM is 0 (comparing to itself)
+                    pivot.loc[idx, "A26 YTD BTM*"] = 0.0
+                else:
+                    # BTM = Company Growth - Segment Growth
+                    company_growth = pivot.loc[idx, "A26 YTD Growth %*"]
+                    btm = company_growth - segment_a26_ytd_growth
+                    pivot.loc[idx, "A26 YTD BTM*"] = round(btm, 1)
+            
+            columns_to_keep.append("A26 YTD BTM*")
+        
+        # Reorder columns: Mfg Com, Growth columns, CAGR, BTM columns
+        column_order = ["Mfg Com"]
+        if "A24 Growth %" in pivot.columns:
+            column_order.append("A24 Growth %")
+        if "A25 Growth %" in pivot.columns:
+            column_order.append("A25 Growth %")
+        if "A26 YTD Growth %*" in pivot.columns:
+            column_order.append("A26 YTD Growth %*")
+        if "2 Yr CAGR % (A23-A25)" in pivot.columns:
+            column_order.append("2 Yr CAGR % (A23-A25)")
+        if "A25 BTM" in pivot.columns:
+            column_order.append("A25 BTM")
+        if "A26 YTD BTM*" in pivot.columns:
+            column_order.append("A26 YTD BTM*")
+        
+        # Select only required columns in the new order
+        final_columns = [col for col in column_order if col in pivot.columns]
         pivot_display = pivot[final_columns].copy()
         
-        # Format growth and CAGR columns to show % symbol
+        # Format growth, CAGR, and BTM columns to show % symbol
         for col in pivot_display.columns:
-            if 'Growth %' in col or 'CAGR %' in col:
-                pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+            if 'Growth %' in col or 'CAGR %' in col or 'BTM' in col:
+                pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) and ('BTM' in col) else f"{x:.1f}%" if pd.notna(x) else "0.0%")
         
         # Apply styling to highlight Segment Total row
         def highlight_segment_total(row):
@@ -831,9 +894,12 @@ def render_manufacturing_pivot_dashboard(table_row: Dict, segment: Dict, is_edit
         styled_pivot = pivot_display.style.apply(highlight_segment_total, axis=1)
         st.dataframe(styled_pivot, use_container_width=True, hide_index=True)
         
+        # Info message below table
+        st.info("📌 Data for all brands within the manufacturing company")
+        
         # Add note about A26 YTD if present
         if "A26" in selected_years and has_month_col:
-            st.caption("*A26 YTD Growth %* calculated as July-Oct A26 vs July-Oct A25")
+            st.caption("*A26 YTD Growth %* and *A26 YTD BTM* calculated as July-Oct A26 vs July-Oct A25")
     
     with col2:
         # Show comment in right column
@@ -969,10 +1035,12 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     )
     
     # Remove A26 from chart display (keep only in View Data table)
-    chart_data_for_display = chart_data[chart_data["PRI Year"] != "A26"].copy()
+    # UPDATE: Now include A26 YTD as a dotted bar
+    chart_data_for_display = chart_data.copy()
     
-    # Sort brands by Brand Family total NS, then by brand total NS (excluding A26)
-    brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["Revised NS"].sum().reset_index()
+    # Sort brands by Brand Family total NS, then by brand total NS (excluding A26 for sorting)
+    chart_data_no_a26 = chart_data[chart_data["PRI Year"] != "A26"].copy()
+    brand_totals = chart_data_no_a26.groupby(["Brand", "Brand Family"])["Revised NS"].sum().reset_index()
     brand_totals.columns = ["Brand", "Brand Family", "Total"]
     
     family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
@@ -985,31 +1053,51 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     # Create ordered brand list
     brand_order = brand_totals["Brand"].tolist()
     
-    # Green color scheme - light to dark (no A26 in chart)
+    # Green color scheme - light to dark, plus A26 YTD
     color_map = {
         "A23": "#90EE90",  # Light Green
         "A24": "#4CAF50",  # Medium Green
-        "A25": "#1B5E20"   # Dark Green
+        "A25": "#1B5E20",  # Dark Green
+        "A26": "#9E9E9E"   # Gray for A26 YTD (partial year)
     }
     
-    # Year order for chart (no A26)
-    year_order = ["A23", "A24", "A25"]
+    # Year order for chart (include A26)
+    year_order = ["A23", "A24", "A25", "A26"]
     
-    # Create multi-bar chart with Plotly Express
-    fig = px.bar(
-        chart_data_for_display,
-        x="Brand",
-        y="Revised NS",
-        color="PRI Year",
-        barmode="group",
-        text="Growth Text",
-        height=500,
-        color_discrete_map=color_map,
-        category_orders={"PRI Year": year_order, "Brand": brand_order}
-    )
+    # Create multi-bar chart with Plotly Graph Objects for pattern control
+    import plotly.graph_objects as go
     
-    # Format growth rate text on top of bars
-    fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+    fig = go.Figure()
+    
+    # Add bars for each year
+    for year in year_order:
+        year_data = chart_data_for_display[chart_data_for_display["PRI Year"] == year]
+        
+        # Sort by brand_order
+        year_data = year_data.set_index("Brand").reindex(brand_order).reset_index()
+        
+        # Determine if this should be a dotted/dashed bar (A26 only)
+        if year == "A26":
+            # Dotted pattern for A26 YTD
+            marker_pattern = dict(shape="/", fgcolor="white", bgcolor=color_map[year], size=8, solidity=0.3)
+        else:
+            # Solid bars for full years
+            marker_pattern = None
+        
+        fig.add_trace(go.Bar(
+            name=year if year != "A26" else "A26 YTD",
+            x=year_data["Brand"],
+            y=year_data["Revised NS"],
+            text=year_data["Growth Text"],
+            textposition='outside',
+            textfont=dict(size=11, family="Arial Black", color="#2E7D32"),
+            marker=dict(
+                color=color_map[year],
+                pattern=marker_pattern,
+                line=dict(color='white', width=1)
+            ),
+            hovertemplate='<b>%{x}</b><br>Year: ' + year + '<br>NS: %{y:,.0f}<extra></extra>'
+        ))
     
     # Get max Y value for positioning CAGR boxes
     max_y = chart_data["Revised NS"].max()
@@ -1038,8 +1126,10 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         xaxis_title="Brand",
         yaxis_title="NS",
         legend_title="PRI Year",
+        barmode='group',
         annotations=annotations,
-        yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
+        yaxis=dict(range=[0, max_y * 1.25]),  # Extend Y-axis to fit CAGR boxes
+        height=500
     )
     st.plotly_chart(fig, use_container_width=True)
     
@@ -1050,6 +1140,23 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     
     # Show data table with growth rates in expander
     with st.expander("View Data with Growth Rates"):
+        st.info("📌 Data for selected brands only")
+        
+        # Calculate All India growth rates for BTM calculation
+        ai_a23 = df_original[df_original["PRI Year"] == "A23"]["Revised NS"].sum()
+        ai_a24 = df_original[df_original["PRI Year"] == "A24"]["Revised NS"].sum()
+        ai_a25 = df_original[df_original["PRI Year"] == "A25"]["Revised NS"].sum()
+        
+        ai_a25_growth = ((ai_a25 - ai_a24) / ai_a24 * 100) if ai_a24 > 0 else 0
+        
+        # Calculate All India A26 YTD growth if available
+        if has_a26 and has_month_col:
+            ai_a25_ytd = df_original[(df_original["PRI Year"] == "A25") & (df_original["Month"].isin(ytd_months))]["Revised NS"].sum()
+            ai_a26_ytd = df_original[(df_original["PRI Year"] == "A26") & (df_original["Month"].isin(ytd_months))]["Revised NS"].sum()
+            ai_a26_ytd_growth = ((ai_a26_ytd - ai_a25_ytd) / ai_a25_ytd * 100) if ai_a25_ytd > 0 else 0
+        else:
+            ai_a26_ytd_growth = 0
+        
         # Create summary table with NS values and growth rates
         summary_df = pivot_wide.copy()
         
@@ -1072,10 +1179,21 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             axis=1
         )
         
+        # Add A25 BTM
+        summary_df["A25 BTM"] = summary_df.apply(
+            lambda r: round(r["A25 Growth %"] - ai_a25_growth, 1),
+            axis=1
+        )
+        
         # Add A26 YTD Growth %* if A26 data exists
         if has_a26 and has_month_col:
             summary_df["A26 YTD Growth %*"] = summary_df.apply(
                 lambda r: a26_ytd_growth_rates.get(r["Brand"], 0.0),
+                axis=1
+            )
+            # Add A26 YTD BTM
+            summary_df["A26 YTD BTM*"] = summary_df.apply(
+                lambda r: round(a26_ytd_growth_rates.get(r["Brand"], 0.0) - ai_a26_ytd_growth, 1),
                 axis=1
             )
         
@@ -1113,12 +1231,14 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
                 "A24 Growth %": round(a24_growth, 1),
                 "A25 Growth %": round(a25_growth, 1),
                 "2-Yr CAGR %": round(cagr_2yr, 1),
+                "A25 BTM": round(a25_growth - ai_a25_growth, 1),
                 "is_family_total": True
             }
             
             if has_a26 and has_month_col:
                 family_row["A26"] = a26_ytd_total
                 family_row["A26 YTD Growth %*"] = round(a26_ytd_growth_family, 1)
+                family_row["A26 YTD BTM*"] = round(a26_ytd_growth_family - ai_a26_ytd_growth, 1)
             
             family_summary.append(family_row)
         
@@ -1155,7 +1275,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         
         combined_df = combined_df.rename(columns=rename_map)
         
-        # Reorder columns
+        # Reorder columns - specific order requested
         column_order = ["Brand Family", "Brand"]
         if "A23 NS" in combined_df.columns:
             column_order.append("A23 NS")
@@ -1169,9 +1289,13 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             column_order.append("A24 Growth %")
         if "A25 Growth %" in combined_df.columns:
             column_order.append("A25 Growth %")
-        column_order.append("2-Yr CAGR %")
         if "A26 YTD Growth %*" in combined_df.columns:
-            column_order.append("A26 YTD Growth %*")  # Put at the end
+            column_order.append("A26 YTD Growth %*")
+        column_order.append("2-Yr CAGR %")
+        if "A25 BTM" in combined_df.columns:
+            column_order.append("A25 BTM")
+        if "A26 YTD BTM*" in combined_df.columns:
+            column_order.append("A26 YTD BTM*")
         
         # Select and display columns
         display_df = combined_df[column_order].copy()
@@ -1181,10 +1305,10 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
         
-        # Format growth columns with % symbol
-        for col in ["A24 Growth %", "A25 Growth %", "A26 YTD Growth %*", "2-Yr CAGR %"]:
+        # Format growth and BTM columns with % symbol
+        for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %", "A25 BTM", "A26 YTD Growth %*", "A26 YTD BTM*"]:
             if col in display_df.columns:
-                display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+                display_df[col] = display_df[col].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) and "BTM" in col else f"{x:.1f}%" if pd.notna(x) else "0.0%")
         
         # Apply styling to highlight family total rows
         def highlight_family_totals(row):
@@ -1211,7 +1335,7 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
 
 def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool) -> None:
     """Render the brand family performance chart with NS M INR and growth rates"""
-    import plotly.express as px
+    import plotly.graph_objects as go
     
     # Get title from config or use default
     filter_config = json.loads(chart_row["filter_json"] if chart_row["filter_json"] else "{}")
@@ -1233,10 +1357,8 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     selected_years = filter_config.get("years", ["A23", "A24", "A25"]) if isinstance(filter_config, dict) else ["A23", "A24", "A25"]
     excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
     
-    # CRITICAL: Remove A26 from selected_years - Brand Chart should ONLY show A23, A24, A25
-    selected_years = [y for y in selected_years if y != "A26"]
-    if not selected_years:
-        selected_years = ["A23", "A24", "A25"]
+    # Include A26 for display (but not in growth calculations)
+    all_years = ["A23", "A24", "A25", "A26"]
     
     # Apply state exclusion filter
     if excluded_states and "State" in df.columns:
@@ -1245,7 +1367,7 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
     
     # Apply filters
     df = df[df["Brand"].isin(selected_brands)]
-    df = df[df["PRI Year"].isin(selected_years)]
+    df = df[df["PRI Year"].isin(all_years)]
     
     if df.empty:
         st.warning("No data available for selected brands and years.")
@@ -1286,55 +1408,86 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
         growth_rates[family] = {
             "A23": None,
             "A24": round(a24_growth, 1),
-            "A25": round(a25_growth, 1)
+            "A25": round(a25_growth, 1),
+            "A26": None  # No growth text for A26
         }
         cagr_values[family] = round(cagr_2yr, 1)
     
-    # Add growth rate text
-    chart_data["Growth Text"] = chart_data.apply(
-        lambda r: f"{growth_rates[r['Brand Family']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
-        axis=1
-    )
-    
-    # Sort families by total NS
-    family_totals = chart_data.groupby("Brand Family")["Revised NS"].sum().reset_index()
+    # Sort families by total NS (A23-A25 only for sorting)
+    family_totals = chart_data[chart_data["PRI Year"].isin(["A23", "A24", "A25"])].groupby("Brand Family")["Revised NS"].sum().reset_index()
     family_totals.columns = ["Brand Family", "Total"]
     family_totals = family_totals.sort_values("Total", ascending=False)
     family_order = family_totals["Brand Family"].tolist()
     
-    # Green color scheme
+    # Green color scheme + Gray for A26
     color_map = {
         "A23": "#90EE90",
         "A24": "#4CAF50",
-        "A25": "#1B5E20"
+        "A25": "#1B5E20",
+        "A26": "#9E9E9E"
     }
     
-    # Create multi-bar chart
-    fig = px.bar(
-        chart_data,
-        x="Brand Family",
-        y="Revised NS",
-        color="PRI Year",
-        barmode="group",
-        text="Growth Text",
-        height=500,
-        color_discrete_map=color_map,
-        category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand Family": family_order}
-    )
+    # Create figure with Graph Objects for pattern control
+    fig = go.Figure()
     
-    # Format growth rate text on top of bars
-    fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+    # Add bars for each year
+    year_order = ["A23", "A24", "A25", "A26"]
+    for year in year_order:
+        year_data = chart_data[chart_data["PRI Year"] == year]
+        
+        # Create growth text for this year
+        growth_text = []
+        for _, row in year_data.iterrows():
+            family = row["Brand Family"]
+            growth = growth_rates.get(family, {}).get(year)
+            if growth is not None:
+                growth_text.append(f"{growth:.1f}%")
+            else:
+                growth_text.append("")
+        
+        # Add pattern for A26 (diagonal stripes)
+        if year == "A26":
+            fig.add_trace(go.Bar(
+                name="A26 YTD",
+                x=[family_order.index(f) if f in family_order else len(family_order) for f in year_data["Brand Family"]],
+                y=year_data["Revised NS"],
+                text=growth_text,
+                textposition='outside',
+                textfont=dict(size=11, family="Arial Black", color="#2E7D32"),
+                marker=dict(
+                    color=color_map[year],
+                    pattern=dict(
+                        shape="/",
+                        bgcolor=color_map[year],
+                        fgcolor="white",
+                        size=8,
+                        solidity=0.3
+                    )
+                ),
+                customdata=year_data["Brand Family"]
+            ))
+        else:
+            fig.add_trace(go.Bar(
+                name=year,
+                x=[family_order.index(f) if f in family_order else len(family_order) for f in year_data["Brand Family"]],
+                y=year_data["Revised NS"],
+                text=growth_text,
+                textposition='outside',
+                textfont=dict(size=11, family="Arial Black", color="#2E7D32"),
+                marker=dict(color=color_map[year]),
+                customdata=year_data["Brand Family"]
+            ))
     
     # Get max Y value for positioning CAGR boxes
     max_y = chart_data["Revised NS"].max()
     
     # Add CAGR boxes above each brand family
     annotations = []
-    for family in family_order:
+    for i, family in enumerate(family_order):
         cagr = cagr_values[family]
         
         annotations.append(dict(
-            x=family,
+            x=i,
             y=max_y * 1.15,
             text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
             showarrow=False,
@@ -1349,12 +1502,22 @@ def render_brand_family_chart_dashboard(chart_row: Dict, segment: Dict, is_edito
         ))
     
     fig.update_layout(
-        xaxis_title="Brand Family",
-        yaxis_title="NS",
+        barmode='group',
+        xaxis=dict(
+            title="Brand Family",
+            tickmode='array',
+            tickvals=list(range(len(family_order))),
+            ticktext=family_order
+        ),
+        yaxis=dict(
+            title="NS",
+            range=[0, max_y * 1.25]
+        ),
         legend_title="PRI Year",
         annotations=annotations,
-        yaxis=dict(range=[0, max_y * 1.25])
+        height=500
     )
+    
     st.plotly_chart(fig, use_container_width=True)
     
     # Show comment below the chart
@@ -1463,13 +1626,16 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
                 </div>
             """, unsafe_allow_html=True)
             
-            # Filter rows for this zone
-            zone_df = result[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_BTM", f"{zone}_A26YTD"]].copy()
+            # Filter rows for this zone - reorder columns: MS|Sal, A25 Gr, A26 YTD Gr*, A25 BTM, A26 YTD BTM*
+            zone_df = result[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_A26YTD", f"{zone}_BTM", f"{zone}_A26YTD_BTM"]].copy()
             
-            # Apply styling to highlight brand families and color negatives
+            # Apply styling to highlight brand families and mfg companies
             def highlight_families(row):
                 row_type = zone_df.loc[row.name, 'Type']
-                if row_type == 'family':
+                if row_type == 'mfg_com':
+                    # Manufacturing Company - bold with golden background
+                    return ['background-color: #FFF3CD; font-weight: bold; border-top: 2px solid #f5b400; border-bottom: 1px solid #f5b400; color: #856404'] * len(row)
+                elif row_type == 'family':
                     family_idx = len([i for i in zone_df.index[:row.name+1] if zone_df.loc[i, 'Type'] == 'family']) - 1
                     color = family_colors[family_idx % len(family_colors)]
                     return [f'background-color: {color}; font-weight: bold'] * len(row)
@@ -1483,9 +1649,9 @@ def render_zonal_pivot_dashboard(table_row: Dict, segment: Dict, is_editor: bool
                         return 'color: #D32F2F; font-weight: bold'
                 return ''
             
-            # Drop Type column and rename
+            # Drop Type column and rename - new order: MS|Sal, A25 Gr, A26 YTD Gr*, A25 BTM, A26 YTD BTM*
             display_df = zone_df.drop(columns=['Type'])
-            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "A25 BTM", "A26 YTD Gr*"]
+            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "A26 YTD Gr*", "A25 BTM", "A26 YTD BTM*"]
             
             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
@@ -2191,7 +2357,10 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
                             # Apply styling
                             def highlight_families(row):
                                 row_type = state_df.loc[row.name, 'Type']
-                                if row_type == 'family':
+                                if row_type == 'mfg_com':
+                                    # Manufacturing Company - bold with golden background
+                                    return ['background-color: #FFF3CD; font-weight: bold; border-top: 2px solid #f5b400; border-bottom: 1px solid #f5b400; color: #856404'] * len(row)
+                                elif row_type == 'family':
                                     family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
                                     color = family_colors[family_idx % len(family_colors)]
                                     return [f'background-color: {color}; font-weight: bold'] * len(row)
@@ -2207,6 +2376,9 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
                             display_df = state_df.drop(columns=['Type'])
                             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+                            
+                            # Info message below table
+                            st.info("📌 Data for all brands within the manufacturing company")
                 
                 # Add spacing between rows if there are more states
                 if row_start + states_per_row < len(selected_states):
@@ -2314,6 +2486,15 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
     selected_states = filter_config.get("states", [])
     selected_family = filter_config.get("brand_family", "")
     
+    # Load state colors - handle both old and new format
+    state_colors_config = filter_config.get("state_colors", {})
+    if isinstance(state_colors_config, dict) and "state_map" in state_colors_config:
+        # New format with color groups
+        state_colors = state_colors_config.get("state_map", {})
+    else:
+        # Old format (direct state->color mapping) or empty
+        state_colors = state_colors_config if isinstance(state_colors_config, dict) else {}
+    
     if not selected_states or not selected_family:
         return
     
@@ -2347,19 +2528,20 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         return
     
     # Get All India values for reference lines
-    ai_ms = float(ai_row["BP FAM\nA25 MS"].iloc[0])
+    ai_ms = float(ai_row["Brand FAM\nA25 MS"].iloc[0])
     ai_salience = float(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
     
     # Prepare data for states
     states = []
-    x_values = []  # BP FAM MS
+    x_values = []  # Brand FAM MS
     y_values = []  # Segment Salience
     sizes = []     # State Contribution (scaled for bubble size)
     contributions = []  # State Contribution (actual values for hover)
+    colors = []    # State colors
     
     for _, row in state_rows.iterrows():
         state = row["State"]
-        ms = float(row["BP FAM\nA25 MS"])
+        ms = float(row["Brand FAM\nA25 MS"])
         salience = float(row["Segment\nSalience to\nAll Spirits"])
         contribution = float(row["State\nContribution\nto AI"])
         
@@ -2369,6 +2551,8 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         contributions.append(contribution)  # Actual value for hover
         # Use square root so area is proportional to contribution, not diameter
         sizes.append((contribution ** 0.5) * 20)  # 2x scale for better visibility
+        # Get assigned color or use default gray
+        colors.append(state_colors.get(state, '#95A5A6'))
     
     # Create bubble chart
     fig = go.Figure()
@@ -2380,7 +2564,7 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
         mode='markers+text',
         marker=dict(
             size=sizes,
-            color='#4A90E2',  # Beautiful single blue color
+            color=colors,  # Use assigned colors
             opacity=0.7,
             line=dict(width=2, color='white')
         ),

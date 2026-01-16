@@ -314,6 +314,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             
             styled_preview = preview_pivot.style.apply(highlight_segment_total, axis=1)
             st.dataframe(styled_preview, use_container_width=True, hide_index=True)
+            
+            # Info message below table
+            st.info("📌 Data for all brands within the manufacturing company")
     
     # Comment box AFTER preview - pre-populated with saved value
     pivot_comment = st.text_area(
@@ -522,11 +525,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 axis=1
             )
             
-            # Remove A26 from chart display (keep only in View Data table)
-            chart_data_for_display = chart_data[chart_data["PRI Year"] != "A26"].copy()
-            
-            # Sort brands by Brand Family total NS, then by brand total NS (excluding A26)
-            brand_totals = chart_data_for_display.groupby(["Brand", "Brand Family"])["Revised NS"].sum().reset_index()
+            # Sort brands by Brand Family total NS, then by brand total NS (excluding A26 from sorting)
+            chart_data_no_a26 = chart_data[chart_data["PRI Year"] != "A26"].copy()
+            brand_totals = chart_data_no_a26.groupby(["Brand", "Brand Family"])["Revised NS"].sum().reset_index()
             brand_totals.columns = ["Brand", "Brand Family", "Total"]
             
             family_totals = brand_totals.groupby("Brand Family")["Total"].sum().reset_index()
@@ -539,44 +540,80 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             # Create ordered brand list
             brand_order = brand_totals["Brand"].tolist()
             
-            # Use Plotly Express with professional color scheme
-            import plotly.express as px
+            # Use Plotly Graph Objects for pattern control
+            import plotly.graph_objects as go
             
-            # Green color scheme - light to dark (no A26 in chart)
+            # Green color scheme + Gray for A26
             color_map = {
                 "A23": "#90EE90",  # Light Green
                 "A24": "#4CAF50",  # Medium Green
-                "A25": "#1B5E20"   # Dark Green
+                "A25": "#1B5E20",  # Dark Green
+                "A26": "#9E9E9E"   # Gray for A26 YTD
             }
             
-            # Year order for chart (no A26)
-            year_order = ["A23", "A24", "A25"]
+            # Year order for chart (includes A26)
+            year_order = ["A23", "A24", "A25", "A26"]
             
-            fig = px.bar(
-                chart_data_for_display,
-                x="Brand",
-                y="Revised NS",
-                color="PRI Year",
-                barmode="group",
-                text="Growth Text",
-                height=500,
-                color_discrete_map=color_map,
-                category_orders={"PRI Year": year_order, "Brand": brand_order}
-            )
+            # Create figure with Graph Objects
+            fig = go.Figure()
             
-            # Format growth rate text on top of bars
-            fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+            # Add bars for each year
+            for year in year_order:
+                year_data = chart_data[chart_data["PRI Year"] == year]
+                
+                # Create growth text for this year
+                growth_text = []
+                for _, row in year_data.iterrows():
+                    brand = row["Brand"]
+                    growth = growth_rates.get(brand, {}).get(year)
+                    if growth is not None:
+                        growth_text.append(f"{growth:.1f}%")
+                    else:
+                        growth_text.append("")
+                
+                # Add pattern for A26 (diagonal stripes)
+                if year == "A26":
+                    fig.add_trace(go.Bar(
+                        name="A26 YTD",
+                        x=[brand_order.index(b) if b in brand_order else len(brand_order) for b in year_data["Brand"]],
+                        y=year_data["Revised NS"],
+                        text=growth_text,
+                        textposition='outside',
+                        textfont=dict(size=11, family="Arial Black", color="#2E7D32"),
+                        marker=dict(
+                            color=color_map[year],
+                            pattern=dict(
+                                shape="/",
+                                bgcolor=color_map[year],
+                                fgcolor="white",
+                                size=8,
+                                solidity=0.3
+                            )
+                        ),
+                        customdata=year_data["Brand"]
+                    ))
+                else:
+                    fig.add_trace(go.Bar(
+                        name=year,
+                        x=[brand_order.index(b) if b in brand_order else len(brand_order) for b in year_data["Brand"]],
+                        y=year_data["Revised NS"],
+                        text=growth_text,
+                        textposition='outside',
+                        textfont=dict(size=11, family="Arial Black", color="#2E7D32"),
+                        marker=dict(color=color_map[year]),
+                        customdata=year_data["Brand"]
+                    ))
             
             # Get max Y value for positioning CAGR boxes
             max_y = chart_data["Revised NS"].max()
             
             # Add CAGR boxes above each brand with neutral styling
             annotations = []
-            for brand in brand_order:
+            for i, brand in enumerate(brand_order):
                 cagr = cagr_values[brand]
                 
                 annotations.append(dict(
-                    x=brand,
+                    x=i,
                     y=max_y * 1.15,  # Position above the bars
                     text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
                     showarrow=False,
@@ -591,16 +628,42 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 ))
             
             fig.update_layout(
-                xaxis_title="Brand",
-                yaxis_title="NS",
+                barmode='group',
+                xaxis=dict(
+                    title="Brand",
+                    tickmode='array',
+                    tickvals=list(range(len(brand_order))),
+                    ticktext=brand_order
+                ),
+                yaxis=dict(
+                    title="NS",
+                    range=[0, max_y * 1.25]  # Extend Y-axis to fit CAGR boxes
+                ),
                 legend_title="PRI Year",
                 annotations=annotations,
-                yaxis=dict(range=[0, max_y * 1.25])  # Extend Y-axis to fit CAGR boxes
+                height=500
             )
             st.plotly_chart(fig, use_container_width=True)
             
             # Show data table with growth rates in expander (same as dashboard)
             with st.expander("📊 View Data"):
+                st.info("📌 Data for selected brands only")
+                
+                # Calculate All India growth rates for BTM calculation
+                ai_a23 = df_chart[df_chart["PRI Year"] == "A23"]["Revised NS"].sum()
+                ai_a24 = df_chart[df_chart["PRI Year"] == "A24"]["Revised NS"].sum()
+                ai_a25 = df_chart[df_chart["PRI Year"] == "A25"]["Revised NS"].sum()
+                
+                ai_a25_growth = ((ai_a25 - ai_a24) / ai_a24 * 100) if ai_a24 > 0 else 0
+                
+                # Calculate All India A26 YTD growth if available
+                if "A26" in years_in_data_chart and has_month_col:
+                    ai_a25_ytd = df_chart[(df_chart["PRI Year"] == "A25") & (df_chart["Month"].isin(ytd_months))]["Revised NS"].sum()
+                    ai_a26_ytd = df_chart[(df_chart["PRI Year"] == "A26") & (df_chart["Month"].isin(ytd_months))]["Revised NS"].sum()
+                    ai_a26_ytd_growth = ((ai_a26_ytd - ai_a25_ytd) / ai_a25_ytd * 100) if ai_a25_ytd > 0 else 0
+                else:
+                    ai_a26_ytd_growth = 0
+                
                 # Create summary table with NS values and growth rates
                 summary_df = pivot_wide.copy()
                 
@@ -618,10 +681,21 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     axis=1
                 )
                 
+                # Add A25 BTM
+                summary_df["A25 BTM"] = summary_df.apply(
+                    lambda r: round(r["A25 Growth %"] - ai_a25_growth, 1),
+                    axis=1
+                )
+                
                 # Add A26 YTD Growth %* if A26 data exists
                 if "A26" in years_in_data_chart and has_month_col:
                     summary_df["A26 YTD Growth %*"] = summary_df.apply(
                         lambda r: a26_ytd_growth_rates.get(r["Brand"], 0.0),
+                        axis=1
+                    )
+                    # Add A26 YTD BTM
+                    summary_df["A26 YTD BTM*"] = summary_df.apply(
+                        lambda r: round(a26_ytd_growth_rates.get(r["Brand"], 0.0) - ai_a26_ytd_growth, 1),
                         axis=1
                     )
                 
@@ -659,12 +733,14 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         "A24 Growth %": round(a24_growth, 1),
                         "A25 Growth %": round(a25_growth, 1),
                         "2-Yr CAGR %": round(cagr_2yr, 1),
+                        "A25 BTM": round(a25_growth - ai_a25_growth, 1),
                         "is_family_total": True
                     }
                     
                     if "A26" in years_in_data_chart and has_month_col:
                         family_row["A26"] = a26_ytd_total
                         family_row["A26 YTD Growth %*"] = round(a26_ytd_growth_family, 1)
+                        family_row["A26 YTD BTM*"] = round(a26_ytd_growth_family - ai_a26_ytd_growth, 1)
                     
                     family_summary.append(family_row)
                 
@@ -703,7 +779,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if "A26" in combined_df.columns:
                     combined_df = combined_df.rename(columns={"A26": "A26 YTD NS"})
                 
-                # Reorder columns - A26 YTD Growth %* at the end
+                # Reorder columns - specific order requested
                 column_order = ["Brand Family", "Brand"]
                 if "A23 NS" in combined_df.columns:
                     column_order.append("A23 NS")
@@ -717,9 +793,13 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     column_order.append("A24 Growth %")
                 if "A25 Growth %" in combined_df.columns:
                     column_order.append("A25 Growth %")
-                column_order.append("2-Yr CAGR %")
                 if "A26 YTD Growth %*" in combined_df.columns:
-                    column_order.append("A26 YTD Growth %*")  # Put at the end
+                    column_order.append("A26 YTD Growth %*")
+                column_order.append("2-Yr CAGR %")
+                if "A25 BTM" in combined_df.columns:
+                    column_order.append("A25 BTM")
+                if "A26 YTD BTM*" in combined_df.columns:
+                    column_order.append("A26 YTD BTM*")
                 
                 # Select and display columns
                 display_df = combined_df[column_order].copy()
@@ -729,10 +809,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     if col in display_df.columns:
                         display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x > 0 else "0")
                 
-                # Format growth columns with % symbol
-                for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %", "A26 YTD Growth %*"]:
+                # Format growth and BTM columns with % symbol
+                for col in ["A24 Growth %", "A25 Growth %", "2-Yr CAGR %", "A25 BTM", "A26 YTD Growth %*", "A26 YTD BTM*"]:
                     if col in display_df.columns:
-                        display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+                        display_df[col] = display_df[col].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) and "BTM" in col else f"{x:.1f}%" if pd.notna(x) else "0.0%")
                 
                 # Apply styling to highlight family totals
                 def highlight_family_totals(row):
@@ -866,8 +946,16 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     
     # Preview chart if brands are selected
     if selected_brands_family:
-        df_family_chart = df_filtered_no_a26[df_filtered_no_a26["Brand"].isin(selected_brands_family)]
-        df_family_chart = df_family_chart[df_family_chart["PRI Year"].isin(["A23", "A24", "A25"])]
+        # Include A26 data for Brand Family chart
+        df_family_chart_with_a26 = df_filtered_with_a26[df_filtered_with_a26["Brand"].isin(selected_brands_family)]
+        
+        # For A26, filter to July-Oct only
+        if "A26" in years_in_data_chart and has_month_col:
+            df_family_a26_ytd = df_family_chart_with_a26[(df_family_chart_with_a26["PRI Year"] == "A26") & (df_family_chart_with_a26["Month"].isin(ytd_months))]
+            df_family_full_years = df_family_chart_with_a26[df_family_chart_with_a26["PRI Year"].isin(["A23", "A24", "A25"])]
+            df_family_chart = pd.concat([df_family_full_years, df_family_a26_ytd], ignore_index=True)
+        else:
+            df_family_chart = df_family_chart_with_a26[df_family_chart_with_a26["PRI Year"].isin(["A23", "A24", "A25"])]
         
         # Apply state exclusion from Section 2
         if excluded_states and "State" in df_family_chart.columns:
@@ -911,54 +999,90 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 family_growth_rates[family] = {
                     "A23": None,
                     "A24": round(a24_growth, 1),
-                    "A25": round(a25_growth, 1)
+                    "A25": round(a25_growth, 1),
+                    "A26": None  # No growth text for A26
                 }
                 family_cagr_values[family] = round(cagr_2yr, 1)
             
-            # Add growth rate text
-            family_chart_data["Growth Text"] = family_chart_data.apply(
-                lambda r: f"{family_growth_rates[r['Brand Family']][r['PRI Year']]:.1f}%" if r['PRI Year'] != 'A23' else "",
-                axis=1
-            )
-            
-            # Sort families by total NS
-            family_totals = family_chart_data.groupby("Brand Family")["Revised NS"].sum().reset_index()
+            # Sort families by total NS (A23-A25 only for sorting)
+            family_chart_no_a26 = family_chart_data[family_chart_data["PRI Year"] != "A26"].copy()
+            family_totals = family_chart_no_a26.groupby("Brand Family")["Revised NS"].sum().reset_index()
             family_totals.columns = ["Brand Family", "Total"]
             family_totals = family_totals.sort_values("Total", ascending=False)
             family_order = family_totals["Brand Family"].tolist()
             
-            # Green color scheme
+            # Green color scheme + Gray for A26
             color_map = {
                 "A23": "#90EE90",
                 "A24": "#4CAF50",
-                "A25": "#1B5E20"
+                "A25": "#1B5E20",
+                "A26": "#9E9E9E"
             }
             
-            fig = px.bar(
-                family_chart_data,
-                x="Brand Family",
-                y="Revised NS",
-                color="PRI Year",
-                barmode="group",
-                text="Growth Text",
-                height=500,
-                color_discrete_map=color_map,
-                category_orders={"PRI Year": ["A23", "A24", "A25"], "Brand Family": family_order}
-            )
+            # Use Plotly Graph Objects for pattern control
+            import plotly.graph_objects as go
             
-            # Format growth rate text on top of bars
-            fig.update_traces(textposition='outside', textfont=dict(size=11, family="Arial Black", color="#2E7D32"))
+            # Create figure
+            fig = go.Figure()
+            
+            # Add bars for each year
+            year_order = ["A23", "A24", "A25", "A26"]
+            for year in year_order:
+                year_data = family_chart_data[family_chart_data["PRI Year"] == year]
+                
+                # Create growth text for this year
+                growth_text = []
+                for _, row in year_data.iterrows():
+                    family = row["Brand Family"]
+                    growth = family_growth_rates.get(family, {}).get(year)
+                    if growth is not None:
+                        growth_text.append(f"{growth:.1f}%")
+                    else:
+                        growth_text.append("")
+                
+                # Add pattern for A26 (diagonal stripes)
+                if year == "A26":
+                    fig.add_trace(go.Bar(
+                        name="A26 YTD",
+                        x=[family_order.index(f) if f in family_order else len(family_order) for f in year_data["Brand Family"]],
+                        y=year_data["Revised NS"],
+                        text=growth_text,
+                        textposition='outside',
+                        textfont=dict(size=11, family="Arial Black", color="#2E7D32"),
+                        marker=dict(
+                            color=color_map[year],
+                            pattern=dict(
+                                shape="/",
+                                bgcolor=color_map[year],
+                                fgcolor="white",
+                                size=8,
+                                solidity=0.3
+                            )
+                        ),
+                        customdata=year_data["Brand Family"]
+                    ))
+                else:
+                    fig.add_trace(go.Bar(
+                        name=year,
+                        x=[family_order.index(f) if f in family_order else len(family_order) for f in year_data["Brand Family"]],
+                        y=year_data["Revised NS"],
+                        text=growth_text,
+                        textposition='outside',
+                        textfont=dict(size=11, family="Arial Black", color="#2E7D32"),
+                        marker=dict(color=color_map[year]),
+                        customdata=year_data["Brand Family"]
+                    ))
             
             # Get max Y value for positioning CAGR boxes
             max_y = family_chart_data["Revised NS"].max()
             
             # Add CAGR boxes above each brand family
             annotations = []
-            for family in family_order:
+            for i, family in enumerate(family_order):
                 cagr = family_cagr_values[family]
                 
                 annotations.append(dict(
-                    x=family,
+                    x=i,
                     y=max_y * 1.15,
                     text=f"<b>2yr CAGR: {cagr:.1f}%</b>",
                     showarrow=False,
@@ -973,11 +1097,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 ))
             
             fig.update_layout(
-                xaxis_title="Brand Family",
-                yaxis_title="NS",
+                barmode='group',
+                xaxis=dict(
+                    title="Brand Family",
+                    tickmode='array',
+                    tickvals=list(range(len(family_order))),
+                    ticktext=family_order
+                ),
+                yaxis=dict(
+                    title="NS",
+                    range=[0, max_y * 1.25]
+                ),
                 legend_title="PRI Year",
                 annotations=annotations,
-                yaxis=dict(range=[0, max_y * 1.25])
+                height=500
             )
             st.plotly_chart(fig, use_container_width=True)
     
@@ -1108,13 +1241,16 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                 </div>
                             """, unsafe_allow_html=True)
                             
-                            # Filter rows for this zone
-                            zone_df = preview_zonal[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_BTM", f"{zone}_A26YTD"]].copy()
+                            # Filter rows for this zone - reorder columns: MS|Sal, A25 Gr, A26 YTD Gr*, A25 BTM, A26 YTD BTM*
+                            zone_df = preview_zonal[["Brand", "Type", f"{zone}_MS", f"{zone}_Gr", f"{zone}_A26YTD", f"{zone}_BTM", f"{zone}_A26YTD_BTM"]].copy()
                             
-                            # Apply styling to highlight brand families
+                            # Apply styling to highlight brand families and mfg companies
                             def highlight_families(row):
                                 row_type = zone_df.loc[row.name, 'Type']
-                                if row_type == 'family':
+                                if row_type == 'mfg_com':
+                                    # Manufacturing Company - bold with golden background
+                                    return ['background-color: #FFF3CD; font-weight: bold; border-top: 2px solid #f5b400; border-bottom: 1px solid #f5b400; color: #856404'] * len(row)
+                                elif row_type == 'family':
                                     family_idx = len([i for i in zone_df.index[:row.name+1] if zone_df.loc[i, 'Type'] == 'family']) - 1
                                     color = family_colors[family_idx % len(family_colors)]
                                     return [f'background-color: {color}; font-weight: bold'] * len(row)
@@ -1128,9 +1264,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                         return 'color: #D32F2F; font-weight: bold'
                                 return ''
                             
-                            # Drop Type column and rename
+                            # Drop Type column and rename - new order: MS|Sal, A25 Gr, A26 YTD Gr*, A25 BTM, A26 YTD BTM*
                             display_df = zone_df.drop(columns=['Type'])
-                            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "A25 BTM", "A26 YTD Gr*"]
+                            display_df.columns = ["Brand", "MS|Sal", "A25 Gr", "A26 YTD Gr*", "A25 BTM", "A26 YTD BTM*"]
                             
                             styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
@@ -1309,7 +1445,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                         # Apply styling
                                         def highlight_families(row):
                                             row_type = state_df.loc[row.name, 'Type']
-                                            if row_type == 'family':
+                                            if row_type == 'mfg_com':
+                                                # Manufacturing Company - bold with golden background
+                                                return ['background-color: #FFF3CD; font-weight: bold; border-top: 2px solid #f5b400; border-bottom: 1px solid #f5b400; color: #856404'] * len(row)
+                                            elif row_type == 'family':
                                                 family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
                                                 color = family_colors[family_idx % len(family_colors)]
                                                 return [f'background-color: {color}; font-weight: bold'] * len(row)
@@ -1325,6 +1464,9 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                                         display_df = state_df.drop(columns=['Type'])
                                         styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                                         st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+                                        
+                                        # Info message below table
+                                        st.info("📌 Data for all brands within the manufacturing company")
                             
                             # Add spacing between rows if there are more states
                             if row_start + states_per_row < len(selected_states):
@@ -1782,6 +1924,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     saved_state_perf_title = state_perf_config.get("title", "BTM Detailed Analysis")
     saved_state_perf_states = state_perf_config.get("states", [])
     saved_state_perf_family = state_perf_config.get("brand_family", "")
+    saved_state_colors = state_perf_config.get("state_colors", {})  # Load saved colors
     saved_state_perf_comment = saved_state_perf["comment"] if saved_state_perf else ""
     
     # Editable title
@@ -1820,21 +1963,114 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 key=f"ns_state_perf_family_{segment['id']}"
             )
         
+        # Calculate and show table preview RIGHT AFTER selection
         if selected_states_perf and selected_family:
-                # Calculate the table - need to pass original df for All Spirits calculation
-                # Load the full dataset (unfiltered by segment)
-                from app_core.uploads import load_dataset
-                df_full = load_dataset(dataset_id)
+            # Calculate the table - need to pass original df for All Spirits calculation
+            # Load the full dataset (unfiltered by segment)
+            from app_core.uploads import load_dataset
+            df_full = load_dataset(dataset_id)
+            
+            state_perf_df = calculate_state_performance_table(df_filtered, df_full, selected_states_perf, selected_family, segment)
+            
+            if state_perf_df is not None and not state_perf_df.empty:
+                st.markdown("---")
+                st.markdown("**Table Preview:**")
                 
-                state_perf_df = calculate_state_performance_table(df_filtered, df_full, selected_states_perf, selected_family, segment)
+                # Display the styled table using Streamlit dataframe with custom styling
+                display_state_performance_table(state_perf_df)
+        
+        # 3 Color Groups for state assignment (AFTER table preview)
+        if selected_states_perf:
+            st.markdown("---")
+            st.markdown("**Assign States to Color Groups (for bubble chart):**")
+            st.caption("Organize states into 3 color groups to visualize different categories")
+            
+            # Load saved color groups
+            saved_color_groups = saved_state_colors.get("color_groups", {
+                "group1": {"color": "#E74C3C", "states": []},  # Red
+                "group2": {"color": "#4A90E2", "states": []},  # Blue
+                "group3": {"color": "#2ECC71", "states": []}   # Green
+            })
+            
+            # Create 3 color group sections
+            color_groups = {}
+            state_colors = {}  # Map state -> color
+            
+            # First pass: collect all currently selected states from session state
+            currently_assigned = {}
+            for group_num in range(1, 4):
+                group_key = f"group{group_num}"
+                session_key = f"states_group_{group_num}_{segment['id']}"
+                if session_key in st.session_state:
+                    currently_assigned[group_key] = st.session_state[session_key]
+                else:
+                    currently_assigned[group_key] = saved_color_groups.get(group_key, {}).get("states", [])
+            
+            for group_num in range(1, 4):
+                group_key = f"group{group_num}"
+                saved_group = saved_color_groups.get(group_key, {"color": ["#E74C3C", "#4A90E2", "#2ECC71"][group_num-1], "states": []})
                 
-                if state_perf_df is not None and not state_perf_df.empty:
-                    st.markdown("**Preview:**")
+                st.markdown(f"**Color Group {group_num}:**")
+                
+                col_color, col_states = st.columns([1, 3])
+                
+                with col_color:
+                    group_color = st.color_picker(
+                        f"Color {group_num}",
+                        value=saved_group.get("color", ["#E74C3C", "#4A90E2", "#2ECC71"][group_num-1]),
+                        key=f"color_group_{group_num}_{segment['id']}"
+                    )
+                
+                with col_states:
+                    # Get states already assigned to OTHER groups (from current session)
+                    assigned_to_others = []
+                    for other_group_num in range(1, 4):
+                        if other_group_num != group_num:
+                            other_key = f"group{other_group_num}"
+                            assigned_to_others.extend(currently_assigned.get(other_key, []))
                     
-                    # Display the styled table using Streamlit dataframe with custom styling
-                    display_state_performance_table(state_perf_df)
+                    # Available states = all selected states minus those assigned to other groups
+                    # But include states currently in THIS group
+                    current_group_states = currently_assigned.get(group_key, [])
+                    available_for_group = [s for s in selected_states_perf 
+                                          if s not in assigned_to_others or s in current_group_states]
                     
-                    # Show bubble chart preview
+                    group_states = st.multiselect(
+                        f"States for Color {group_num}",
+                        options=available_for_group,
+                        default=[s for s in current_group_states if s in selected_states_perf],
+                        key=f"states_group_{group_num}_{segment['id']}",
+                        help=f"Assign states to Color Group {group_num}"
+                    )
+                
+                # Store group configuration
+                color_groups[group_key] = {
+                    "color": group_color,
+                    "states": group_states
+                }
+                
+                # Map each state to its color
+                for state in group_states:
+                    state_colors[state] = group_color
+                
+                st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+            
+            # Show unassigned states warning
+            assigned_all = []
+            for group in color_groups.values():
+                assigned_all.extend(group["states"])
+            unassigned = [s for s in selected_states_perf if s not in assigned_all]
+            
+            if unassigned:
+                st.warning(f"⚠️ Unassigned states: {', '.join(unassigned)}. These will use default color.")
+                # Assign default color to unassigned states
+                for state in unassigned:
+                    state_colors[state] = "#95A5A6"  # Gray for unassigned
+        
+        # Show bubble chart preview (AFTER color assignment)
+        if selected_states_perf and selected_family:
+                # Reuse the already calculated state_perf_df from above
+                if 'state_perf_df' in locals() and state_perf_df is not None and not state_perf_df.empty:
                     st.markdown("---")
                     st.markdown("**Chart Preview:**")
                     
@@ -1847,7 +2083,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     
                     if not ai_row.empty and not state_rows.empty:
                         # Get All India values
-                        ai_ms = float(ai_row["BP FAM\nA25 MS"].iloc[0])
+                        ai_ms = float(ai_row["Brand FAM\nA25 MS"].iloc[0])
                         ai_salience = float(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
                         
                         # Prepare state data
@@ -1856,15 +2092,19 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         y_values = []
                         sizes = []
                         contribution_values = []
+                        colors = []  # Add colors list
                         
                         for _, row in state_rows.iterrows():
                             contribution = float(row["State\nContribution\nto AI"])
-                            states.append(row["State"])
-                            x_values.append(float(row["BP FAM\nA25 MS"]))
+                            state_name = row["State"]
+                            states.append(state_name)
+                            x_values.append(float(row["Brand FAM\nA25 MS"]))
                             y_values.append(float(row["Segment\nSalience to\nAll Spirits"]))
                             contribution_values.append(contribution)
                             # Use square root so area is proportional to contribution, not diameter
                             sizes.append((contribution ** 0.5) * 20)  # 2x scale for better visibility
+                            # Get assigned color for this state
+                            colors.append(state_colors.get(state_name, '#4A90E2'))
                         
                         # Create figure
                         fig = go.Figure()
@@ -1875,7 +2115,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                             mode='markers+text',
                             marker=dict(
                                 size=sizes,
-                                color='#4A90E2',  # Beautiful single blue color
+                                color=colors,  # Use assigned colors
                                 opacity=0.7,
                                 line=dict(width=2, color='white')
                             ),
@@ -1967,11 +2207,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Delete existing table
                     delete_tables_for_section(segment["id"], "NS Landscape", "State Performance Analysis")
                     
-                    # Save configuration (independent from Section 2)
+                    # Save configuration with color groups
                     filter_config = json.dumps({
                         "states": selected_states_perf,
                         "brand_family": selected_family,
-                        "title": state_perf_title
+                        "title": state_perf_title,
+                        "state_colors": {
+                            "color_groups": color_groups,  # Save color groups
+                            "state_map": state_colors  # Save state->color mapping for easy lookup
+                        }
                     })
                     save_table(
                         name="State Performance Analysis",
@@ -3619,7 +3863,10 @@ def render_state_drilldown_preview(preview_data: Dict, selected_states: List[str
                 
                 def highlight_families(row):
                     row_type = state_df.loc[row.name, 'Type']
-                    if row_type == 'family':
+                    if row_type == 'mfg_com':
+                        # Manufacturing Company - bold with golden background
+                        return ['background-color: #FFF3CD; font-weight: bold; border-top: 2px solid #f5b400; border-bottom: 1px solid #f5b400; color: #856404'] * len(row)
+                    elif row_type == 'family':
                         family_idx = len([i for i in state_df.index[:row.name+1] if state_df.loc[i, 'Type'] == 'family']) - 1
                         color = family_colors[family_idx % len(family_colors)]
                         return [f'background-color: {color}; font-weight: bold'] * len(row)
@@ -3634,6 +3881,9 @@ def render_state_drilldown_preview(preview_data: Dict, selected_states: List[str
                 display_df = state_df.drop(columns=['Type'])
                 styled_df = display_df.style.apply(highlight_families, axis=1).applymap(color_negatives)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True, height=350)
+                
+                # Info message below table
+                st.info("📌 Data for all brands within the manufacturing company")
 
 
 def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.DataFrame, selected_states: List[str], selected_family: str, segment: Dict) -> pd.DataFrame | None:
@@ -3703,7 +3953,7 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         # State all spirits (all segments in this state from unfiltered data)
         state_all_spirits_a25 = df_state_full[df_state_full["PRI Year"] == "A25"]["Revised NS"].sum()
         
-        # 1. BP FAM A25 MS (State Level) - Brand Family Market Share within Segment
+        # 1. Brand FAM A25 MS (State Level) - Brand Family Market Share within Segment
         bp_fam_ms = (state_family_a25 / state_segment_a25 * 100) if state_segment_a25 > 0 else 0
         
         # 2. Segment Salience to All Spirits A25 - Segment NS / All Spirits NS
@@ -3715,29 +3965,29 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         # 4. PW A25 NS Gr - Segment Growth Rate (Delta in PW Consumption)
         pw_gr = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
         
-        # 5. BP FAM A25 NS Gr - Brand Family Growth Rate (Delta in BP Consumption)
+        # 5. Brand FAM A25 NS Gr - Brand Family Growth Rate (Delta in BP Consumption)
         bp_fam_gr = ((state_family_a25 - state_family_a24) / state_family_a24 * 100) if state_family_a24 > 0 else 0
         
-        # 6. BP FAM BTM - Beat the Market (BP Growth - PW Growth)
-        btm = bp_fam_gr - pw_gr
+        # 6. Brand FAM BTM - Beat the Market (BP Growth - All India Segment Growth)
+        btm = bp_fam_gr - ai_segment_gr
         
         # 7. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
         pw_gr_index = (pw_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0
         
-        # 8. BP FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
+        # 8. Brand FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
         bp_fam_gr_index = (bp_fam_gr / ai_family_gr * 100) if ai_family_gr != 0 else 0
         
-        # 8. BP FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
+        # 8. Brand FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
         bp_fam_efficiency = (bp_fam_gr / pw_gr * 100) if pw_gr != 0 else 0
         
         rows.append({
             "State": state,
-            "BP FAM\nA25 MS": bp_fam_ms,
+            "Brand FAM\nA25 MS": bp_fam_ms,
             "Segment\nSalience to\nAll Spirits": segment_salience,
             "State\nContribution\nto AI": state_contribution,
             "Seg A25\nNS Gr": pw_gr,
-            "BP FAM\nA25 NS Gr": bp_fam_gr,
-            "BP FAM\nBTM": btm,
+            "Brand FAM\nA25 NS Gr": bp_fam_gr,
+            "Brand FAM\nBTM": btm,
             "Seg Gr\nIndexed\nto AI": pw_gr_index,
             "BP Gr\nIndexed\nto AI": bp_fam_gr_index,
             "BP Gr\nIndexed to\nAI BP Gr": bp_fam_efficiency,
@@ -3753,19 +4003,19 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     result_df = pd.DataFrame(rows)
     
     # Add ranking columns
-    result_df["MS\nRANK"] = result_df["BP FAM\nA25 MS"].rank(ascending=False, method='min').astype(int)
+    result_df["MS\nRANK"] = result_df["Brand FAM\nA25 MS"].rank(ascending=False, method='min').astype(int)
     result_df["Salience\nRANK"] = result_df["Segment\nSalience to\nAll Spirits"].rank(ascending=False, method='min').astype(int)
     result_df["Contribution\nRANK"] = result_df["State\nContribution\nto AI"].rank(ascending=False, method='min').astype(int)
     
     # Add AI row at the TOP
     ai_row = {
         "State": "All India",
-        "BP FAM\nA25 MS": (ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0,
+        "Brand FAM\nA25 MS": (ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0,
         "Segment\nSalience to\nAll Spirits": (ai_segment_a25 / ai_all_spirits_a25 * 100) if ai_all_spirits_a25 > 0 else 0,
         "State\nContribution\nto AI": 100.0,
         "Seg A25\nNS Gr": ai_segment_gr,
-        "BP FAM\nA25 NS Gr": ai_family_gr,
-        "BP FAM\nBTM": ai_family_gr - ai_segment_gr,
+        "Brand FAM\nA25 NS Gr": ai_family_gr,
+        "Brand FAM\nBTM": ai_family_gr - ai_segment_gr,
         "Seg Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed\nto AI": 100.0,
         "BP Gr\nIndexed to\nAI BP Gr": (ai_family_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0,
@@ -3796,13 +4046,13 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
         },
         {
             "name": "State aggregated to AI",
-            "columns": ["BP FAM A25 MS", "Segment Salience", "State Contribution"],
+            "columns": ["Brand FAM A25 MS", "Segment Salience", "State Contribution"],
             "color": "#E8F5E9",  # Light Green
             "text_color": "#1B5E20"
         },
         {
             "name": "NS Growth Data",
-            "columns": ["PW A25 NS Gr", "BP FAM A25 NS Gr"],
+            "columns": ["PW A25 NS Gr", "Brand FAM A25 NS Gr"],
             "color": "#FFF3E0",  # Light Orange
             "text_color": "#E65100"
         },
@@ -3831,7 +4081,7 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
     html += "<tr>"
     for group in column_groups:
         colspan = len(group["columns"])
-        html += f"""
+        html += f"""+
             <th colspan='{colspan}' style='
                 background: {group["color"]};
                 color: {group["text_color"]};
@@ -3849,7 +4099,7 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
     for group in column_groups:
         for col in group["columns"]:
             # Shorten column names for display
-            display_name = col.replace("BP FAM ", "").replace(" (AI)", "").replace("A25 ", "")
+            display_name = col.replace("Brand FAM ", "").replace(" (AI)", "").replace("A25 ", "")
             html += f"""
                 <th style='
                     background: {group["color"]};
@@ -3885,11 +4135,11 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
                     align = "center"
                     text_style = "font-weight: 600;" if is_ai_row else ""
                 elif isinstance(value, (int, float)):
-                    if col in ["BP FAM A25 MS", "Segment Salience", "State Contribution"]:
+                    if col in ["Brand FAM A25 MS", "Segment Salience", "State Contribution"]:
                         display_value = f"{value:.1f}%"
                         align = "center"
                         text_style = "font-weight: 600;" if is_ai_row else ""
-                    elif col in ["PW A25 NS Gr", "BP FAM A25 NS Gr"]:
+                    elif col in ["PW A25 NS Gr", "Brand FAM A25 NS Gr"]:
                         display_value = f"{value:+.1f}%"
                         align = "center"
                         # Color negative values red, positive green
@@ -3931,165 +4181,32 @@ def render_state_performance_table_html(df: pd.DataFrame) -> str:
 
 
 def display_state_performance_table(df: pd.DataFrame) -> None:
-    """Display state performance table with multi-level column headers and colored groups using HTML"""
+    """Display state performance table as downloadable Streamlit table (without last 6 columns)"""
     
     if df.empty:
         return
     
-    # Define column structure with groups
-    column_structure = [
-        {"group": "", "group_color": "#F5F5F5", "text_color": "#424242", "columns": ["State"], "colspan": 1},
-        {"group": "State aggregated to AI", "group_color": "#E8F5E9", "text_color": "#1B5E20", 
-         "columns": ["Brand FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"], "colspan": 3},
-        {"group": "NS Growth Data", "group_color": "#FFF3E0", "text_color": "#E65100", 
-         "columns": ["Seg A25\nNS Gr", "Brand FAM\nA25 NS Gr", "Brand FAM\nBTM"], "colspan": 3},
-        {"group": "Growth Indexation", "group_color": "#F3E5F5", "text_color": "#4A148C", 
-         "columns": ["Seg Gr\nIndexed\nto AI", "Brand Gr\nIndexed\nto AI", "Brand Gr\nIndexed to\nAI Brand Gr"], "colspan": 3},
-        {"group": "Salience & Contribution RANKS", "group_color": "#FCE4EC", "text_color": "#880E4F", 
-         "columns": ["MS\nRANK", "Salience\nRANK", "Contribution\nRANK"], "colspan": 3}
+    # Remove the last 6 columns (Growth Indexation and Ranks)
+    columns_to_remove = [
+        "Seg Gr\nIndexed\nto AI",
+        "Brand Gr\nIndexed\nto AI", 
+        "Brand Gr\nIndexed to\nAI Brand Gr",
+        "MS\nRANK",
+        "Salience\nRANK",
+        "Contribution\nRANK"
     ]
     
-    # Build HTML table
-    html = """
-    <div style='overflow-x: auto; margin: 1rem 0;'>
-        <table style='width: 100%; border-collapse: collapse; font-size: 0.9rem; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-family: Inter, sans-serif;'>
-            <thead>
-                <tr>
-    """
+    # Create a copy and remove unwanted columns
+    df_display = df.copy()
+    for col in columns_to_remove:
+        if col in df_display.columns:
+            df_display = df_display.drop(columns=[col])
     
-    # First row: Group headers
-    for group_info in column_structure:
-        if group_info["group"]:  # Only show group header if not empty
-            html += f"""
-                <th colspan='{group_info["colspan"]}' style='
-                    background: {group_info["group_color"]};
-                    color: {group_info["text_color"]};
-                    padding: 0.8rem 0.5rem;
-                    text-align: center;
-                    font-weight: 700;
-                    font-size: 0.95rem;
-                    border: 2px solid white;
-                '>{group_info["group"]}</th>
-            """
-        else:
-            html += f"""
-                <th colspan='{group_info["colspan"]}' style='
-                    background: {group_info["group_color"]};
-                    padding: 0.8rem 0.5rem;
-                    border: 2px solid white;
-                '></th>
-            """
+    # Clean up column names (remove \n for better display)
+    df_display.columns = [col.replace('\n', ' ') for col in df_display.columns]
     
-    html += "</tr><tr>"
-    
-    # Second row: Column names
-    for group_info in column_structure:
-        for col in group_info["columns"]:
-            # Shorten column names for display
-            display_name = col.replace("\n", "<br>")
-            html += f"""
-                <th style='
-                    background: #FAFAFA;
-                    color: #424242;
-                    padding: 0.7rem 0.5rem;
-                    text-align: center;
-                    font-weight: 600;
-                    font-size: 0.85rem;
-                    border: 1px solid #E0E0E0;
-                    white-space: nowrap;
-                '>{display_name}</th>
-            """
-    
-    html += "</tr></thead><tbody>"
-    
-    # Data rows
-    for idx, row in df.iterrows():
-        is_ai_row = row["State"] == "All India"
-        row_bg = "#FFF9C4" if is_ai_row else ("white" if idx % 2 == 0 else "#FAFAFA")
-        
-        html += "<tr>"
-        
-        # State column
-        html += f"""
-            <td style='
-                padding: 0.7rem 0.8rem;
-                text-align: left;
-                border: 1px solid #E0E0E0;
-                background: {row_bg};
-                font-weight: {"700" if is_ai_row else "500"};
-                color: {"#1565C0" if is_ai_row else "#424242"};
-            '>{row["State"]}</td>
-        """
-        
-        # State aggregated to AI columns
-        for col in ["BP FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI"]:
-            value = row[col]
-            display_value = f"{value:.0f}%" if isinstance(value, (int, float)) else value
-            html += f"""
-                <td style='
-                    padding: 0.7rem 0.5rem;
-                    text-align: center;
-                    border: 1px solid #E0E0E0;
-                    background: {row_bg};
-                    font-weight: {"600" if is_ai_row else "400"};
-                '>{display_value}</td>
-            """
-        
-        # NS Growth Data columns
-        for col in ["Seg A25\nNS Gr", "BP FAM\nA25 NS Gr", "BP FAM\nBTM"]:
-            value = row[col]
-            display_value = f"{value:+.0f}%" if isinstance(value, (int, float)) else value
-            color = "#2E7D32" if isinstance(value, (int, float)) and value > 0 else ("#D32F2F" if isinstance(value, (int, float)) and value < 0 else "#424242")
-            html += f"""
-                <td style='
-                    padding: 0.7rem 0.5rem;
-                    text-align: center;
-                    border: 1px solid #E0E0E0;
-                    background: {row_bg};
-                    font-weight: 600;
-                    color: {color};
-                '>{display_value}</td>
-            """
-        
-        # Growth Indexation columns (no % sign, already multiplied by 100)
-        for col in ["Seg Gr\nIndexed\nto AI", "BP Gr\nIndexed\nto AI", "BP Gr\nIndexed to\nAI BP Gr"]:
-            value = row[col]
-            display_value = f"{value:.0f}" if isinstance(value, (int, float)) else value
-            html += f"""
-                <td style='
-                    padding: 0.7rem 0.5rem;
-                    text-align: center;
-                    border: 1px solid #E0E0E0;
-                    background: {row_bg};
-                    font-weight: {"600" if is_ai_row else "400"};
-                '>{display_value}</td>
-            """
-        
-        # Rank columns
-        for col in ["MS\nRANK", "Salience\nRANK", "Contribution\nRANK"]:
-            value = row[col]
-            display_value = str(int(value)) if value != "" and str(value) != "" and value != 0 else "-"
-            html += f"""
-                <td style='
-                    padding: 0.7rem 0.5rem;
-                    text-align: center;
-                    border: 1px solid #E0E0E0;
-                    background: {row_bg};
-                    font-weight: {"600" if is_ai_row else "400"};
-                '>{display_value}</td>
-            """
-        
-        html += "</tr>"
-    
-    html += "</tbody></table></div>"
-    
-    # Display HTML table with components.html for better rendering
-    try:
-        import streamlit.components.v1 as components
-        components.html(html, height=min(650, (len(df) + 3) * 45), scrolling=True)
-    except:
-        # Fallback to st.markdown if components not available
-        st.markdown(html, unsafe_allow_html=True)
+    # Display as normal Streamlit dataframe (downloadable)
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 
 def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str], zone_name: str, df_full_segment: pd.DataFrame = None) -> Dict | None:
@@ -4143,6 +4260,19 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["Revised NS"].sum()
     ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
     
+    # Calculate All India A26 YTD growth for BTM calculation
+    ai_a26_ytd_total = df_all[
+        (df_all["PRI Year"] == "A26") & 
+        (df_all["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    
+    ai_a25_ytd_total = df_all[
+        (df_all["PRI Year"] == "A25") & 
+        (df_all["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    
+    ai_a26_ytd_growth = ((ai_a26_ytd_total / ai_a25_ytd_total) - 1) * 100 if ai_a25_ytd_total > 0 else 0
+    
     # ===== STATE SUMMARY TABLE =====
     state_a25 = df_a25.groupby("State")["Revised NS"].sum().to_dict()
     state_a24 = df_a24.groupby("State")["Revised NS"].sum().to_dict()
@@ -4163,19 +4293,21 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     zone_growth = ((zone_a25 / zone_a24) - 1) * 100 if zone_a24 > 0 else 0
     zone_a26_ytd_growth = ((zone_a26_ytd / zone_a25_ytd) - 1) * 100 if zone_a25_ytd > 0 else 0
     zone_btm = zone_growth - ai_growth
+    zone_a26_ytd_btm = zone_a26_ytd_growth - ai_a26_ytd_growth
     
     # Get zone display name
     zone_display = zone_name.replace(" Zone", "").replace("+", "+").upper()
     
     summary_rows = []
     
-    # First row: Zone summary
+    # First row: Zone summary - reordered columns
     summary_rows.append({
         "State": zone_display,
         "A25 Sal % Contribution to AI": f"{zone_sal:.0f}%",
         "A25 Gr": f"{zone_growth:+.1f}%",
+        "A26 YTD Gr*": f"{zone_a26_ytd_growth:+.1f}%",
         "A25 BTM": f"{zone_btm:+.1f}%",
-        "A26 YTD Gr*": f"{zone_a26_ytd_growth:+.1f}%"
+        "A26 YTD BTM*": f"{zone_a26_ytd_btm:+.1f}%"
     })
     
     # Then individual states - collect with numeric salience for sorting
@@ -4190,13 +4322,15 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
         state_growth = ((a25_ns / a24_ns) - 1) * 100 if a24_ns > 0 else 0
         state_a26_ytd_growth = ((a26_ytd_ns / a25_ytd_ns) - 1) * 100 if a25_ytd_ns > 0 else 0
         btm = state_growth - ai_growth
+        a26_ytd_btm = state_a26_ytd_growth - ai_a26_ytd_growth
         
         state_rows_with_sal.append({
             "State": state,
             "A25 Sal % Contribution to AI": f"{sal_contribution:.0f}%",
             "A25 Gr": f"{state_growth:+.1f}%",
-            "A25 BTM": f"{btm:+.1f}%",
             "A26 YTD Gr*": f"{state_a26_ytd_growth:+.1f}%",
+            "A25 BTM": f"{btm:+.1f}%",
+            "A26 YTD BTM*": f"{a26_ytd_btm:+.1f}%",
             "_sal_numeric": sal_contribution  # For sorting
         })
     
@@ -4211,10 +4345,28 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     state_summary = pd.DataFrame(summary_rows)
     
     # ===== STATE DEEP-DIVE TABLES =====
+    # Brand-level data by state (SELECTED brands only)
     brand_state_a25 = df_a25.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     brand_state_a24 = df_a24.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     brand_state_a26_ytd = df_a26_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    
+    # Family-level data by state (ALL brands - for Mfg Com calculations)
+    df_zone_all = df[df["Zone"] == zone_name].copy()
+    df_a25_all = df_zone_all[df_zone_all["PRI Year"] == "A25"].copy()
+    df_a24_all = df_zone_all[df_zone_all["PRI Year"] == "A24"].copy()
+    df_a26_ytd_all = df_zone_all[df_zone_all["PRI Year"] == "A26"].copy()
+    df_a25_ytd_all = df_zone_all[df_zone_all["PRI Year"] == "A25"].copy()
+    
+    if "Month" in df_a26_ytd_all.columns:
+        df_a26_ytd_all = df_a26_ytd_all[df_a26_ytd_all["Month"].isin(["July", "August", "September", "October"])]
+    if "Month" in df_a25_ytd_all.columns:
+        df_a25_ytd_all = df_a25_ytd_all[df_a25_ytd_all["Month"].isin(["July", "August", "September", "October"])]
+    
+    family_state_a25_all = df_a25_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_state_a24_all = df_a24_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_state_a26_ytd_all = df_a26_ytd_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_state_a25_ytd_all = df_a25_ytd_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
     
     state_details = {}
     
@@ -4224,23 +4376,129 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
         segment_state_a24 = segment_state_a24_full.get(state, 0)
         segment_state_growth = ((segment_state_a25 / segment_state_a24) - 1) * 100 if segment_state_a24 > 0 else 0
         
+        # Calculate segment A26 YTD growth for this state (for BTM calculation)
+        segment_state_a26_ytd = df_segment_full[
+            (df_segment_full["PRI Year"] == "A26") & 
+            (df_segment_full["State"] == state) & 
+            (df_segment_full["Month"].isin(["July", "August", "September", "October"]))
+        ]["Revised NS"].sum() if "Month" in df_segment_full.columns else 0
+        
+        segment_state_a25_ytd = df_segment_full[
+            (df_segment_full["PRI Year"] == "A25") & 
+            (df_segment_full["State"] == state) & 
+            (df_segment_full["Month"].isin(["July", "August", "September", "October"]))
+        ]["Revised NS"].sum() if "Month" in df_segment_full.columns else 0
+        
+        segment_state_a26_ytd_growth = ((segment_state_a26_ytd / segment_state_a25_ytd) - 1) * 100 if segment_state_a25_ytd > 0 else 0
+        
         detail_rows = []
         
+        # Group ALL families by Manufacturing Company (not just selected)
+        all_families_in_data = df_a25_all["Brand Family"].unique().tolist() if "Brand Family" in df_a25_all.columns else []
+        family_to_mfg_all = {}
+        for family in all_families_in_data:
+            family_data = df_a25_all[df_a25_all["Brand Family"] == family]
+            if not family_data.empty and "Mfg Com" in family_data.columns:
+                mfg_com = family_data["Mfg Com"].iloc[0]
+                family_to_mfg_all[family] = mfg_com
+            else:
+                family_to_mfg_all[family] = "Unknown"
+        
+        mfg_to_all_families = {}
+        for family, mfg in family_to_mfg_all.items():
+            if mfg not in mfg_to_all_families:
+                mfg_to_all_families[mfg] = []
+            mfg_to_all_families[mfg].append(family)
+        
+        # Group SELECTED families by Manufacturing Company
+        family_to_mfg = {}
         for family in selected_families:
-            family_brands_all = []
-            for brand in selected_brands:
-                if not brand_state_a25[
-                    (brand_state_a25["Brand Family"] == family) & 
-                    (brand_state_a25["Brand"] == brand)
-                ].empty:
-                    family_brands_all.append(brand)
+            family_data = df_a25[df_a25["Brand Family"] == family]
+            if not family_data.empty and "Mfg Com" in family_data.columns:
+                mfg_com = family_data["Mfg Com"].iloc[0]
+                family_to_mfg[family] = mfg_com
+            else:
+                family_to_mfg[family] = "Unknown"
+        
+        mfg_to_families = {}
+        for family, mfg in family_to_mfg.items():
+            if mfg not in mfg_to_families:
+                mfg_to_families[mfg] = []
+            mfg_to_families[mfg].append(family)
+        
+        # Sort Mfg Companies
+        mfg_order = []
+        for mfg_name in ["PRI", "Diageo", "Others", "Unknown"]:
+            if mfg_name in mfg_to_families:
+                mfg_order.append(mfg_name)
+        
+        for mfg_com in mfg_order:
+            families_in_mfg_selected = mfg_to_families[mfg_com]
+            families_in_mfg_all = mfg_to_all_families.get(mfg_com, [])
             
-            if not family_brands_all:
-                continue
+            # Add Manufacturing Company header row (using ALL brands in ALL families)
+            mfg_a25 = 0
+            mfg_a24 = 0
+            mfg_a26_ytd = 0
+            mfg_a25_ytd = 0
             
-            # Family total row
-            family_a25 = brand_state_a25[
-                (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
+            for family in families_in_mfg_all:
+                mfg_a25 += family_state_a25_all[
+                    (family_state_a25_all["State"] == state) & (family_state_a25_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                mfg_a24 += family_state_a24_all[
+                    (family_state_a24_all["State"] == state) & (family_state_a24_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                mfg_a26_ytd += family_state_a26_ytd_all[
+                    (family_state_a26_ytd_all["State"] == state) & (family_state_a26_ytd_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                mfg_a25_ytd += family_state_a25_ytd_all[
+                    (family_state_a25_ytd_all["State"] == state) & (family_state_a25_ytd_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+            
+            if mfg_a25 == 0 and mfg_a24 == 0:
+                detail_rows.append({
+                    "Brand": f"📊 {mfg_com}",
+                    "MS": "-",
+                    "A25 Gr": "-",
+                    "A25 BTM": "-",
+                    "A26 YTD Gr*": "-",
+                    "A26 YTD BTM*": "-",
+                    "Type": "mfg_com"
+                })
+            else:
+                mfg_ms = (mfg_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
+                mfg_growth = ((mfg_a25 / mfg_a24) - 1) * 100 if mfg_a24 > 0 else 0
+                mfg_a26_ytd_growth = ((mfg_a26_ytd / mfg_a25_ytd) - 1) * 100 if mfg_a25_ytd > 0 else 0
+                mfg_btm = mfg_growth - ai_growth  # Use All India growth as benchmark
+                mfg_a26_ytd_btm = mfg_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
+                
+                detail_rows.append({
+                    "Brand": f"📊 {mfg_com}",
+                    "MS": f"{mfg_ms:.0f}%",
+                    "A25 Gr": f"{mfg_growth:+.1f}%",
+                    "A25 BTM": f"{mfg_btm:+.0f}%",
+                    "A26 YTD Gr*": f"{mfg_a26_ytd_growth:+.1f}%",
+                    "A26 YTD BTM*": f"{mfg_a26_ytd_btm:+.0f}%",
+                    "Type": "mfg_com"
+                })
+            
+            # Now add SELECTED families under this Mfg Com
+            for family in families_in_mfg_selected:
+                family_brands_all = []
+                for brand in selected_brands:
+                    if not brand_state_a25[
+                        (brand_state_a25["Brand Family"] == family) & 
+                        (brand_state_a25["Brand"] == brand)
+                    ].empty:
+                        family_brands_all.append(brand)
+                
+                if not family_brands_all:
+                    continue
+                
+                # Family total row
+                family_a25 = brand_state_a25[
+                    (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
             ]["Revised NS"].sum()
             family_a24 = brand_state_a24[
                 (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
@@ -4254,11 +4512,12 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
             
             if family_a25 == 0 and family_a24 == 0:
                 detail_rows.append({
-                    "Brand": f"{family} FAM",
+                    "Brand": f"  {family} FAM",
                     "MS": "-",
                     "A25 Gr": "-",
-                    "A25 BTM": "-",
                     "A26 YTD Gr*": "-",
+                    "A25 BTM": "-",
+                    "A26 YTD BTM*": "-",
                     "Type": "family"
                 })
             else:
@@ -4266,13 +4525,15 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                 family_growth = ((family_a25 / family_a24) - 1) * 100 if family_a24 > 0 else 0
                 family_a26_ytd_growth = ((family_a26_ytd / family_a25_ytd) - 1) * 100 if family_a25_ytd > 0 else 0
                 family_btm = family_growth - segment_state_growth
+                family_a26_ytd_btm = family_a26_ytd_growth - segment_state_a26_ytd_growth
                 
                 detail_rows.append({
-                    "Brand": f"{family} FAM",
+                    "Brand": f"  {family} FAM",
                     "MS": f"{family_ms:.0f}%",
                     "A25 Gr": f"{family_growth:+.1f}%",
-                    "A25 BTM": f"{family_btm:+.0f}%",
                     "A26 YTD Gr*": f"{family_a26_ytd_growth:+.1f}%",
+                    "A25 BTM": f"{family_btm:+.0f}%",
+                    "A26 YTD BTM*": f"{family_a26_ytd_btm:+.0f}%",
                     "Type": "family"
                 })
             
@@ -4306,11 +4567,12 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                 
                 if brand_a25 == 0 and brand_a24 == 0:
                     detail_rows.append({
-                        "Brand": brand,
+                        "Brand": f"    {brand}",
                         "MS": "-",
                         "A25 Gr": "-",
-                        "A25 BTM": "-",
                         "A26 YTD Gr*": "-",
+                        "A25 BTM": "-",
+                        "A26 YTD BTM*": "-",
                         "Type": "brand"
                     })
                 else:
@@ -4318,13 +4580,15 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                     brand_growth = ((brand_a25 / brand_a24) - 1) * 100 if brand_a24 > 0 else 0
                     brand_a26_ytd_growth = ((brand_a26_ytd / brand_a25_ytd) - 1) * 100 if brand_a25_ytd > 0 else 0
                     brand_btm = brand_growth - segment_state_growth
+                    brand_a26_ytd_btm = brand_a26_ytd_growth - segment_state_a26_ytd_growth
                     
                     detail_rows.append({
-                        "Brand": brand,
+                        "Brand": f"    {brand}",
                         "MS": f"{brand_ms:.0f}%",
                         "A25 Gr": f"{brand_growth:+.1f}%",
-                        "A25 BTM": f"{brand_btm:+.0f}%",
                         "A26 YTD Gr*": f"{brand_a26_ytd_growth:+.1f}%",
+                        "A25 BTM": f"{brand_btm:+.0f}%",
+                        "A26 YTD BTM*": f"{brand_a26_ytd_btm:+.0f}%",
                         "Type": "brand"
                     })
         
@@ -4362,12 +4626,30 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     segment_zone_a25 = df_a25_all_brands.groupby("Zone")["Revised NS"].sum().to_dict()
     segment_zone_a24 = df_a24_all_brands.groupby("Zone")["Revised NS"].sum().to_dict()
     
-    # Calculate segment growth for each zone (from ALL brands)
+    # Calculate segment growth for each zone (from ALL brands) - ONLY FOR DISPLAY, NOT FOR BTM
     segment_growth = {}
     for zone in zones:
         a25_total = segment_zone_a25.get(zone, 0)
         a24_total = segment_zone_a24.get(zone, 0)
         segment_growth[zone] = ((a25_total / a24_total) - 1) * 100 if a24_total > 0 else 0
+    
+    # Calculate ALL INDIA growth for BTM benchmark (sum across all zones)
+    ai_a25_total = sum(segment_zone_a25.values())
+    ai_a24_total = sum(segment_zone_a24.values())
+    ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
+    
+    # Calculate ALL INDIA A26 YTD growth for BTM benchmark
+    df_a26_ytd_all_brands = df_all[df_all["PRI Year"] == "A26"].copy()
+    df_a25_ytd_all_brands = df_all[df_all["PRI Year"] == "A25"].copy()
+    
+    if "Month" in df_a26_ytd_all_brands.columns:
+        df_a26_ytd_all_brands = df_a26_ytd_all_brands[df_a26_ytd_all_brands["Month"].isin(["July", "August", "September", "October"])]
+    if "Month" in df_a25_ytd_all_brands.columns:
+        df_a25_ytd_all_brands = df_a25_ytd_all_brands[df_a25_ytd_all_brands["Month"].isin(["July", "August", "September", "October"])]
+    
+    ai_a26_ytd_total = df_a26_ytd_all_brands["Revised NS"].sum()
+    ai_a25_ytd_total = df_a25_ytd_all_brands["Revised NS"].sum()
+    ai_a26_ytd_growth = ((ai_a26_ytd_total / ai_a25_ytd_total) - 1) * 100 if ai_a25_ytd_total > 0 else 0
     
     # NOW filter to selected brands and families for the table rows
     df_a25 = df_all[(df_all["PRI Year"] == "A25") & 
@@ -4406,63 +4688,189 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     family_zone_a26_ytd = df_a26_ytd.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
     family_zone_a25_ytd = df_a25_ytd.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
     
+    # Level 2b: Zone × Brand Family (ALL brands - unfiltered, for Mfg Com calculations)
+    df_a25_all = df_all[df_all["PRI Year"] == "A25"].copy()
+    df_a24_all = df_all[df_all["PRI Year"] == "A24"].copy()
+    df_a26_ytd_all = df_all[df_all["PRI Year"] == "A26"].copy()
+    df_a25_ytd_all = df_all[df_all["PRI Year"] == "A25"].copy()
+    
+    if "Month" in df_a26_ytd_all.columns:
+        df_a26_ytd_all = df_a26_ytd_all[df_a26_ytd_all["Month"].isin(["July", "August", "September", "October"])]
+    if "Month" in df_a25_ytd_all.columns:
+        df_a25_ytd_all = df_a25_ytd_all[df_a25_ytd_all["Month"].isin(["July", "August", "September", "October"])]
+    
+    family_zone_a25_all = df_a25_all.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_zone_a24_all = df_a24_all.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_zone_a26_ytd_all = df_a26_ytd_all.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_zone_a25_ytd_all = df_a25_ytd_all.groupby(["Zone", "Brand Family"])["Revised NS"].sum().reset_index()
+    
     # Build unified table
     rows = []
     
+    # Group ALL families by Manufacturing Company (not just selected ones)
+    # Get all unique families from the unfiltered data
+    all_families_in_data = df_a25_all["Brand Family"].unique().tolist() if "Brand Family" in df_a25_all.columns else []
+    
+    family_to_mfg_all = {}
+    for family in all_families_in_data:
+        # Get the manufacturing company for this family from the unfiltered data
+        family_data = df_a25_all[df_a25_all["Brand Family"] == family]
+        if not family_data.empty and "Mfg Com" in family_data.columns:
+            mfg_com = family_data["Mfg Com"].iloc[0]
+            family_to_mfg_all[family] = mfg_com
+        else:
+            family_to_mfg_all[family] = "Unknown"
+    
+    # Group ALL families by Mfg Com
+    mfg_to_all_families = {}
+    for family, mfg in family_to_mfg_all.items():
+        if mfg not in mfg_to_all_families:
+            mfg_to_all_families[mfg] = []
+        mfg_to_all_families[mfg].append(family)
+    
+    # Also track which selected families belong to which Mfg Com
+    family_to_mfg = {}
     for family in selected_families:
-        # Get brands in this family from the data
-        family_brands_in_data = brand_zone_a25[brand_zone_a25["Brand Family"] == family]["Brand"].unique().tolist()
-        family_brands = [b for b in selected_brands if b in family_brands_in_data]
+        # Get the manufacturing company for this family from the data
+        family_data = df_a25[df_a25["Brand Family"] == family]
+        if not family_data.empty and "Mfg Com" in family_data.columns:
+            mfg_com = family_data["Mfg Com"].iloc[0]
+            family_to_mfg[family] = mfg_com
+        else:
+            family_to_mfg[family] = "Unknown"
+    
+    # Group selected families by Mfg Com
+    mfg_to_families = {}
+    for family, mfg in family_to_mfg.items():
+        if mfg not in mfg_to_families:
+            mfg_to_families[mfg] = []
+        mfg_to_families[mfg].append(family)
+    
+    # Sort Mfg Companies: PRI, Diageo, Others, Unknown
+    mfg_order = []
+    for mfg_name in ["PRI", "Diageo", "Others", "Unknown"]:
+        if mfg_name in mfg_to_families:
+            mfg_order.append(mfg_name)
+    
+    for mfg_com in mfg_order:
+        families_in_mfg_selected = mfg_to_families[mfg_com]  # Selected families for display
+        families_in_mfg_all = mfg_to_all_families.get(mfg_com, [])  # ALL families for Mfg Com calculation
         
-        if not family_brands:
-            continue
+        # Add Manufacturing Company header row (aggregated from ALL brands in ALL families of this Mfg Com)
+        mfg_row = {"Brand": f"📊 {mfg_com}", "Type": "mfg_com"}
         
-        # Add Brand Family header row
-        family_row = {"Brand": f"{family} FAM", "Type": "family"}
-        
-        # Calculate family total across all zones for salience
-        family_total_all_zones = family_zone_a25[family_zone_a25["Brand Family"] == family]["Revised NS"].sum()
+        # Calculate Mfg Com totals across all zones for salience (ALL brands in ALL families)
+        mfg_total_all_zones = 0
+        for family in families_in_mfg_all:
+            family_total = family_zone_a25_all[family_zone_a25_all["Brand Family"] == family]["Revised NS"].sum()
+            mfg_total_all_zones += family_total
         
         for zone in zones:
-            # Get family totals for this zone
-            family_zone_data_a25 = family_zone_a25[(family_zone_a25["Zone"] == zone) & (family_zone_a25["Brand Family"] == family)]
-            family_sum_a25 = family_zone_data_a25["Revised NS"].sum() if not family_zone_data_a25.empty else 0
+            # Aggregate all families in this Mfg Com for this zone (ALL brands)
+            mfg_sum_a25 = 0
+            mfg_sum_a24 = 0
+            mfg_sum_a26_ytd = 0
+            mfg_sum_a25_ytd = 0
             
-            family_zone_data_a24 = family_zone_a24[(family_zone_a24["Zone"] == zone) & (family_zone_a24["Brand Family"] == family)]
-            family_sum_a24 = family_zone_data_a24["Revised NS"].sum() if not family_zone_data_a24.empty else 0
-            
-            # MS = Family share in this zone (vs segment total in zone)
+            for family in families_in_mfg_all:
+                family_zone_data_a25 = family_zone_a25_all[(family_zone_a25_all["Zone"] == zone) & (family_zone_a25_all["Brand Family"] == family)]
+                mfg_sum_a25 += family_zone_data_a25["Revised NS"].sum() if not family_zone_data_a25.empty else 0
+                
+                family_zone_data_a24 = family_zone_a24_all[(family_zone_a24_all["Zone"] == zone) & (family_zone_a24_all["Brand Family"] == family)]
+                mfg_sum_a24 += family_zone_data_a24["Revised NS"].sum() if not family_zone_data_a24.empty else 0
+                
+                family_zone_data_a26_ytd = family_zone_a26_ytd_all[(family_zone_a26_ytd_all["Zone"] == zone) & (family_zone_a26_ytd_all["Brand Family"] == family)]
+                mfg_sum_a26_ytd += family_zone_data_a26_ytd["Revised NS"].sum() if not family_zone_data_a26_ytd.empty else 0
+                
+                family_zone_data_a25_ytd = family_zone_a25_ytd_all[(family_zone_a25_ytd_all["Zone"] == zone) & (family_zone_a25_ytd_all["Brand Family"] == family)]
+                mfg_sum_a25_ytd += family_zone_data_a25_ytd["Revised NS"].sum() if not family_zone_data_a25_ytd.empty else 0
+                        
+            # MS = Mfg Com share in this zone (vs segment total in zone)
             segment_total_zone = segment_zone_a25.get(zone, 0)
-            family_ms = (family_sum_a25 / segment_total_zone * 100) if segment_total_zone > 0 else 0
+            mfg_ms = (mfg_sum_a25 / segment_total_zone * 100) if segment_total_zone > 0 else 0
             
-            # Salience = This zone's share of family's total across all zones
-            family_salience = (family_sum_a25 / family_total_all_zones * 100) if family_total_all_zones > 0 else 0
+            # Salience = This zone's share of Mfg Com's total across all zones
+            mfg_salience = (mfg_sum_a25 / mfg_total_all_zones * 100) if mfg_total_all_zones > 0 else 0
             
-            # Growth = Family growth in this zone
-            family_growth = ((family_sum_a25 / family_sum_a24) - 1) * 100 if family_sum_a24 > 0 else 0
+            # Growth = Mfg Com growth in this zone
+            mfg_growth = ((mfg_sum_a25 / mfg_sum_a24) - 1) * 100 if mfg_sum_a24 > 0 else 0
             
-            # A26 YTD Growth = (July-Oct A26 - July-Oct A25) / July-Oct A25
-            family_zone_data_a26_ytd = family_zone_a26_ytd[(family_zone_a26_ytd["Zone"] == zone) & (family_zone_a26_ytd["Brand Family"] == family)]
-            family_sum_a26_ytd = family_zone_data_a26_ytd["Revised NS"].sum() if not family_zone_data_a26_ytd.empty else 0
+            # A26 YTD Growth
+            mfg_a26_ytd_growth = ((mfg_sum_a26_ytd / mfg_sum_a25_ytd) - 1) * 100 if mfg_sum_a25_ytd > 0 else 0
             
-            family_zone_data_a25_ytd = family_zone_a25_ytd[(family_zone_a25_ytd["Zone"] == zone) & (family_zone_a25_ytd["Brand Family"] == family)]
-            family_sum_a25_ytd = family_zone_data_a25_ytd["Revised NS"].sum() if not family_zone_data_a25_ytd.empty else 0
+            # BTM = Mfg Com growth - ALL INDIA growth (not zone-specific)
+            mfg_btm = mfg_growth - ai_growth
             
-            family_a26_ytd_growth = ((family_sum_a26_ytd / family_sum_a25_ytd) - 1) * 100 if family_sum_a25_ytd > 0 else 0
+            # A26 YTD BTM = Mfg Com A26 YTD growth - ALL INDIA A26 YTD growth (not zone-specific)
+            mfg_a26_ytd_btm = mfg_a26_ytd_growth - ai_a26_ytd_growth
             
-            # BTM = Family growth - Segment growth in this zone
-            family_btm = family_growth - segment_growth[zone]
-            
-            family_row[f"{zone}_MS"] = f"{family_ms:.0f}% | {family_salience:.0f}%"
-            family_row[f"{zone}_Gr"] = f"{family_growth:.1f}%"
-            family_row[f"{zone}_BTM"] = f"{family_btm:+.0f}%"
-            family_row[f"{zone}_A26YTD"] = f"{family_a26_ytd_growth:.1f}%"
+            mfg_row[f"{zone}_MS"] = f"{mfg_ms:.0f}% | {mfg_salience:.0f}%"
+            mfg_row[f"{zone}_Gr"] = f"{mfg_growth:.1f}%"
+            mfg_row[f"{zone}_BTM"] = f"{mfg_btm:+.0f}%"
+            mfg_row[f"{zone}_A26YTD"] = f"{mfg_a26_ytd_growth:.1f}%"
+            mfg_row[f"{zone}_A26YTD_BTM"] = f"{mfg_a26_ytd_btm:+.0f}%"
         
-        rows.append(family_row)
+        rows.append(mfg_row)
         
-        # Add individual brand rows
-        for brand in family_brands:
-            brand_row = {"Brand": brand, "Type": "brand"}
+        # Now add SELECTED families under this Mfg Com
+        for family in families_in_mfg_selected:
+            # Get brands in this family from the data
+            family_brands_in_data = brand_zone_a25[brand_zone_a25["Brand Family"] == family]["Brand"].unique().tolist()
+            family_brands = [b for b in selected_brands if b in family_brands_in_data]
+            
+            if not family_brands:
+                continue
+            
+            # Add Brand Family header row (indented under Mfg Com)
+            family_row = {"Brand": f"  {family} FAM", "Type": "family"}
+            
+            # Calculate family total across all zones for salience
+            family_total_all_zones = family_zone_a25[family_zone_a25["Brand Family"] == family]["Revised NS"].sum()
+            
+            for zone in zones:
+                # Get family totals for this zone
+                family_zone_data_a25 = family_zone_a25[(family_zone_a25["Zone"] == zone) & (family_zone_a25["Brand Family"] == family)]
+                family_sum_a25 = family_zone_data_a25["Revised NS"].sum() if not family_zone_data_a25.empty else 0
+                
+                family_zone_data_a24 = family_zone_a24[(family_zone_a24["Zone"] == zone) & (family_zone_a24["Brand Family"] == family)]
+                family_sum_a24 = family_zone_data_a24["Revised NS"].sum() if not family_zone_data_a24.empty else 0
+                
+                # MS = Family share in this zone (vs segment total in zone)
+                segment_total_zone = segment_zone_a25.get(zone, 0)
+                family_ms = (family_sum_a25 / segment_total_zone * 100) if segment_total_zone > 0 else 0
+                
+                # Salience = This zone's share of family's total across all zones
+                family_salience = (family_sum_a25 / family_total_all_zones * 100) if family_total_all_zones > 0 else 0
+                
+                # Growth = Family growth in this zone
+                family_growth = ((family_sum_a25 / family_sum_a24) - 1) * 100 if family_sum_a24 > 0 else 0
+                
+                # A26 YTD Growth = (July-Oct A26 - July-Oct A25) / July-Oct A25
+                family_zone_data_a26_ytd = family_zone_a26_ytd[(family_zone_a26_ytd["Zone"] == zone) & (family_zone_a26_ytd["Brand Family"] == family)]
+                family_sum_a26_ytd = family_zone_data_a26_ytd["Revised NS"].sum() if not family_zone_data_a26_ytd.empty else 0
+                
+                family_zone_data_a25_ytd = family_zone_a25_ytd[(family_zone_a25_ytd["Zone"] == zone) & (family_zone_a25_ytd["Brand Family"] == family)]
+                family_sum_a25_ytd = family_zone_data_a25_ytd["Revised NS"].sum() if not family_zone_data_a25_ytd.empty else 0
+                
+                family_a26_ytd_growth = ((family_sum_a26_ytd / family_sum_a25_ytd) - 1) * 100 if family_sum_a25_ytd > 0 else 0
+                
+                # BTM = Family growth - ALL INDIA growth (not zone-specific)
+                family_btm = family_growth - ai_growth
+                
+                # A26 YTD BTM = Family A26 YTD growth - ALL INDIA A26 YTD growth (not zone-specific)
+                family_a26_ytd_btm = family_a26_ytd_growth - ai_a26_ytd_growth
+                
+                family_row[f"{zone}_MS"] = f"{family_ms:.0f}% | {family_salience:.0f}%"
+                family_row[f"{zone}_Gr"] = f"{family_growth:.1f}%"
+                family_row[f"{zone}_BTM"] = f"{family_btm:+.0f}%"
+                family_row[f"{zone}_A26YTD"] = f"{family_a26_ytd_growth:.1f}%"
+                family_row[f"{zone}_A26YTD_BTM"] = f"{family_a26_ytd_btm:+.0f}%"
+            
+            rows.append(family_row)
+            
+            # Add individual brand rows (further indented)
+            for brand in family_brands:
+                brand_row = {"Brand": f"    {brand}", "Type": "brand"}
             
             # Calculate brand total across all zones for salience
             brand_total_all_zones = brand_zone_a25[(brand_zone_a25["Brand Family"] == family) & 
@@ -4503,13 +4911,17 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
                 
                 a26_ytd_growth = ((a26_ytd_val / a25_ytd_val) - 1) * 100 if a25_ytd_val > 0 else 0
                 
-                # BTM = Brand growth - Segment growth in this zone
-                btm = growth - segment_growth[zone]
+                # BTM = Brand growth - ALL INDIA growth (not zone-specific)
+                btm = growth - ai_growth
+                
+                # A26 YTD BTM = Brand A26 YTD growth - ALL INDIA A26 YTD growth (not zone-specific)
+                a26_ytd_btm = a26_ytd_growth - ai_a26_ytd_growth
                 
                 brand_row[f"{zone}_MS"] = f"{ms:.0f}% | {salience:.0f}%"
                 brand_row[f"{zone}_Gr"] = f"{growth:.1f}%"
                 brand_row[f"{zone}_BTM"] = f"{btm:+.0f}%"
                 brand_row[f"{zone}_A26YTD"] = f"{a26_ytd_growth:.1f}%"
+                brand_row[f"{zone}_A26YTD_BTM"] = f"{a26_ytd_btm:+.0f}%"
             
             rows.append(brand_row)
     
@@ -4619,12 +5031,12 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
     if "A23" in selected_years and "A25" in selected_years:
         start = pivot["A23"]
         end = pivot["A25"]
-        pivot["2 Yr CAGR %"] = np.where(
+        pivot["2 Yr CAGR % (A23-A25)"] = np.where(
             start > 0,
             ((end / start) ** 0.5 - 1) * 100,
             0
         ).round(1)
-        columns_to_keep.append("2 Yr CAGR %")
+        columns_to_keep.append("2 Yr CAGR % (A23-A25)")
     
     # Calculate A26 YTD Growth % (July-Oct A26 vs July-Oct A25)
     if "A26" in selected_years and has_month_col:
@@ -4685,7 +5097,7 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
         
         columns_to_keep.append("A26 YTD Growth %*")
     
-    # Reset index to make Mfg Com a column
+    # Reset index to make Mfg Com a column FIRST
     pivot = pivot.reset_index()
     pivot = pivot.rename(columns={"index": "Mfg Com"})
     
@@ -4694,14 +5106,77 @@ def create_manufacturing_pivot(df: pd.DataFrame, selected_years: List[str]) -> p
     pivot["sort_key"] = pivot["Mfg Com"].apply(lambda x: custom_order.index(x) if x in custom_order else 999)
     pivot = pivot.sort_values("sort_key").drop(columns=["sort_key"]).reset_index(drop=True)
     
-    # Select only required columns (Mfg Com + growth columns + CAGR)
-    final_columns = [col for col in columns_to_keep if col in pivot.columns]
+    # Calculate A25 BTM (Beat The Market) - Company A25 Growth vs Segment Total A25 Growth
+    if "A25 Growth %" in pivot.columns:
+        # Get Segment Total A25 Growth (All India benchmark) - it's the first row after sorting
+        segment_row = pivot[pivot["Mfg Com"] == "Segment Total"]
+        if not segment_row.empty:
+            segment_a25_growth = segment_row["A25 Growth %"].iloc[0]
+        else:
+            segment_a25_growth = 0.0
+        
+        # Calculate BTM for each Mfg Com
+        pivot["A25 BTM"] = 0.0
+        for idx in range(len(pivot)):
+            mfg_com = pivot.loc[idx, "Mfg Com"]
+            if mfg_com == "Segment Total":
+                # Segment Total BTM is 0 (comparing to itself)
+                pivot.loc[idx, "A25 BTM"] = 0.0
+            else:
+                # BTM = Company Growth - Segment Growth
+                company_growth = pivot.loc[idx, "A25 Growth %"]
+                btm = company_growth - segment_a25_growth
+                pivot.loc[idx, "A25 BTM"] = round(btm, 1)
+        
+        columns_to_keep.append("A25 BTM")
+    
+    # Calculate A26 YTD BTM - Company A26 YTD Growth vs Segment Total A26 YTD Growth
+    if "A26 YTD Growth %*" in pivot.columns:
+        # Get Segment Total A26 YTD Growth (All India benchmark)
+        segment_row = pivot[pivot["Mfg Com"] == "Segment Total"]
+        if not segment_row.empty:
+            segment_a26_ytd_growth = segment_row["A26 YTD Growth %*"].iloc[0]
+        else:
+            segment_a26_ytd_growth = 0.0
+        
+        # Calculate BTM for each Mfg Com
+        pivot["A26 YTD BTM*"] = 0.0
+        for idx in range(len(pivot)):
+            mfg_com = pivot.loc[idx, "Mfg Com"]
+            if mfg_com == "Segment Total":
+                # Segment Total BTM is 0 (comparing to itself)
+                pivot.loc[idx, "A26 YTD BTM*"] = 0.0
+            else:
+                # BTM = Company Growth - Segment Growth
+                company_growth = pivot.loc[idx, "A26 YTD Growth %*"]
+                btm = company_growth - segment_a26_ytd_growth
+                pivot.loc[idx, "A26 YTD BTM*"] = round(btm, 1)
+        
+        columns_to_keep.append("A26 YTD BTM*")
+    
+    # Reorder columns: Mfg Com, Growth columns, CAGR, BTM columns
+    column_order = ["Mfg Com"]
+    if "A24 Growth %" in pivot.columns:
+        column_order.append("A24 Growth %")
+    if "A25 Growth %" in pivot.columns:
+        column_order.append("A25 Growth %")
+    if "A26 YTD Growth %*" in pivot.columns:
+        column_order.append("A26 YTD Growth %*")
+    if "2 Yr CAGR % (A23-A25)" in pivot.columns:
+        column_order.append("2 Yr CAGR % (A23-A25)")
+    if "A25 BTM" in pivot.columns:
+        column_order.append("A25 BTM")
+    if "A26 YTD BTM*" in pivot.columns:
+        column_order.append("A26 YTD BTM*")
+    
+    # Select only required columns in the new order
+    final_columns = [col for col in column_order if col in pivot.columns]
     pivot_display = pivot[final_columns].copy()
     
-    # Format growth and CAGR columns to show % symbol
+    # Format growth, CAGR, and BTM columns to show % symbol
     for col in pivot_display.columns:
-        if 'Growth %' in col or 'CAGR %' in col:
-            pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+        if 'Growth %' in col or 'CAGR %' in col or 'BTM' in col:
+            pivot_display[col] = pivot_display[col].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) and ('BTM' in col) else f"{x:.1f}%" if pd.notna(x) else "0.0%")
     
     return pivot_display
 
@@ -4764,6 +5239,19 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["Revised NS"].sum()
     ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
     
+    # Calculate All India A26 YTD growth for BTM calculation
+    ai_a26_ytd_total = df_all[
+        (df_all["PRI Year"] == "A26") & 
+        (df_all["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    
+    ai_a25_ytd_total = df_all[
+        (df_all["PRI Year"] == "A25") & 
+        (df_all["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    
+    ai_a26_ytd_growth = ((ai_a26_ytd_total / ai_a25_ytd_total) - 1) * 100 if ai_a25_ytd_total > 0 else 0
+    
     # ===== STATE SUMMARY TABLE =====
     # Aggregate by state for segment totals (selected brands only for summary)
     state_a25 = df_a25.groupby("State")["Revised NS"].sum().to_dict()
@@ -4785,16 +5273,18 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     north_zone_growth = ((north_zone_a25 / north_zone_a24) - 1) * 100 if north_zone_a24 > 0 else 0
     north_zone_a26_ytd_growth = ((north_zone_a26_ytd / north_zone_a25_ytd) - 1) * 100 if north_zone_a25_ytd > 0 else 0
     north_zone_btm = north_zone_growth - ai_growth
+    north_zone_a26_ytd_btm = north_zone_a26_ytd_growth - ai_a26_ytd_growth
     
     summary_rows = []
     
-    # First row: NORTH zone summary
+    # First row: NORTH zone summary - reordered columns
     summary_rows.append({
         "State": "NORTH",
         "A25 Sal % Contribution to AI": f"{north_zone_sal:.0f}%",
         "A25 Gr": f"{north_zone_growth:+.1f}%",
+        "A26 YTD Gr*": f"{north_zone_a26_ytd_growth:+.1f}%",
         "A25 BTM": f"{north_zone_btm:+.1f}%",
-        "A26 YTD Gr*": f"{north_zone_a26_ytd_growth:+.1f}%"
+        "A26 YTD BTM*": f"{north_zone_a26_ytd_btm:+.1f}%"
     })
     
     # Then individual states - collect with numeric salience for sorting
@@ -4817,12 +5307,16 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
         # BTM (State vs AI)
         btm = state_growth - ai_growth
         
+        # A26 YTD BTM (State vs AI)
+        a26_ytd_btm = state_a26_ytd_growth - ai_a26_ytd_growth
+        
         state_rows_with_sal.append({
             "State": state,
             "A25 Sal % Contribution to AI": f"{sal_contribution:.0f}%",
             "A25 Gr": f"{state_growth:+.1f}%",
-            "A25 BTM": f"{btm:+.1f}%",
             "A26 YTD Gr*": f"{state_a26_ytd_growth:+.1f}%",
+            "A25 BTM": f"{btm:+.1f}%",
+            "A26 YTD BTM*": f"{a26_ytd_btm:+.1f}%",
             "_sal_numeric": sal_contribution  # Store numeric value for sorting
         })
     
@@ -4839,11 +5333,28 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     state_summary = pd.DataFrame(summary_rows)
     
     # ===== STATE DEEP-DIVE TABLES =====
-    # Brand-level data by state
+    # Brand-level data by state (SELECTED brands only)
     brand_state_a25 = df_a25.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     brand_state_a24 = df_a24.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     brand_state_a26_ytd = df_a26_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
+    
+    # Family-level data by state (ALL brands - for Mfg Com calculations)
+    df_north_all = df[df["Zone"] == "North Zone"].copy()
+    df_a25_all = df_north_all[df_north_all["PRI Year"] == "A25"].copy()
+    df_a24_all = df_north_all[df_north_all["PRI Year"] == "A24"].copy()
+    df_a26_ytd_all = df_north_all[df_north_all["PRI Year"] == "A26"].copy()
+    df_a25_ytd_all = df_north_all[df_north_all["PRI Year"] == "A25"].copy()
+    
+    if "Month" in df_a26_ytd_all.columns:
+        df_a26_ytd_all = df_a26_ytd_all[df_a26_ytd_all["Month"].isin(["July", "August", "September", "October"])]
+    if "Month" in df_a25_ytd_all.columns:
+        df_a25_ytd_all = df_a25_ytd_all[df_a25_ytd_all["Month"].isin(["July", "August", "September", "October"])]
+    
+    family_state_a25_all = df_a25_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_state_a24_all = df_a24_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_state_a26_ytd_all = df_a26_ytd_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
+    family_state_a25_ytd_all = df_a25_ytd_all.groupby(["State", "Brand Family"])["Revised NS"].sum().reset_index()
     
     state_details = {}
     
@@ -4853,12 +5364,119 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
         segment_state_a24 = segment_state_a24_full.get(state, 0)
         segment_state_growth = ((segment_state_a25 / segment_state_a24) - 1) * 100 if segment_state_a24 > 0 else 0
         
+        # Calculate segment A26 YTD growth for this state (for BTM calculation)
+        segment_state_a26_ytd = df_segment_full[
+            (df_segment_full["PRI Year"] == "A26") & 
+            (df_segment_full["State"] == state) & 
+            (df_segment_full["Month"].isin(["July", "August", "September", "October"]))
+        ]["Revised NS"].sum() if "Month" in df_segment_full.columns else 0
+        
+        segment_state_a25_ytd = df_segment_full[
+            (df_segment_full["PRI Year"] == "A25") & 
+            (df_segment_full["State"] == state) & 
+            (df_segment_full["Month"].isin(["July", "August", "September", "October"]))
+        ]["Revised NS"].sum() if "Month" in df_segment_full.columns else 0
+        
+        segment_state_a26_ytd_growth = ((segment_state_a26_ytd / segment_state_a25_ytd) - 1) * 100 if segment_state_a25_ytd > 0 else 0
+        
         detail_rows = []
         
+        # Group ALL families by Manufacturing Company (not just selected)
+        all_families_in_data = df_a25_all["Brand Family"].unique().tolist() if "Brand Family" in df_a25_all.columns else []
+        family_to_mfg_all = {}
+        for family in all_families_in_data:
+            family_data = df_a25_all[df_a25_all["Brand Family"] == family]
+            if not family_data.empty and "Mfg Com" in family_data.columns:
+                mfg_com = family_data["Mfg Com"].iloc[0]
+                family_to_mfg_all[family] = mfg_com
+            else:
+                family_to_mfg_all[family] = "Unknown"
+        
+        mfg_to_all_families = {}
+        for family, mfg in family_to_mfg_all.items():
+            if mfg not in mfg_to_all_families:
+                mfg_to_all_families[mfg] = []
+            mfg_to_all_families[mfg].append(family)
+        
+        # Group SELECTED families by Manufacturing Company
+        family_to_mfg = {}
         for family in selected_families:
-            # Get ALL brands in this family from selected_brands (show all, even if 0 in this state)
-            # First check which brands in selected_brands belong to this family
-            family_brands_all = []
+            family_data = df_a25[df_a25["Brand Family"] == family]
+            if not family_data.empty and "Mfg Com" in family_data.columns:
+                mfg_com = family_data["Mfg Com"].iloc[0]
+                family_to_mfg[family] = mfg_com
+            else:
+                family_to_mfg[family] = "Unknown"
+        
+        # Group families by Mfg Com
+        mfg_to_families = {}
+        for family, mfg in family_to_mfg.items():
+            if mfg not in mfg_to_families:
+                mfg_to_families[mfg] = []
+            mfg_to_families[mfg].append(family)
+        
+        # Sort Mfg Companies
+        mfg_order = []
+        for mfg_name in ["PRI", "Diageo", "Others", "Unknown"]:
+            if mfg_name in mfg_to_families:
+                mfg_order.append(mfg_name)
+        
+        for mfg_com in mfg_order:
+            families_in_mfg_selected = mfg_to_families[mfg_com]  # Selected families for display
+            families_in_mfg_all = mfg_to_all_families.get(mfg_com, [])  # ALL families for Mfg Com calculation
+            
+            # Add Manufacturing Company header row (using ALL brands in ALL families)
+            mfg_a25 = 0
+            mfg_a24 = 0
+            mfg_a26_ytd = 0
+            mfg_a25_ytd = 0
+            
+            for family in families_in_mfg_all:
+                mfg_a25 += family_state_a25_all[
+                    (family_state_a25_all["State"] == state) & (family_state_a25_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                mfg_a24 += family_state_a24_all[
+                    (family_state_a24_all["State"] == state) & (family_state_a24_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                mfg_a26_ytd += family_state_a26_ytd_all[
+                    (family_state_a26_ytd_all["State"] == state) & (family_state_a26_ytd_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                mfg_a25_ytd += family_state_a25_ytd_all[
+                    (family_state_a25_ytd_all["State"] == state) & (family_state_a25_ytd_all["Brand Family"] == family)
+                ]["Revised NS"].sum()
+            
+            if mfg_a25 == 0 and mfg_a24 == 0:
+                detail_rows.append({
+                    "Brand": f"📊 {mfg_com}",
+                    "MS": "-",
+                    "A25 Gr": "-",
+                    "A26 YTD Gr*": "-",
+                    "A25 BTM": "-",
+                    "A26 YTD BTM*": "-",
+                    "Type": "mfg_com"
+                })
+            else:
+                mfg_ms = (mfg_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
+                mfg_growth = ((mfg_a25 / mfg_a24) - 1) * 100 if mfg_a24 > 0 else 0
+                mfg_a26_ytd_growth = ((mfg_a26_ytd / mfg_a25_ytd) - 1) * 100 if mfg_a25_ytd > 0 else 0
+                mfg_btm = mfg_growth - ai_growth  # Use All India growth as benchmark
+                mfg_a26_ytd_btm = mfg_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
+                
+                detail_rows.append({
+                    "Brand": f"📊 {mfg_com}",
+                    "MS": f"{mfg_ms:.0f}%",
+                    "A25 Gr": f"{mfg_growth:+.1f}%",
+                    "A26 YTD Gr*": f"{mfg_a26_ytd_growth:+.1f}%",
+                    "A25 BTM": f"{mfg_btm:+.0f}%",
+                    "A26 YTD BTM*": f"{mfg_a26_ytd_btm:+.0f}%",
+                    "Type": "mfg_com"
+                })
+            
+            # Now add SELECTED families under this Mfg Com
+            for family in families_in_mfg_selected:
+                # Get ALL brands in this family from selected_brands (show all, even if 0 in this state)
+                # First check which brands in selected_brands belong to this family
+                family_brands_all = []
             for brand in selected_brands:
                 # Check if this brand belongs to this family in ANY state
                 if not brand_state_a25[
@@ -4887,25 +5505,28 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
             # If family has no sales in this state, show "-"
             if family_a25 == 0 and family_a24 == 0:
                 detail_rows.append({
-                    "Brand": f"{family} FAM",
+                    "Brand": f"  {family} FAM",
                     "MS": "-",
                     "A25 Gr": "-",
-                    "A25 BTM": "-",
                     "A26 YTD Gr*": "-",
+                    "A25 BTM": "-",
+                    "A26 YTD BTM*": "-",
                     "Type": "family"
                 })
             else:
                 family_ms = (family_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
                 family_growth = ((family_a25 / family_a24) - 1) * 100 if family_a24 > 0 else 0
                 family_a26_ytd_growth = ((family_a26_ytd / family_a25_ytd) - 1) * 100 if family_a25_ytd > 0 else 0
-                family_btm = family_growth - segment_state_growth
+                family_btm = family_growth - ai_growth  # Use All India growth as benchmark
+                family_a26_ytd_btm = family_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
                 
                 detail_rows.append({
-                    "Brand": f"{family} FAM",
+                    "Brand": f"  {family} FAM",
                     "MS": f"{family_ms:.0f}%",
                     "A25 Gr": f"{family_growth:+.1f}%",
-                    "A25 BTM": f"{family_btm:+.0f}%",
                     "A26 YTD Gr*": f"{family_a26_ytd_growth:+.1f}%",
+                    "A25 BTM": f"{family_btm:+.0f}%",
+                    "A26 YTD BTM*": f"{family_a26_ytd_btm:+.0f}%",
                     "Type": "family"
                 })
             
@@ -4941,25 +5562,28 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
                 # If brand has no sales in this state (both A25 and A24 are 0), show "-"
                 if brand_a25 == 0 and brand_a24 == 0:
                     detail_rows.append({
-                        "Brand": brand,
+                        "Brand": f"    {brand}",
                         "MS": "-",
                         "A25 Gr": "-",
-                        "A25 BTM": "-",
                         "A26 YTD Gr*": "-",
+                        "A25 BTM": "-",
+                        "A26 YTD BTM*": "-",
                         "Type": "brand"
                     })
                 else:
                     brand_ms = (brand_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 and brand_a25 > 0 else 0
                     brand_growth = ((brand_a25 / brand_a24) - 1) * 100 if brand_a24 > 0 else 0
                     brand_a26_ytd_growth = ((brand_a26_ytd / brand_a25_ytd) - 1) * 100 if brand_a25_ytd > 0 else 0
-                    brand_btm = brand_growth - segment_state_growth
+                    brand_btm = brand_growth - ai_growth  # Use All India growth as benchmark
+                    brand_a26_ytd_btm = brand_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
                     
                     detail_rows.append({
-                        "Brand": brand,
+                        "Brand": f"    {brand}",
                         "MS": f"{brand_ms:.0f}%",
                         "A25 Gr": f"{brand_growth:+.1f}%",
-                        "A25 BTM": f"{brand_btm:+.0f}%",
                         "A26 YTD Gr*": f"{brand_a26_ytd_growth:+.1f}%",
+                        "A25 BTM": f"{brand_btm:+.0f}%",
+                        "A26 YTD BTM*": f"{brand_a26_ytd_btm:+.0f}%",
                         "Type": "brand"
                     })
         
