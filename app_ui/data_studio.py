@@ -419,8 +419,26 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             brands_in_families = sorted(
                 df_filtered_with_a26[df_filtered_with_a26["Brand Family"].isin(selected_families)]["Brand"].dropna().unique().tolist()
             )
-            # Use saved brands if available, otherwise default to all brands in selected families
-            default_brands = [b for b in saved_brands if b in brands_in_families] if saved_brands else brands_in_families
+            # Auto-fill: Keep saved brands that are valid + add all brands from newly added families
+            if saved_brands:
+                # Get families that were saved vs currently selected
+                saved_families_set = set(saved_families) if saved_families else set()
+                current_families_set = set(selected_families)
+                new_families = current_families_set - saved_families_set
+                
+                # Get brands from newly added families
+                new_family_brands = []
+                if new_families:
+                    new_family_brands = df_filtered_with_a26[df_filtered_with_a26["Brand Family"].isin(new_families)]["Brand"].dropna().unique().tolist()
+                
+                # Default = valid saved brands + all brands from new families
+                valid_saved_brands = [b for b in saved_brands if b in brands_in_families]
+                default_brands = list(set(valid_saved_brands + new_family_brands))
+                default_brands = [b for b in brands_in_families if b in default_brands]  # Maintain order
+            else:
+                # No saved brands - default to all brands in selected families
+                default_brands = brands_in_families
+            
             selected_brands = st.multiselect(
                 "Select Brands",
                 options=brands_in_families,
@@ -4588,10 +4606,20 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
             for family in families_in_mfg_selected:
                 family_brands_all = []
                 for brand in selected_brands:
-                    if not brand_state_a25[
+                    # Check if brand exists in ANY data source (A25, A24, or A26)
+                    in_a25 = not brand_state_a25[
                         (brand_state_a25["Brand Family"] == family) & 
                         (brand_state_a25["Brand"] == brand)
-                    ].empty:
+                    ].empty
+                    in_a24 = not brand_state_a24[
+                        (brand_state_a24["Brand Family"] == family) & 
+                        (brand_state_a24["Brand"] == brand)
+                    ].empty
+                    in_a26 = not brand_state_a26_ytd[
+                        (brand_state_a26_ytd["Brand Family"] == family) & 
+                        (brand_state_a26_ytd["Brand"] == brand)
+                    ].empty
+                    if in_a25 or in_a24 or in_a26:
                         family_brands_all.append(brand)
                 
                 if not family_brands_all:
@@ -4600,98 +4628,98 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                 # Family total row
                 family_a25 = brand_state_a25[
                     (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
-            ]["Revised NS"].sum()
-            family_a24 = brand_state_a24[
-                (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
-            ]["Revised NS"].sum()
-            family_a26_ytd = brand_state_a26_ytd[
-                (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
-            ]["Revised NS"].sum()
-            family_a25_ytd = brand_state_a25_ytd[
-                (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
-            ]["Revised NS"].sum()
+                ]["Revised NS"].sum()
+                family_a24 = brand_state_a24[
+                    (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                family_a26_ytd = brand_state_a26_ytd[
+                    (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                family_a25_ytd = brand_state_a25_ytd[
+                    (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
+                ]["Revised NS"].sum()
             
-            if family_a25 == 0 and family_a24 == 0:
-                detail_rows.append({
-                    "Brand": f"  {family} FAM",
-                    "MS": "-",
-                    "A25 Gr": "-",
-                    "A26 YTD Gr*": "-",
-                    "A25 BTM": "-",
-                    "A26 YTD BTM*": "-",
-                    "Type": "family"
-                })
-            else:
-                family_ms = (family_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
-                family_growth = ((family_a25 / family_a24) - 1) * 100 if family_a24 > 0 else 0
-                family_a26_ytd_growth = ((family_a26_ytd / family_a25_ytd) - 1) * 100 if family_a25_ytd > 0 else 0
-                family_btm = family_growth - ai_growth  # Use All India growth as benchmark
-                family_a26_ytd_btm = family_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
-                
-                detail_rows.append({
-                    "Brand": f"  {family} FAM",
-                    "MS": f"{family_ms:.0f}%",
-                    "A25 Gr": f"{family_growth:+.1f}%",
-                    "A26 YTD Gr*": f"{family_a26_ytd_growth:+.1f}%",
-                    "A25 BTM": f"{family_btm:+.0f}%",
-                    "A26 YTD BTM*": f"{family_a26_ytd_btm:+.0f}%",
-                    "Type": "family"
-                })
-            
-            # Individual brand rows
-            for brand in family_brands_all:
-                brand_data_a25 = brand_state_a25[
-                    (brand_state_a25["State"] == state) & 
-                    (brand_state_a25["Brand Family"] == family) & 
-                    (brand_state_a25["Brand"] == brand)
-                ]
-                brand_data_a24 = brand_state_a24[
-                    (brand_state_a24["State"] == state) & 
-                    (brand_state_a24["Brand Family"] == family) & 
-                    (brand_state_a24["Brand"] == brand)
-                ]
-                brand_data_a26_ytd = brand_state_a26_ytd[
-                    (brand_state_a26_ytd["State"] == state) & 
-                    (brand_state_a26_ytd["Brand Family"] == family) & 
-                    (brand_state_a26_ytd["Brand"] == brand)
-                ]
-                brand_data_a25_ytd = brand_state_a25_ytd[
-                    (brand_state_a25_ytd["State"] == state) & 
-                    (brand_state_a25_ytd["Brand Family"] == family) & 
-                    (brand_state_a25_ytd["Brand"] == brand)
-                ]
-                
-                brand_a25 = brand_data_a25["Revised NS"].sum() if not brand_data_a25.empty else 0
-                brand_a24 = brand_data_a24["Revised NS"].sum() if not brand_data_a24.empty else 0
-                brand_a26_ytd = brand_data_a26_ytd["Revised NS"].sum() if not brand_data_a26_ytd.empty else 0
-                brand_a25_ytd = brand_data_a25_ytd["Revised NS"].sum() if not brand_data_a25_ytd.empty else 0
-                
-                if brand_a25 == 0 and brand_a24 == 0:
+                if family_a25 == 0 and family_a24 == 0:
                     detail_rows.append({
-                        "Brand": f"    {brand}",
+                        "Brand": f"  {family} FAM",
                         "MS": "-",
                         "A25 Gr": "-",
                         "A26 YTD Gr*": "-",
                         "A25 BTM": "-",
                         "A26 YTD BTM*": "-",
-                        "Type": "brand"
+                        "Type": "family"
                     })
                 else:
-                    brand_ms = (brand_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 and brand_a25 > 0 else 0
-                    brand_growth = ((brand_a25 / brand_a24) - 1) * 100 if brand_a24 > 0 else 0
-                    brand_a26_ytd_growth = ((brand_a26_ytd / brand_a25_ytd) - 1) * 100 if brand_a25_ytd > 0 else 0
-                    brand_btm = brand_growth - ai_growth  # Use All India growth as benchmark
-                    brand_a26_ytd_btm = brand_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
-                    
+                    family_ms = (family_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
+                    family_growth = ((family_a25 / family_a24) - 1) * 100 if family_a24 > 0 else 0
+                    family_a26_ytd_growth = ((family_a26_ytd / family_a25_ytd) - 1) * 100 if family_a25_ytd > 0 else 0
+                    family_btm = family_growth - ai_growth  # Use All India growth as benchmark
+                    family_a26_ytd_btm = family_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
+                
                     detail_rows.append({
-                        "Brand": f"    {brand}",
-                        "MS": f"{brand_ms:.0f}%",
-                        "A25 Gr": f"{brand_growth:+.1f}%",
-                        "A26 YTD Gr*": f"{brand_a26_ytd_growth:+.1f}%",
-                        "A25 BTM": f"{brand_btm:+.0f}%",
-                        "A26 YTD BTM*": f"{brand_a26_ytd_btm:+.0f}%",
-                        "Type": "brand"
+                        "Brand": f"  {family} FAM",
+                        "MS": f"{family_ms:.0f}%",
+                        "A25 Gr": f"{family_growth:+.1f}%",
+                        "A26 YTD Gr*": f"{family_a26_ytd_growth:+.1f}%",
+                        "A25 BTM": f"{family_btm:+.0f}%",
+                        "A26 YTD BTM*": f"{family_a26_ytd_btm:+.0f}%",
+                        "Type": "family"
                     })
+            
+                # Individual brand rows
+                for brand in family_brands_all:
+                    brand_data_a25 = brand_state_a25[
+                        (brand_state_a25["State"] == state) & 
+                        (brand_state_a25["Brand Family"] == family) & 
+                        (brand_state_a25["Brand"] == brand)
+                    ]
+                    brand_data_a24 = brand_state_a24[
+                        (brand_state_a24["State"] == state) & 
+                        (brand_state_a24["Brand Family"] == family) & 
+                        (brand_state_a24["Brand"] == brand)
+                    ]
+                    brand_data_a26_ytd = brand_state_a26_ytd[
+                        (brand_state_a26_ytd["State"] == state) & 
+                        (brand_state_a26_ytd["Brand Family"] == family) & 
+                        (brand_state_a26_ytd["Brand"] == brand)
+                    ]
+                    brand_data_a25_ytd = brand_state_a25_ytd[
+                        (brand_state_a25_ytd["State"] == state) & 
+                        (brand_state_a25_ytd["Brand Family"] == family) & 
+                        (brand_state_a25_ytd["Brand"] == brand)
+                    ]
+                
+                    brand_a25 = brand_data_a25["Revised NS"].sum() if not brand_data_a25.empty else 0
+                    brand_a24 = brand_data_a24["Revised NS"].sum() if not brand_data_a24.empty else 0
+                    brand_a26_ytd = brand_data_a26_ytd["Revised NS"].sum() if not brand_data_a26_ytd.empty else 0
+                    brand_a25_ytd = brand_data_a25_ytd["Revised NS"].sum() if not brand_data_a25_ytd.empty else 0
+                
+                    if brand_a25 == 0 and brand_a24 == 0:
+                        detail_rows.append({
+                            "Brand": f"    {brand}",
+                            "MS": "-",
+                            "A25 Gr": "-",
+                            "A26 YTD Gr*": "-",
+                            "A25 BTM": "-",
+                            "A26 YTD BTM*": "-",
+                            "Type": "brand"
+                        })
+                    else:
+                        brand_ms = (brand_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 and brand_a25 > 0 else 0
+                        brand_growth = ((brand_a25 / brand_a24) - 1) * 100 if brand_a24 > 0 else 0
+                        brand_a26_ytd_growth = ((brand_a26_ytd / brand_a25_ytd) - 1) * 100 if brand_a25_ytd > 0 else 0
+                        brand_btm = brand_growth - ai_growth  # Use All India growth as benchmark
+                        brand_a26_ytd_btm = brand_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
+                    
+                        detail_rows.append({
+                            "Brand": f"    {brand}",
+                            "MS": f"{brand_ms:.0f}%",
+                            "A25 Gr": f"{brand_growth:+.1f}%",
+                            "A26 YTD Gr*": f"{brand_a26_ytd_growth:+.1f}%",
+                            "A25 BTM": f"{brand_btm:+.0f}%",
+                            "A26 YTD BTM*": f"{brand_a26_ytd_btm:+.0f}%",
+                            "Type": "brand"
+                        })
         
         if detail_rows:
             state_details[state] = pd.DataFrame(detail_rows)
@@ -5601,115 +5629,124 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
                 # Get ALL brands in this family from selected_brands (show all, even if 0 in this state)
                 # First check which brands in selected_brands belong to this family
                 family_brands_all = []
-            for brand in selected_brands:
-                # Check if this brand belongs to this family in ANY state
-                if not brand_state_a25[
-                    (brand_state_a25["Brand Family"] == family) & 
-                    (brand_state_a25["Brand"] == brand)
-                ].empty:
-                    family_brands_all.append(brand)
+                for brand in selected_brands:
+                    # Check if brand exists in ANY data source (A25, A24, or A26)
+                    in_a25 = not brand_state_a25[
+                        (brand_state_a25["Brand Family"] == family) & 
+                        (brand_state_a25["Brand"] == brand)
+                    ].empty
+                    in_a24 = not brand_state_a24[
+                        (brand_state_a24["Brand Family"] == family) & 
+                        (brand_state_a24["Brand"] == brand)
+                    ].empty
+                    in_a26 = not brand_state_a26_ytd[
+                        (brand_state_a26_ytd["Brand Family"] == family) & 
+                        (brand_state_a26_ytd["Brand"] == brand)
+                    ].empty
+                    if in_a25 or in_a24 or in_a26:
+                        family_brands_all.append(brand)
             
-            if not family_brands_all:
-                continue
+                if not family_brands_all:
+                    continue
             
-            # Family total row - sum across all brands in family for this state
-            family_a25 = brand_state_a25[
-                (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
-            ]["Revised NS"].sum()
-            family_a24 = brand_state_a24[
-                (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
-            ]["Revised NS"].sum()
-            family_a26_ytd = brand_state_a26_ytd[
-                (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
-            ]["Revised NS"].sum()
-            family_a25_ytd = brand_state_a25_ytd[
-                (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
-            ]["Revised NS"].sum()
+                # Family total row - sum across all brands in family for this state
+                family_a25 = brand_state_a25[
+                    (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                family_a24 = brand_state_a24[
+                    (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                family_a26_ytd = brand_state_a26_ytd[
+                    (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
+                ]["Revised NS"].sum()
+                family_a25_ytd = brand_state_a25_ytd[
+                    (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
+                ]["Revised NS"].sum()
             
-            # If family has no sales in this state, show "-"
-            if family_a25 == 0 and family_a24 == 0:
-                detail_rows.append({
-                    "Brand": f"  {family} FAM",
-                    "MS": "-",
-                    "A25 Gr": "-",
-                    "A26 YTD Gr*": "-",
-                    "A25 BTM": "-",
-                    "A26 YTD BTM*": "-",
-                    "Type": "family"
-                })
-            else:
-                family_ms = (family_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
-                family_growth = ((family_a25 / family_a24) - 1) * 100 if family_a24 > 0 else 0
-                family_a26_ytd_growth = ((family_a26_ytd / family_a25_ytd) - 1) * 100 if family_a25_ytd > 0 else 0
-                family_btm = family_growth - ai_growth  # Use All India growth as benchmark
-                family_a26_ytd_btm = family_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
-                
-                detail_rows.append({
-                    "Brand": f"  {family} FAM",
-                    "MS": f"{family_ms:.0f}%",
-                    "A25 Gr": f"{family_growth:+.1f}%",
-                    "A26 YTD Gr*": f"{family_a26_ytd_growth:+.1f}%",
-                    "A25 BTM": f"{family_btm:+.0f}%",
-                    "A26 YTD BTM*": f"{family_a26_ytd_btm:+.0f}%",
-                    "Type": "family"
-                })
-            
-            # Individual brand rows - show ALL brands in family, even if 0 in this state
-            for brand in family_brands_all:
-                brand_data_a25 = brand_state_a25[
-                    (brand_state_a25["State"] == state) & 
-                    (brand_state_a25["Brand Family"] == family) & 
-                    (brand_state_a25["Brand"] == brand)
-                ]
-                brand_data_a24 = brand_state_a24[
-                    (brand_state_a24["State"] == state) & 
-                    (brand_state_a24["Brand Family"] == family) & 
-                    (brand_state_a24["Brand"] == brand)
-                ]
-                brand_data_a26_ytd = brand_state_a26_ytd[
-                    (brand_state_a26_ytd["State"] == state) & 
-                    (brand_state_a26_ytd["Brand Family"] == family) & 
-                    (brand_state_a26_ytd["Brand"] == brand)
-                ]
-                brand_data_a25_ytd = brand_state_a25_ytd[
-                    (brand_state_a25_ytd["State"] == state) & 
-                    (brand_state_a25_ytd["Brand Family"] == family) & 
-                    (brand_state_a25_ytd["Brand"] == brand)
-                ]
-                
-                # Always show brand, even if 0
-                brand_a25 = brand_data_a25["Revised NS"].sum() if not brand_data_a25.empty else 0
-                brand_a24 = brand_data_a24["Revised NS"].sum() if not brand_data_a24.empty else 0
-                brand_a26_ytd = brand_data_a26_ytd["Revised NS"].sum() if not brand_data_a26_ytd.empty else 0
-                brand_a25_ytd = brand_data_a25_ytd["Revised NS"].sum() if not brand_data_a25_ytd.empty else 0
-                
-                # If brand has no sales in this state (both A25 and A24 are 0), show "-"
-                if brand_a25 == 0 and brand_a24 == 0:
+                # If family has no sales in this state, show "-"
+                if family_a25 == 0 and family_a24 == 0:
                     detail_rows.append({
-                        "Brand": f"    {brand}",
+                        "Brand": f"  {family} FAM",
                         "MS": "-",
                         "A25 Gr": "-",
                         "A26 YTD Gr*": "-",
                         "A25 BTM": "-",
                         "A26 YTD BTM*": "-",
-                        "Type": "brand"
+                        "Type": "family"
                     })
                 else:
-                    brand_ms = (brand_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 and brand_a25 > 0 else 0
-                    brand_growth = ((brand_a25 / brand_a24) - 1) * 100 if brand_a24 > 0 else 0
-                    brand_a26_ytd_growth = ((brand_a26_ytd / brand_a25_ytd) - 1) * 100 if brand_a25_ytd > 0 else 0
-                    brand_btm = brand_growth - ai_growth  # Use All India growth as benchmark
-                    brand_a26_ytd_btm = brand_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
-                    
+                    family_ms = (family_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
+                    family_growth = ((family_a25 / family_a24) - 1) * 100 if family_a24 > 0 else 0
+                    family_a26_ytd_growth = ((family_a26_ytd / family_a25_ytd) - 1) * 100 if family_a25_ytd > 0 else 0
+                    family_btm = family_growth - ai_growth  # Use All India growth as benchmark
+                    family_a26_ytd_btm = family_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
+                
                     detail_rows.append({
-                        "Brand": f"    {brand}",
-                        "MS": f"{brand_ms:.0f}%",
-                        "A25 Gr": f"{brand_growth:+.1f}%",
-                        "A26 YTD Gr*": f"{brand_a26_ytd_growth:+.1f}%",
-                        "A25 BTM": f"{brand_btm:+.0f}%",
-                        "A26 YTD BTM*": f"{brand_a26_ytd_btm:+.0f}%",
-                        "Type": "brand"
+                        "Brand": f"  {family} FAM",
+                        "MS": f"{family_ms:.0f}%",
+                        "A25 Gr": f"{family_growth:+.1f}%",
+                        "A26 YTD Gr*": f"{family_a26_ytd_growth:+.1f}%",
+                        "A25 BTM": f"{family_btm:+.0f}%",
+                        "A26 YTD BTM*": f"{family_a26_ytd_btm:+.0f}%",
+                        "Type": "family"
                     })
+            
+                # Individual brand rows - show ALL brands in family, even if 0 in this state
+                for brand in family_brands_all:
+                    brand_data_a25 = brand_state_a25[
+                        (brand_state_a25["State"] == state) & 
+                        (brand_state_a25["Brand Family"] == family) & 
+                        (brand_state_a25["Brand"] == brand)
+                    ]
+                    brand_data_a24 = brand_state_a24[
+                        (brand_state_a24["State"] == state) & 
+                        (brand_state_a24["Brand Family"] == family) & 
+                        (brand_state_a24["Brand"] == brand)
+                    ]
+                    brand_data_a26_ytd = brand_state_a26_ytd[
+                        (brand_state_a26_ytd["State"] == state) & 
+                        (brand_state_a26_ytd["Brand Family"] == family) & 
+                        (brand_state_a26_ytd["Brand"] == brand)
+                    ]
+                    brand_data_a25_ytd = brand_state_a25_ytd[
+                        (brand_state_a25_ytd["State"] == state) & 
+                        (brand_state_a25_ytd["Brand Family"] == family) & 
+                        (brand_state_a25_ytd["Brand"] == brand)
+                    ]
+                
+                    # Always show brand, even if 0
+                    brand_a25 = brand_data_a25["Revised NS"].sum() if not brand_data_a25.empty else 0
+                    brand_a24 = brand_data_a24["Revised NS"].sum() if not brand_data_a24.empty else 0
+                    brand_a26_ytd = brand_data_a26_ytd["Revised NS"].sum() if not brand_data_a26_ytd.empty else 0
+                    brand_a25_ytd = brand_data_a25_ytd["Revised NS"].sum() if not brand_data_a25_ytd.empty else 0
+                
+                    # If brand has no sales in this state (both A25 and A24 are 0), show "-"
+                    if brand_a25 == 0 and brand_a24 == 0:
+                        detail_rows.append({
+                            "Brand": f"    {brand}",
+                            "MS": "-",
+                            "A25 Gr": "-",
+                            "A26 YTD Gr*": "-",
+                            "A25 BTM": "-",
+                            "A26 YTD BTM*": "-",
+                            "Type": "brand"
+                        })
+                    else:
+                        brand_ms = (brand_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 and brand_a25 > 0 else 0
+                        brand_growth = ((brand_a25 / brand_a24) - 1) * 100 if brand_a24 > 0 else 0
+                        brand_a26_ytd_growth = ((brand_a26_ytd / brand_a25_ytd) - 1) * 100 if brand_a25_ytd > 0 else 0
+                        brand_btm = brand_growth - ai_growth  # Use All India growth as benchmark
+                        brand_a26_ytd_btm = brand_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
+                    
+                        detail_rows.append({
+                            "Brand": f"    {brand}",
+                            "MS": f"{brand_ms:.0f}%",
+                            "A25 Gr": f"{brand_growth:+.1f}%",
+                            "A26 YTD Gr*": f"{brand_a26_ytd_growth:+.1f}%",
+                            "A25 BTM": f"{brand_btm:+.0f}%",
+                            "A26 YTD BTM*": f"{brand_a26_ytd_btm:+.0f}%",
+                            "Type": "brand"
+                        })
         
         if detail_rows:
             state_details[state] = pd.DataFrame(detail_rows)
