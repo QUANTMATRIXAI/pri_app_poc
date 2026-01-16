@@ -1009,9 +1009,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             family_cagr_values = {}
             for _, row in family_pivot.iterrows():
                 family = row["Brand Family"]
-                ns_a23 = row.get("A23", 0) or 0
-                ns_a24 = row.get("A24", 0) or 0
-                ns_a25 = row.get("A25", 0) or 0
+                ns_a23 = float(row.get("A23", 0) or 0)
+                ns_a24 = float(row.get("A24", 0) or 0)
+                ns_a25 = float(row.get("A25", 0) or 0)
+                ns_a26 = float(row.get("A26", 0) or 0)
                 
                 # A24 Growth % (YoY from A23)
                 a24_growth = ((ns_a24 - ns_a23) / ns_a23 * 100) if ns_a23 != 0 else 0
@@ -1022,11 +1023,24 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # 2-Year CAGR (A23 to A25)
                 cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
                 
+                # A26 YTD Growth % - compare A26 YTD (Jul-Oct) vs A25 YTD (Jul-Oct)
+                # Get A25 YTD for same months
+                a26_ytd_growth = 0
+                if has_month_col and ns_a26 > 0:
+                    df_a25_ytd_temp = df_family_chart_with_a26[
+                        (df_family_chart_with_a26["PRI Year"] == "A25") & 
+                        (df_family_chart_with_a26["Brand Family"] == family) &
+                        (df_family_chart_with_a26["Month"].isin(ytd_months))
+                    ].copy()
+                    df_a25_ytd_temp = clean_numeric_column(df_a25_ytd_temp, "Revised NS")
+                    df_a25_ytd_family = df_a25_ytd_temp["Revised NS"].sum() if not df_a25_ytd_temp.empty else 0
+                    a26_ytd_growth = ((ns_a26 - df_a25_ytd_family) / df_a25_ytd_family * 100) if df_a25_ytd_family != 0 else 0
+                
                 family_growth_rates[family] = {
                     "A23": None,
                     "A24": round(a24_growth, 1),
                     "A25": round(a25_growth, 1),
-                    "A26": None  # No growth text for A26
+                    "A26": round(a26_ytd_growth, 1) if ns_a26 > 0 else None  # Show A26 YTD growth
                 }
                 family_cagr_values[family] = round(cagr_2yr, 1)
             
