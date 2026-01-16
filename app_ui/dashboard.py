@@ -991,6 +991,12 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
     df_original = filter_df_by_segment(df_original, segment)
     if excluded_states and "State" in df_original.columns:
         df_original = df_original[~df_original["State"].isin(excluded_states)]
+    
+    # Keep unfiltered segment data for All India benchmark (NOT affected by brand selection)
+    df_segment_full = df_original.copy()
+    df_segment_full = clean_numeric_column(df_segment_full, "Revised NS")
+    
+    # Now filter by selected brands for brand-level calculations
     df_original = df_original[df_original["Brand"].isin(selected_brands)]
     # Ensure Revised NS is numeric in df_original
     df_original = clean_numeric_column(df_original, "Revised NS")
@@ -1143,16 +1149,17 @@ def render_brand_chart_dashboard(chart_row: Dict, segment: Dict, is_editor: bool
         st.info("📌 Data for selected brands only")
         
         # Calculate All India growth rates for BTM calculation
-        ai_a23 = df_original[df_original["PRI Year"] == "A23"]["Revised NS"].sum()
-        ai_a24 = df_original[df_original["PRI Year"] == "A24"]["Revised NS"].sum()
-        ai_a25 = df_original[df_original["PRI Year"] == "A25"]["Revised NS"].sum()
+        # Use df_segment_full (full segment data) NOT df_original (filtered by brand selection)
+        ai_a23 = df_segment_full[df_segment_full["PRI Year"] == "A23"]["Revised NS"].sum()
+        ai_a24 = df_segment_full[df_segment_full["PRI Year"] == "A24"]["Revised NS"].sum()
+        ai_a25 = df_segment_full[df_segment_full["PRI Year"] == "A25"]["Revised NS"].sum()
         
         ai_a25_growth = ((ai_a25 - ai_a24) / ai_a24 * 100) if ai_a24 > 0 else 0
         
         # Calculate All India A26 YTD growth if available
         if has_a26 and has_month_col:
-            ai_a25_ytd = df_original[(df_original["PRI Year"] == "A25") & (df_original["Month"].isin(ytd_months))]["Revised NS"].sum()
-            ai_a26_ytd = df_original[(df_original["PRI Year"] == "A26") & (df_original["Month"].isin(ytd_months))]["Revised NS"].sum()
+            ai_a25_ytd = df_segment_full[(df_segment_full["PRI Year"] == "A25") & (df_segment_full["Month"].isin(ytd_months))]["Revised NS"].sum()
+            ai_a26_ytd = df_segment_full[(df_segment_full["PRI Year"] == "A26") & (df_segment_full["Month"].isin(ytd_months))]["Revised NS"].sum()
             ai_a26_ytd_growth = ((ai_a26_ytd - ai_a25_ytd) / ai_a25_ytd * 100) if ai_a25_ytd > 0 else 0
         else:
             ai_a26_ytd_growth = 0
@@ -2224,6 +2231,9 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     selected_states = filter_config.get("states", []) if isinstance(filter_config, dict) else []
     excluded_states = filter_config.get("excluded_states", []) if isinstance(filter_config, dict) else []
     
+    # Keep a copy of full segment data for All India benchmark (BEFORE state exclusion)
+    df_full_segment_for_ai = df.copy()
+    
     # Apply state exclusion filter
     if excluded_states and "State" in df.columns:
         df = df[~df["State"].isin(excluded_states)]
@@ -2249,7 +2259,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     
     # Use the same function as preview - first get ALL states summary
     from app_ui.data_studio import create_zone_state_drilldown
-    result_all = create_zone_state_drilldown(df, selected_families, selected_brands, states_in_zone, zone_name, df)
+    result_all = create_zone_state_drilldown(df, selected_families, selected_brands, states_in_zone, zone_name, df_full_segment_for_ai)
     
     if result_all is None:
         st.warning("Unable to create state drill-down.")
@@ -2325,7 +2335,7 @@ def render_zone_drilldown_dashboard(table_row: Dict, segment: Dict, is_editor: b
     # Show state deep-dives for SELECTED states only
     if selected_states:
         from app_ui.data_studio import create_zone_state_drilldown
-        result = create_zone_state_drilldown(df, selected_families, selected_brands, selected_states, zone_name, df)
+        result = create_zone_state_drilldown(df, selected_families, selected_brands, selected_states, zone_name, df_full_segment_for_ai)
         
         if result and result['state_details']:
             st.markdown("---")
@@ -2527,9 +2537,15 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
     if ai_row.empty or state_rows.empty:
         return
     
+    # Helper function to convert formatted percentage string to float
+    def parse_pct(val):
+        if isinstance(val, str):
+            return float(val.replace('%', ''))
+        return float(val)
+    
     # Get All India values for reference lines
-    ai_ms = float(ai_row["Brand FAM\nA25 MS"].iloc[0])
-    ai_salience = float(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
+    ai_ms = parse_pct(ai_row["Brand FAM\nA25 MS"].iloc[0])
+    ai_salience = parse_pct(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
     
     # Prepare data for states
     states = []
@@ -2541,9 +2557,9 @@ def render_state_performance_bubble_chart(table_row: Dict, segment: Dict) -> Non
     
     for _, row in state_rows.iterrows():
         state = row["State"]
-        ms = float(row["Brand FAM\nA25 MS"])
-        salience = float(row["Segment\nSalience to\nAll Spirits"])
-        contribution = float(row["State\nContribution\nto AI"])
+        ms = parse_pct(row["Brand FAM\nA25 MS"])
+        salience = parse_pct(row["Segment\nSalience to\nAll Spirits"])
+        contribution = parse_pct(row["State\nContribution\nto AI"])
         
         states.append(state)
         x_values.append(ms)

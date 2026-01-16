@@ -371,6 +371,10 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
     df_filtered_with_a26 = df_filtered.copy()  # Keep A26 for Brand Chart
     df_filtered_no_a26 = df_filtered[df_filtered["PRI Year"] != "A26"].copy()  # Remove A26 for other sections
     
+    # Keep a copy of the ORIGINAL full segment data (ALL states, ALL brands) for All India benchmark calculations
+    # This should NOT be affected by state exclusion
+    df_full_segment_for_ai = df_filtered.copy()  # For All India benchmark (never filtered by excluded states)
+    
     # 2. Brand Multi-Bar Chart Configuration (uses A26 YTD)
     st.markdown("### Brand View")
     st.caption("NS YoY Growth and CAGR by Brands (includes A26 YTD)")
@@ -650,16 +654,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 st.info("📌 Data for selected brands only")
                 
                 # Calculate All India growth rates for BTM calculation
-                ai_a23 = df_chart[df_chart["PRI Year"] == "A23"]["Revised NS"].sum()
-                ai_a24 = df_chart[df_chart["PRI Year"] == "A24"]["Revised NS"].sum()
-                ai_a25 = df_chart[df_chart["PRI Year"] == "A25"]["Revised NS"].sum()
+                # Use df_filtered_with_a26 (full segment data) NOT df_chart (filtered by brand selection)
+                # Clean numeric column first
+                df_segment_for_btm = clean_numeric_column(df_filtered_with_a26.copy(), "Revised NS")
+                
+                ai_a23 = df_segment_for_btm[df_segment_for_btm["PRI Year"] == "A23"]["Revised NS"].sum()
+                ai_a24 = df_segment_for_btm[df_segment_for_btm["PRI Year"] == "A24"]["Revised NS"].sum()
+                ai_a25 = df_segment_for_btm[df_segment_for_btm["PRI Year"] == "A25"]["Revised NS"].sum()
                 
                 ai_a25_growth = ((ai_a25 - ai_a24) / ai_a24 * 100) if ai_a24 > 0 else 0
                 
                 # Calculate All India A26 YTD growth if available
                 if "A26" in years_in_data_chart and has_month_col:
-                    ai_a25_ytd = df_chart[(df_chart["PRI Year"] == "A25") & (df_chart["Month"].isin(ytd_months))]["Revised NS"].sum()
-                    ai_a26_ytd = df_chart[(df_chart["PRI Year"] == "A26") & (df_chart["Month"].isin(ytd_months))]["Revised NS"].sum()
+                    ai_a25_ytd = df_segment_for_btm[(df_segment_for_btm["PRI Year"] == "A25") & (df_segment_for_btm["Month"].isin(ytd_months))]["Revised NS"].sum()
+                    ai_a26_ytd = df_segment_for_btm[(df_segment_for_btm["PRI Year"] == "A26") & (df_segment_for_btm["Month"].isin(ytd_months))]["Revised NS"].sum()
                     ai_a26_ytd_growth = ((ai_a26_ytd - ai_a25_ytd) / ai_a25_ytd * 100) if ai_a25_ytd > 0 else 0
                 else:
                     ai_a26_ytd_growth = 0
@@ -1361,7 +1369,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 # First show state summary for ALL states in North Zone
 
-                preview_all_states = create_north_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_north, df_filtered_with_a26)
+                preview_all_states = create_north_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_north, df_full_segment_for_ai)
                 
                 if preview_all_states:
                     # Define colors for styling
@@ -1411,7 +1419,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 if selected_states:
                     # Preview deep-dive
                     st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
-                    preview_north = create_north_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states, df_filtered_with_a26)
+                    preview_north = create_north_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states, df_full_segment_for_ai)
                     
                     if preview_north and preview_north['state_details']:
                         # Define colors for brand families
@@ -1566,7 +1574,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_west = sorted(df_west["State"].dropna().unique().tolist())
                 
 
-                preview_all_west = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_west, "West+CSD Zone", df_full_segment)
+                preview_all_west = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_west, "West+CSD Zone", df_full_segment_for_ai)
                 
                 if preview_all_west:
                     summary_styled = style_state_summary(preview_all_west['state_summary'])
@@ -1600,7 +1608,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if selected_states_west:
                     st.markdown("**Select Key States**")
-                    preview_west = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states_west, "West+CSD Zone", df_filtered_with_a26)
+                    preview_west = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states_west, "West+CSD Zone", df_full_segment_for_ai)
                     
                     if preview_west and preview_west['state_details']:
                         render_state_drilldown_preview(preview_west, selected_states_west)
@@ -1692,7 +1700,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_east = sorted(df_east["State"].dropna().unique().tolist())
                 
 
-                preview_all_east = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_east, "East Zone", df_filtered_with_a26)
+                preview_all_east = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_east, "East Zone", df_full_segment_for_ai)
                 
                 if preview_all_east:
                     summary_styled = style_state_summary(preview_all_east['state_summary'])
@@ -1726,7 +1734,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if selected_states_east:
                     st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
-                    preview_east = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states_east, "East Zone", df_filtered_with_a26)
+                    preview_east = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states_east, "East Zone", df_full_segment_for_ai)
                     
                     if preview_east and preview_east['state_details']:
                         render_state_drilldown_preview(preview_east, selected_states_east)
@@ -1818,7 +1826,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 states_in_south = sorted(df_south["State"].dropna().unique().tolist())
                 
 
-                preview_all_south = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_south, "South Zone", df_filtered_with_a26)
+                preview_all_south = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, states_in_south, "South Zone", df_full_segment_for_ai)
                 
                 if preview_all_south:
                     summary_styled = style_state_summary(preview_all_south['state_summary'])
@@ -1852,7 +1860,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 
                 if selected_states_south:
                     st.markdown("**Retrieving data. Wait a few seconds and try to cut or copy again.**")
-                    preview_south = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states_south, "South Zone", df_filtered_with_a26)
+                    preview_south = create_zone_state_drilldown(df_filtered_with_a26, selected_families, selected_brands, selected_states_south, "South Zone", df_full_segment_for_ai)
                     
                     if preview_south and preview_south['state_details']:
                         render_state_drilldown_preview(preview_south, selected_states_south)
@@ -1946,11 +1954,15 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
         col1, col2 = st.columns(2)
         
         with col1:
+            # Filter saved states to only include those that exist in current data
+            valid_saved_states = [s for s in saved_state_perf_states if s in all_states] if saved_state_perf_states else []
+            default_states = valid_saved_states if valid_saved_states else all_states[:5]
+            
             # Multiselect for states
             selected_states_perf = st.multiselect(
                 "Select States",
                 options=all_states,
-                default=saved_state_perf_states if saved_state_perf_states else all_states[:5],  # Default to first 5 states
+                default=default_states,
                 key=f"ns_state_perf_states_{segment['id']}"
             )
         
@@ -1970,7 +1982,7 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
             from app_core.uploads import load_dataset
             df_full = load_dataset(dataset_id)
             
-            state_perf_df = calculate_state_performance_table(df_filtered, df_full, selected_states_perf, selected_family, segment)
+            state_perf_df = calculate_state_performance_table(df_filtered_with_a26, df_full, selected_states_perf, selected_family, segment)
             
             if state_perf_df is not None and not state_perf_df.empty:
                 st.markdown("---")
@@ -2077,14 +2089,20 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                     # Create bubble chart
                     import plotly.graph_objects as go
                     
+                    # Helper function to convert formatted percentage string to float
+                    def parse_pct(val):
+                        if isinstance(val, str):
+                            return float(val.replace('%', ''))
+                        return float(val)
+                    
                     # Extract data
                     ai_row = state_perf_df[state_perf_df["State"] == "All India"]
                     state_rows = state_perf_df[state_perf_df["State"] != "All India"]
                     
                     if not ai_row.empty and not state_rows.empty:
                         # Get All India values
-                        ai_ms = float(ai_row["Brand FAM\nA25 MS"].iloc[0])
-                        ai_salience = float(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
+                        ai_ms = parse_pct(ai_row["Brand FAM\nA25 MS"].iloc[0])
+                        ai_salience = parse_pct(ai_row["Segment\nSalience to\nAll Spirits"].iloc[0])
                         
                         # Prepare state data
                         states = []
@@ -2095,11 +2113,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                         colors = []  # Add colors list
                         
                         for _, row in state_rows.iterrows():
-                            contribution = float(row["State\nContribution\nto AI"])
+                            contribution = parse_pct(row["State\nContribution\nto AI"])
                             state_name = row["State"]
                             states.append(state_name)
-                            x_values.append(float(row["Brand FAM\nA25 MS"]))
-                            y_values.append(float(row["Segment\nSalience to\nAll Spirits"]))
+                            x_values.append(parse_pct(row["Brand FAM\nA25 MS"]))
+                            y_values.append(parse_pct(row["Segment\nSalience to\nAll Spirits"]))
                             contribution_values.append(contribution)
                             # Use square root so area is proportional to contribution, not diameter
                             sizes.append((contribution ** 0.5) * 20)  # 2x scale for better visibility
@@ -3903,9 +3921,9 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     # Ensure Revised NS is numeric
     df_segment = clean_numeric_column(df_segment, "Revised NS")
     
-    # Filter for A24 and A25 data
-    df_calc = df_segment[df_segment["PRI Year"].isin(["A24", "A25"])].copy()
-    df_full_calc = df_full[df_full["PRI Year"].isin(["A24", "A25"])].copy() if df_full is not None and not df_full.empty else df_calc
+    # Filter for A24, A25, and A26 data
+    df_calc = df_segment[df_segment["PRI Year"].isin(["A24", "A25", "A26"])].copy()
+    df_full_calc = df_full[df_full["PRI Year"].isin(["A24", "A25", "A26"])].copy() if df_full is not None and not df_full.empty else df_calc
     
     # Ensure Revised NS is numeric in df_full_calc
     if df_full_calc is not df_calc:
@@ -3917,12 +3935,28 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     # Get segment name
     segment_name = segment.get("name", "")
     
+    # YTD months for A26
+    ytd_months = ["July", "August", "September", "October"]
+    has_month_col = "Month" in df_calc.columns
+    
     # Calculate ACTUAL All India (AI) values from ALL STATES (not affected by selected states)
     ai_segment_a24 = df_calc[df_calc["PRI Year"] == "A24"]["Revised NS"].sum()
     ai_segment_a25 = df_calc[df_calc["PRI Year"] == "A25"]["Revised NS"].sum()
     
     ai_family_a24 = df_calc[(df_calc["PRI Year"] == "A24") & (df_calc["Brand Family"] == selected_family)]["Revised NS"].sum()
     ai_family_a25 = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Brand Family"] == selected_family)]["Revised NS"].sum()
+    
+    # Calculate All India A26 YTD values
+    if has_month_col:
+        ai_segment_a26_ytd = df_calc[(df_calc["PRI Year"] == "A26") & (df_calc["Month"].isin(ytd_months))]["Revised NS"].sum()
+        ai_segment_a25_ytd = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Month"].isin(ytd_months))]["Revised NS"].sum()
+        ai_family_a26_ytd = df_calc[(df_calc["PRI Year"] == "A26") & (df_calc["Brand Family"] == selected_family) & (df_calc["Month"].isin(ytd_months))]["Revised NS"].sum()
+        ai_family_a25_ytd = df_calc[(df_calc["PRI Year"] == "A25") & (df_calc["Brand Family"] == selected_family) & (df_calc["Month"].isin(ytd_months))]["Revised NS"].sum()
+    else:
+        ai_segment_a26_ytd = 0
+        ai_segment_a25_ytd = 0
+        ai_family_a26_ytd = 0
+        ai_family_a25_ytd = 0
     
     # Calculate All Spirits from ALL STATES (all segments from unfiltered data)
     ai_all_spirits_a24 = df_full_calc[df_full_calc["PRI Year"] == "A24"]["Revised NS"].sum()
@@ -3931,6 +3965,10 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     # AI Growth rates (based on actual All India, not selected states)
     ai_segment_gr = ((ai_segment_a25 - ai_segment_a24) / ai_segment_a24 * 100) if ai_segment_a24 > 0 else 0
     ai_family_gr = ((ai_family_a25 - ai_family_a24) / ai_family_a24 * 100) if ai_family_a24 > 0 else 0
+    
+    # AI A26 YTD Growth rates
+    ai_segment_a26_ytd_gr = ((ai_segment_a26_ytd - ai_segment_a25_ytd) / ai_segment_a25_ytd * 100) if ai_segment_a25_ytd > 0 else 0
+    ai_family_a26_ytd_gr = ((ai_family_a26_ytd - ai_family_a25_ytd) / ai_family_a25_ytd * 100) if ai_family_a25_ytd > 0 else 0
     
     # Calculate metrics for each selected state
     rows = []
@@ -3950,6 +3988,18 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         state_family_a24 = df_state[(df_state["PRI Year"] == "A24") & (df_state["Brand Family"] == selected_family)]["Revised NS"].sum()
         state_family_a25 = df_state[(df_state["PRI Year"] == "A25") & (df_state["Brand Family"] == selected_family)]["Revised NS"].sum()
         
+        # State A26 YTD values
+        if has_month_col:
+            state_segment_a26_ytd = df_state[(df_state["PRI Year"] == "A26") & (df_state["Month"].isin(ytd_months))]["Revised NS"].sum()
+            state_segment_a25_ytd = df_state[(df_state["PRI Year"] == "A25") & (df_state["Month"].isin(ytd_months))]["Revised NS"].sum()
+            state_family_a26_ytd = df_state[(df_state["PRI Year"] == "A26") & (df_state["Brand Family"] == selected_family) & (df_state["Month"].isin(ytd_months))]["Revised NS"].sum()
+            state_family_a25_ytd = df_state[(df_state["PRI Year"] == "A25") & (df_state["Brand Family"] == selected_family) & (df_state["Month"].isin(ytd_months))]["Revised NS"].sum()
+        else:
+            state_segment_a26_ytd = 0
+            state_segment_a25_ytd = 0
+            state_family_a26_ytd = 0
+            state_family_a25_ytd = 0
+        
         # State all spirits (all segments in this state from unfiltered data)
         state_all_spirits_a25 = df_state_full[df_state_full["PRI Year"] == "A25"]["Revised NS"].sum()
         
@@ -3965,19 +4015,28 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
         # 4. PW A25 NS Gr - Segment Growth Rate (Delta in PW Consumption)
         pw_gr = ((state_segment_a25 - state_segment_a24) / state_segment_a24 * 100) if state_segment_a24 > 0 else 0
         
-        # 5. Brand FAM A25 NS Gr - Brand Family Growth Rate (Delta in BP Consumption)
+        # 5. Seg A26 YTD NS Gr - Segment A26 YTD Growth Rate
+        seg_a26_ytd_gr = ((state_segment_a26_ytd - state_segment_a25_ytd) / state_segment_a25_ytd * 100) if state_segment_a25_ytd > 0 else 0
+        
+        # 6. Brand FAM A25 NS Gr - Brand Family Growth Rate (Delta in BP Consumption)
         bp_fam_gr = ((state_family_a25 - state_family_a24) / state_family_a24 * 100) if state_family_a24 > 0 else 0
         
-        # 6. Brand FAM BTM - Beat the Market (BP Growth - All India Segment Growth)
+        # 7. Brand FAM A26 YTD NS Gr - Brand Family A26 YTD Growth Rate
+        bp_fam_a26_ytd_gr = ((state_family_a26_ytd - state_family_a25_ytd) / state_family_a25_ytd * 100) if state_family_a25_ytd > 0 else 0
+        
+        # 8. Brand FAM BTM - Beat the Market (BP Growth - All India Segment Growth)
         btm = bp_fam_gr - ai_segment_gr
         
-        # 7. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
+        # 9. Brand FAM A26 YTD BTM - Beat the Market A26 YTD (BP A26 YTD Growth - All India Segment A26 YTD Growth)
+        btm_a26_ytd = bp_fam_a26_ytd_gr - ai_segment_a26_ytd_gr
+        
+        # 10. PW A25 NS Gr (States Indexed to All India) - State Segment Growth / AI Segment Growth * 100
         pw_gr_index = (pw_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0
         
-        # 8. Brand FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
+        # 11. Brand FAM A25 NS Gr (States Indexed to All India) - State BP Growth / AI BP Growth * 100
         bp_fam_gr_index = (bp_fam_gr / ai_family_gr * 100) if ai_family_gr != 0 else 0
         
-        # 8. Brand FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
+        # 12. Brand FAM A25 NS Gr (Indexed to All India BP Fam Gr) - BP Growth / PW Growth (efficiency)
         bp_fam_efficiency = (bp_fam_gr / pw_gr * 100) if pw_gr != 0 else 0
         
         rows.append({
@@ -3986,11 +4045,14 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
             "Segment\nSalience to\nAll Spirits": segment_salience,
             "State\nContribution\nto AI": state_contribution,
             "Seg A25\nNS Gr": pw_gr,
+            "Seg A26 YTD\nNS Gr*": seg_a26_ytd_gr,
             "Brand FAM\nA25 NS Gr": bp_fam_gr,
-            "Brand FAM\nBTM": btm,
+            "Brand FAM\nA26 YTD NS Gr*": bp_fam_a26_ytd_gr,
+            "Brand FAM\nA25 BTM": btm,
+            "Brand FAM\nA26 YTD BTM*": btm_a26_ytd,
             "Seg Gr\nIndexed\nto AI": pw_gr_index,
-            "BP Gr\nIndexed\nto AI": bp_fam_gr_index,
-            "BP Gr\nIndexed to\nAI BP Gr": bp_fam_efficiency,
+            "Brand Gr\nIndexed\nto AI": bp_fam_gr_index,
+            "Brand Gr\nIndexed to\nAI Brand Gr": bp_fam_efficiency,
             "MS\nRANK": 0,
             "Salience\nRANK": 0,
             "Contribution\nRANK": 0
@@ -4002,23 +4064,33 @@ def calculate_state_performance_table(df_segment: pd.DataFrame, df_full: pd.Data
     # Create DataFrame
     result_df = pd.DataFrame(rows)
     
-    # Add ranking columns
+    # Add ranking columns (before formatting)
     result_df["MS\nRANK"] = result_df["Brand FAM\nA25 MS"].rank(ascending=False, method='min').astype(int)
     result_df["Salience\nRANK"] = result_df["Segment\nSalience to\nAll Spirits"].rank(ascending=False, method='min').astype(int)
     result_df["Contribution\nRANK"] = result_df["State\nContribution\nto AI"].rank(ascending=False, method='min').astype(int)
     
+    # Format numeric columns with % and 1 decimal
+    for col in ["Brand FAM\nA25 MS", "Segment\nSalience to\nAll Spirits", "State\nContribution\nto AI",
+                "Seg A25\nNS Gr", "Seg A26 YTD\nNS Gr*", "Brand FAM\nA25 NS Gr", "Brand FAM\nA26 YTD NS Gr*",
+                "Brand FAM\nA25 BTM", "Brand FAM\nA26 YTD BTM*", "Seg Gr\nIndexed\nto AI", 
+                "Brand Gr\nIndexed\nto AI", "Brand Gr\nIndexed to\nAI Brand Gr"]:
+        result_df[col] = result_df[col].apply(lambda x: f"{x:.1f}%")
+    
     # Add AI row at the TOP
     ai_row = {
         "State": "All India",
-        "Brand FAM\nA25 MS": (ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0,
-        "Segment\nSalience to\nAll Spirits": (ai_segment_a25 / ai_all_spirits_a25 * 100) if ai_all_spirits_a25 > 0 else 0,
-        "State\nContribution\nto AI": 100.0,
-        "Seg A25\nNS Gr": ai_segment_gr,
-        "Brand FAM\nA25 NS Gr": ai_family_gr,
-        "Brand FAM\nBTM": ai_family_gr - ai_segment_gr,
-        "Seg Gr\nIndexed\nto AI": 100.0,
-        "BP Gr\nIndexed\nto AI": 100.0,
-        "BP Gr\nIndexed to\nAI BP Gr": (ai_family_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0,
+        "Brand FAM\nA25 MS": f"{(ai_family_a25 / ai_segment_a25 * 100) if ai_segment_a25 > 0 else 0:.1f}%",
+        "Segment\nSalience to\nAll Spirits": f"{(ai_segment_a25 / ai_all_spirits_a25 * 100) if ai_all_spirits_a25 > 0 else 0:.1f}%",
+        "State\nContribution\nto AI": "100.0%",
+        "Seg A25\nNS Gr": f"{ai_segment_gr:.1f}%",
+        "Seg A26 YTD\nNS Gr*": f"{ai_segment_a26_ytd_gr:.1f}%",
+        "Brand FAM\nA25 NS Gr": f"{ai_family_gr:.1f}%",
+        "Brand FAM\nA26 YTD NS Gr*": f"{ai_family_a26_ytd_gr:.1f}%",
+        "Brand FAM\nA25 BTM": f"{ai_family_gr - ai_segment_gr:.1f}%",
+        "Brand FAM\nA26 YTD BTM*": f"{ai_family_a26_ytd_gr - ai_segment_a26_ytd_gr:.1f}%",
+        "Seg Gr\nIndexed\nto AI": "100.0%",
+        "Brand Gr\nIndexed\nto AI": "100.0%",
+        "Brand Gr\nIndexed to\nAI Brand Gr": f"{(ai_family_gr / ai_segment_gr * 100) if ai_segment_gr != 0 else 0:.1f}%",
         "MS\nRANK": "",
         "Salience\nRANK": "",
         "Contribution\nRANK": ""
@@ -4254,35 +4326,48 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     if "Month" in df_a25_ytd.columns:
         df_a25_ytd = df_a25_ytd[df_a25_ytd["Month"].isin(["July", "August", "September", "October"])]
     
-    # Calculate All India totals (for the segment with selected brands)
-    df_all = df[df["Brand Family"].isin(selected_families) & df["Brand"].isin(selected_brands)].copy()
-    ai_a25_total = df_all[df_all["PRI Year"] == "A25"]["Revised NS"].sum()
-    ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["Revised NS"].sum()
+    # Calculate All India totals from FULL SEGMENT (not affected by brand selection)
+    # Use df_for_denominator which contains all brands in the segment
+    ai_a25_total = df_for_denominator[df_for_denominator["PRI Year"] == "A25"]["Revised NS"].sum()
+    ai_a24_total = df_for_denominator[df_for_denominator["PRI Year"] == "A24"]["Revised NS"].sum()
     ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
     
-    # Calculate All India A26 YTD growth for BTM calculation
-    ai_a26_ytd_total = df_all[
-        (df_all["PRI Year"] == "A26") & 
-        (df_all["Month"].isin(["July", "August", "September", "October"]))
-    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    # Calculate All India A26 YTD growth for BTM calculation (from full segment)
+    ai_a26_ytd_total = df_for_denominator[
+        (df_for_denominator["PRI Year"] == "A26") & 
+        (df_for_denominator["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_for_denominator.columns else 0
     
-    ai_a25_ytd_total = df_all[
-        (df_all["PRI Year"] == "A25") & 
-        (df_all["Month"].isin(["July", "August", "September", "October"]))
-    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    ai_a25_ytd_total = df_for_denominator[
+        (df_for_denominator["PRI Year"] == "A25") & 
+        (df_for_denominator["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_for_denominator.columns else 0
     
     ai_a26_ytd_growth = ((ai_a26_ytd_total / ai_a25_ytd_total) - 1) * 100 if ai_a25_ytd_total > 0 else 0
     
     # ===== STATE SUMMARY TABLE =====
-    state_a25 = df_a25.groupby("State")["Revised NS"].sum().to_dict()
-    state_a24 = df_a24.groupby("State")["Revised NS"].sum().to_dict()
-    state_a26_ytd = df_a26_ytd.groupby("State")["Revised NS"].sum().to_dict()
-    state_a25_ytd = df_a25_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    # Use FULL segment data for state summary (NOT affected by brand selection)
+    # This is state/zone level data, not brand level
+    df_segment_full = df_for_denominator[df_for_denominator["Zone"] == zone_name].copy()
     
-    # Calculate segment totals for ALL brands in each state (for MS denominator)
-    df_segment_full = df_for_denominator[df_for_denominator["Zone"] == zone_name].copy()  # All brands in segment in this zone
-    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["Revised NS"].sum().to_dict()
-    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["Revised NS"].sum().to_dict()
+    # Aggregate by state for segment totals (ALL brands in segment)
+    state_a25 = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["Revised NS"].sum().to_dict()
+    state_a24 = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["Revised NS"].sum().to_dict()
+    
+    # A26 YTD and A25 YTD for state summary (ALL brands)
+    df_segment_full_a26_ytd = df_segment_full[df_segment_full["PRI Year"] == "A26"].copy()
+    if "Month" in df_segment_full_a26_ytd.columns:
+        df_segment_full_a26_ytd = df_segment_full_a26_ytd[df_segment_full_a26_ytd["Month"].isin(["July", "August", "September", "October"])]
+    state_a26_ytd = df_segment_full_a26_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    
+    df_segment_full_a25_ytd = df_segment_full[df_segment_full["PRI Year"] == "A25"].copy()
+    if "Month" in df_segment_full_a25_ytd.columns:
+        df_segment_full_a25_ytd = df_segment_full_a25_ytd[df_segment_full_a25_ytd["Month"].isin(["July", "August", "September", "October"])]
+    state_a25_ytd = df_segment_full_a25_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    
+    # Keep segment_state for MS denominator (same as state totals now)
+    segment_state_a25_full = state_a25
+    segment_state_a24_full = state_a24
     
     # Calculate zone totals
     zone_a25 = sum(state_a25.values())
@@ -4352,7 +4437,8 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
     brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     
     # Family-level data by state (ALL brands - for Mfg Com calculations)
-    df_zone_all = df[df["Zone"] == zone_name].copy()
+    # Use df_for_denominator (full segment data) NOT df (filtered by selected brands)
+    df_zone_all = df_for_denominator[df_for_denominator["Zone"] == zone_name].copy()
     df_a25_all = df_zone_all[df_zone_all["PRI Year"] == "A25"].copy()
     df_a24_all = df_zone_all[df_zone_all["PRI Year"] == "A24"].copy()
     df_a26_ytd_all = df_zone_all[df_zone_all["PRI Year"] == "A26"].copy()
@@ -4394,10 +4480,10 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
         detail_rows = []
         
         # Group ALL families by Manufacturing Company (not just selected)
-        all_families_in_data = df_a25_all["Brand Family"].unique().tolist() if "Brand Family" in df_a25_all.columns else []
+        all_families_in_data = df_for_denominator["Brand Family"].unique().tolist() if "Brand Family" in df_for_denominator.columns else []
         family_to_mfg_all = {}
         for family in all_families_in_data:
-            family_data = df_a25_all[df_a25_all["Brand Family"] == family]
+            family_data = df_for_denominator[df_for_denominator["Brand Family"] == family]
             if not family_data.empty and "Mfg Com" in family_data.columns:
                 mfg_com = family_data["Mfg Com"].iloc[0]
                 family_to_mfg_all[family] = mfg_com
@@ -4524,8 +4610,8 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                 family_ms = (family_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 else 0
                 family_growth = ((family_a25 / family_a24) - 1) * 100 if family_a24 > 0 else 0
                 family_a26_ytd_growth = ((family_a26_ytd / family_a25_ytd) - 1) * 100 if family_a25_ytd > 0 else 0
-                family_btm = family_growth - segment_state_growth
-                family_a26_ytd_btm = family_a26_ytd_growth - segment_state_a26_ytd_growth
+                family_btm = family_growth - ai_growth  # Use All India growth as benchmark
+                family_a26_ytd_btm = family_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
                 
                 detail_rows.append({
                     "Brand": f"  {family} FAM",
@@ -4579,8 +4665,8 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                     brand_ms = (brand_a25 / segment_state_a25 * 100) if segment_state_a25 > 0 and brand_a25 > 0 else 0
                     brand_growth = ((brand_a25 / brand_a24) - 1) * 100 if brand_a24 > 0 else 0
                     brand_a26_ytd_growth = ((brand_a26_ytd / brand_a25_ytd) - 1) * 100 if brand_a25_ytd > 0 else 0
-                    brand_btm = brand_growth - segment_state_growth
-                    brand_a26_ytd_btm = brand_a26_ytd_growth - segment_state_a26_ytd_growth
+                    brand_btm = brand_growth - ai_growth  # Use All India growth as benchmark
+                    brand_a26_ytd_btm = brand_a26_ytd_growth - ai_a26_ytd_growth  # Use All India A26 YTD growth as benchmark
                     
                     detail_rows.append({
                         "Brand": f"    {brand}",
@@ -4614,23 +4700,33 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     # Need A24, A25, and A26 data for growth calculation
     df_all = df.copy()
     
-    # CRITICAL: Calculate segment totals from ALL brands (not just selected ones)
-    # This ensures MS shows true market share vs entire segment
+    # Calculate segment totals from ALL brands (for MS denominator - true market share)
     df_a25_all_brands = df_all[df_all["PRI Year"] == "A25"].copy()
     df_a24_all_brands = df_all[df_all["PRI Year"] == "A24"].copy()
     
     # Get all zones
     zones = sorted(df_a25_all_brands["Zone"].unique().tolist())
     
-    # Level 3: Zone only (segment totals per zone) - FROM ALL BRANDS
+    # Level 3: Zone only (segment totals per zone) - FROM ALL BRANDS (for MS denominator)
     segment_zone_a25 = df_a25_all_brands.groupby("Zone")["Revised NS"].sum().to_dict()
     segment_zone_a24 = df_a24_all_brands.groupby("Zone")["Revised NS"].sum().to_dict()
     
-    # Calculate segment growth for each zone (from ALL brands) - ONLY FOR DISPLAY, NOT FOR BTM
+    # Calculate zone totals from SELECTED brands only (for zone header Salience and Growth)
+    df_a25_selected = df_all[(df_all["PRI Year"] == "A25") & 
+                             (df_all["Brand Family"].isin(selected_families)) & 
+                             (df_all["Brand"].isin(selected_brands))].copy()
+    df_a24_selected = df_all[(df_all["PRI Year"] == "A24") & 
+                             (df_all["Brand Family"].isin(selected_families)) & 
+                             (df_all["Brand"].isin(selected_brands))].copy()
+    
+    selected_zone_a25 = df_a25_selected.groupby("Zone")["Revised NS"].sum().to_dict()
+    selected_zone_a24 = df_a24_selected.groupby("Zone")["Revised NS"].sum().to_dict()
+    
+    # Calculate growth for each zone from SELECTED brands (for zone header display)
     segment_growth = {}
     for zone in zones:
-        a25_total = segment_zone_a25.get(zone, 0)
-        a24_total = segment_zone_a24.get(zone, 0)
+        a25_total = selected_zone_a25.get(zone, 0)
+        a24_total = selected_zone_a24.get(zone, 0)
         segment_growth[zone] = ((a25_total / a24_total) - 1) * 100 if a24_total > 0 else 0
     
     # Calculate ALL INDIA growth for BTM benchmark (sum across all zones)
@@ -4709,12 +4805,12 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
     
     # Group ALL families by Manufacturing Company (not just selected ones)
     # Get all unique families from the unfiltered data
-    all_families_in_data = df_a25_all["Brand Family"].unique().tolist() if "Brand Family" in df_a25_all.columns else []
+    all_families_in_data = df_all["Brand Family"].unique().tolist() if "Brand Family" in df_all.columns else []
     
     family_to_mfg_all = {}
     for family in all_families_in_data:
         # Get the manufacturing company for this family from the unfiltered data
-        family_data = df_a25_all[df_a25_all["Brand Family"] == family]
+        family_data = df_all[df_all["Brand Family"] == family]
         if not family_data.empty and "Mfg Com" in family_data.columns:
             mfg_com = family_data["Mfg Com"].iloc[0]
             family_to_mfg_all[family] = mfg_com
@@ -4871,68 +4967,68 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
             # Add individual brand rows (further indented)
             for brand in family_brands:
                 brand_row = {"Brand": f"    {brand}", "Type": "brand"}
-            
-            # Calculate brand total across all zones for salience
-            brand_total_all_zones = brand_zone_a25[(brand_zone_a25["Brand Family"] == family) & 
-                                                     (brand_zone_a25["Brand"] == brand)]["Revised NS"].sum()
-            
-            for zone in zones:
-                # Get brand data for this zone
-                brand_zone_data_a25 = brand_zone_a25[(brand_zone_a25["Zone"] == zone) & 
-                                                       (brand_zone_a25["Brand Family"] == family) & 
-                                                       (brand_zone_a25["Brand"] == brand)]
-                a25_val = brand_zone_data_a25["Revised NS"].sum() if not brand_zone_data_a25.empty else 0
                 
-                brand_zone_data_a24 = brand_zone_a24[(brand_zone_a24["Zone"] == zone) & 
-                                                       (brand_zone_a24["Brand Family"] == family) & 
-                                                       (brand_zone_a24["Brand"] == brand)]
-                a24_val = brand_zone_data_a24["Revised NS"].sum() if not brand_zone_data_a24.empty else 0
+                # Calculate brand total across all zones for salience
+                brand_total_all_zones = brand_zone_a25[(brand_zone_a25["Brand Family"] == family) & 
+                                                         (brand_zone_a25["Brand"] == brand)]["Revised NS"].sum()
                 
-                # MS = Brand share in this zone (vs segment total in zone)
-                segment_total_zone = segment_zone_a25.get(zone, 0)
-                ms = (a25_val / segment_total_zone * 100) if segment_total_zone > 0 else 0
+                for zone in zones:
+                    # Get brand data for this zone
+                    brand_zone_data_a25 = brand_zone_a25[(brand_zone_a25["Zone"] == zone) & 
+                                                           (brand_zone_a25["Brand Family"] == family) & 
+                                                           (brand_zone_a25["Brand"] == brand)]
+                    a25_val = brand_zone_data_a25["Revised NS"].sum() if not brand_zone_data_a25.empty else 0
+                    
+                    brand_zone_data_a24 = brand_zone_a24[(brand_zone_a24["Zone"] == zone) & 
+                                                           (brand_zone_a24["Brand Family"] == family) & 
+                                                           (brand_zone_a24["Brand"] == brand)]
+                    a24_val = brand_zone_data_a24["Revised NS"].sum() if not brand_zone_data_a24.empty else 0
+                    
+                    # MS = Brand share in this zone (vs segment total in zone)
+                    segment_total_zone = segment_zone_a25.get(zone, 0)
+                    ms = (a25_val / segment_total_zone * 100) if segment_total_zone > 0 else 0
+                    
+                    # Salience = This zone's share of brand's total across all zones
+                    salience = (a25_val / brand_total_all_zones * 100) if brand_total_all_zones > 0 else 0
+                    
+                    # Growth = Brand growth in this zone
+                    growth = ((a25_val / a24_val) - 1) * 100 if a24_val > 0 else 0
+                    
+                    # A26 YTD Growth = (July-Oct A26 - July-Oct A25) / July-Oct A25
+                    brand_zone_data_a26_ytd = brand_zone_a26_ytd[(brand_zone_a26_ytd["Zone"] == zone) & 
+                                                                   (brand_zone_a26_ytd["Brand Family"] == family) & 
+                                                                   (brand_zone_a26_ytd["Brand"] == brand)]
+                    a26_ytd_val = brand_zone_data_a26_ytd["Revised NS"].sum() if not brand_zone_data_a26_ytd.empty else 0
+                    
+                    brand_zone_data_a25_ytd = brand_zone_a25_ytd[(brand_zone_a25_ytd["Zone"] == zone) & 
+                                                                   (brand_zone_a25_ytd["Brand Family"] == family) & 
+                                                                   (brand_zone_a25_ytd["Brand"] == brand)]
+                    a25_ytd_val = brand_zone_data_a25_ytd["Revised NS"].sum() if not brand_zone_data_a25_ytd.empty else 0
+                    
+                    a26_ytd_growth = ((a26_ytd_val / a25_ytd_val) - 1) * 100 if a25_ytd_val > 0 else 0
+                    
+                    # BTM = Brand growth - ALL INDIA growth (not zone-specific)
+                    btm = growth - ai_growth
+                    
+                    # A26 YTD BTM = Brand A26 YTD growth - ALL INDIA A26 YTD growth (not zone-specific)
+                    a26_ytd_btm = a26_ytd_growth - ai_a26_ytd_growth
+                    
+                    brand_row[f"{zone}_MS"] = f"{ms:.0f}% | {salience:.0f}%"
+                    brand_row[f"{zone}_Gr"] = f"{growth:.1f}%"
+                    brand_row[f"{zone}_BTM"] = f"{btm:+.0f}%"
+                    brand_row[f"{zone}_A26YTD"] = f"{a26_ytd_growth:.1f}%"
+                    brand_row[f"{zone}_A26YTD_BTM"] = f"{a26_ytd_btm:+.0f}%"
                 
-                # Salience = This zone's share of brand's total across all zones
-                salience = (a25_val / brand_total_all_zones * 100) if brand_total_all_zones > 0 else 0
-                
-                # Growth = Brand growth in this zone
-                growth = ((a25_val / a24_val) - 1) * 100 if a24_val > 0 else 0
-                
-                # A26 YTD Growth = (July-Oct A26 - July-Oct A25) / July-Oct A25
-                brand_zone_data_a26_ytd = brand_zone_a26_ytd[(brand_zone_a26_ytd["Zone"] == zone) & 
-                                                               (brand_zone_a26_ytd["Brand Family"] == family) & 
-                                                               (brand_zone_a26_ytd["Brand"] == brand)]
-                a26_ytd_val = brand_zone_data_a26_ytd["Revised NS"].sum() if not brand_zone_data_a26_ytd.empty else 0
-                
-                brand_zone_data_a25_ytd = brand_zone_a25_ytd[(brand_zone_a25_ytd["Zone"] == zone) & 
-                                                               (brand_zone_a25_ytd["Brand Family"] == family) & 
-                                                               (brand_zone_a25_ytd["Brand"] == brand)]
-                a25_ytd_val = brand_zone_data_a25_ytd["Revised NS"].sum() if not brand_zone_data_a25_ytd.empty else 0
-                
-                a26_ytd_growth = ((a26_ytd_val / a25_ytd_val) - 1) * 100 if a25_ytd_val > 0 else 0
-                
-                # BTM = Brand growth - ALL INDIA growth (not zone-specific)
-                btm = growth - ai_growth
-                
-                # A26 YTD BTM = Brand A26 YTD growth - ALL INDIA A26 YTD growth (not zone-specific)
-                a26_ytd_btm = a26_ytd_growth - ai_a26_ytd_growth
-                
-                brand_row[f"{zone}_MS"] = f"{ms:.0f}% | {salience:.0f}%"
-                brand_row[f"{zone}_Gr"] = f"{growth:.1f}%"
-                brand_row[f"{zone}_BTM"] = f"{btm:+.0f}%"
-                brand_row[f"{zone}_A26YTD"] = f"{a26_ytd_growth:.1f}%"
-                brand_row[f"{zone}_A26YTD_BTM"] = f"{a26_ytd_btm:+.0f}%"
-            
-            rows.append(brand_row)
+                rows.append(brand_row)
     
     # Create DataFrame
     result = pd.DataFrame(rows)
     
-    # Calculate PW Salience for each zone (zone's share of total segment)
-    total_segment_a25 = sum(segment_zone_a25.values())
+    # Calculate PW Salience for each zone from SELECTED brands (zone's share of selected brands total)
+    total_selected_a25 = sum(selected_zone_a25.values())
     pw_salience = {}
     for zone in zones:
-        pw_salience[zone] = (segment_zone_a25.get(zone, 0) / total_segment_a25 * 100) if total_segment_a25 > 0 else 0
+        pw_salience[zone] = (selected_zone_a25.get(zone, 0) / total_selected_a25 * 100) if total_selected_a25 > 0 else 0
     
     # Store zone info for headers
     result.attrs['zones'] = zones
@@ -5233,36 +5329,48 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     if "Month" in df_a25_ytd.columns:
         df_a25_ytd = df_a25_ytd[df_a25_ytd["Month"].isin(["July", "August", "September", "October"])]
     
-    # Calculate All India totals (for the segment with selected brands)
-    df_all = df[df["Brand Family"].isin(selected_families) & df["Brand"].isin(selected_brands)].copy()
-    ai_a25_total = df_all[df_all["PRI Year"] == "A25"]["Revised NS"].sum()
-    ai_a24_total = df_all[df_all["PRI Year"] == "A24"]["Revised NS"].sum()
+    # Calculate All India totals from FULL SEGMENT (not affected by brand selection)
+    # Use df_for_denominator which contains all brands in the segment
+    ai_a25_total = df_for_denominator[df_for_denominator["PRI Year"] == "A25"]["Revised NS"].sum()
+    ai_a24_total = df_for_denominator[df_for_denominator["PRI Year"] == "A24"]["Revised NS"].sum()
     ai_growth = ((ai_a25_total / ai_a24_total) - 1) * 100 if ai_a24_total > 0 else 0
     
-    # Calculate All India A26 YTD growth for BTM calculation
-    ai_a26_ytd_total = df_all[
-        (df_all["PRI Year"] == "A26") & 
-        (df_all["Month"].isin(["July", "August", "September", "October"]))
-    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    # Calculate All India A26 YTD growth for BTM calculation (from full segment)
+    ai_a26_ytd_total = df_for_denominator[
+        (df_for_denominator["PRI Year"] == "A26") & 
+        (df_for_denominator["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_for_denominator.columns else 0
     
-    ai_a25_ytd_total = df_all[
-        (df_all["PRI Year"] == "A25") & 
-        (df_all["Month"].isin(["July", "August", "September", "October"]))
-    ]["Revised NS"].sum() if "Month" in df_all.columns else 0
+    ai_a25_ytd_total = df_for_denominator[
+        (df_for_denominator["PRI Year"] == "A25") & 
+        (df_for_denominator["Month"].isin(["July", "August", "September", "October"]))
+    ]["Revised NS"].sum() if "Month" in df_for_denominator.columns else 0
     
     ai_a26_ytd_growth = ((ai_a26_ytd_total / ai_a25_ytd_total) - 1) * 100 if ai_a25_ytd_total > 0 else 0
     
     # ===== STATE SUMMARY TABLE =====
-    # Aggregate by state for segment totals (selected brands only for summary)
-    state_a25 = df_a25.groupby("State")["Revised NS"].sum().to_dict()
-    state_a24 = df_a24.groupby("State")["Revised NS"].sum().to_dict()
-    state_a26_ytd = df_a26_ytd.groupby("State")["Revised NS"].sum().to_dict()
-    state_a25_ytd = df_a25_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    # Use FULL segment data for state summary (NOT affected by brand selection)
+    # This is state/zone level data, not brand level
+    df_segment_full = df_for_denominator[df_for_denominator["Zone"] == "North Zone"].copy()
     
-    # Calculate segment totals for ALL brands in each state (for MS denominator)
-    df_segment_full = df_for_denominator[df_for_denominator["Zone"] == "North Zone"].copy()  # All brands in segment in North Zone
-    segment_state_a25_full = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["Revised NS"].sum().to_dict()
-    segment_state_a24_full = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["Revised NS"].sum().to_dict()
+    # Aggregate by state for segment totals (ALL brands in segment)
+    state_a25 = df_segment_full[df_segment_full["PRI Year"] == "A25"].groupby("State")["Revised NS"].sum().to_dict()
+    state_a24 = df_segment_full[df_segment_full["PRI Year"] == "A24"].groupby("State")["Revised NS"].sum().to_dict()
+    
+    # A26 YTD and A25 YTD for state summary (ALL brands)
+    df_segment_full_a26_ytd = df_segment_full[df_segment_full["PRI Year"] == "A26"].copy()
+    if "Month" in df_segment_full_a26_ytd.columns:
+        df_segment_full_a26_ytd = df_segment_full_a26_ytd[df_segment_full_a26_ytd["Month"].isin(["July", "August", "September", "October"])]
+    state_a26_ytd = df_segment_full_a26_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    
+    df_segment_full_a25_ytd = df_segment_full[df_segment_full["PRI Year"] == "A25"].copy()
+    if "Month" in df_segment_full_a25_ytd.columns:
+        df_segment_full_a25_ytd = df_segment_full_a25_ytd[df_segment_full_a25_ytd["Month"].isin(["July", "August", "September", "October"])]
+    state_a25_ytd = df_segment_full_a25_ytd.groupby("State")["Revised NS"].sum().to_dict()
+    
+    # Keep segment_state for MS denominator (same as state totals now)
+    segment_state_a25_full = state_a25
+    segment_state_a24_full = state_a24
     
     # Calculate NORTH zone totals (sum of all states in North Zone)
     north_zone_a25 = sum(state_a25.values())
@@ -5340,7 +5448,8 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
     brand_state_a25_ytd = df_a25_ytd.groupby(["State", "Brand Family", "Brand"])["Revised NS"].sum().reset_index()
     
     # Family-level data by state (ALL brands - for Mfg Com calculations)
-    df_north_all = df[df["Zone"] == "North Zone"].copy()
+    # Use df_for_denominator (full segment data) NOT df (filtered by selected brands)
+    df_north_all = df_for_denominator[df_for_denominator["Zone"] == "North Zone"].copy()
     df_a25_all = df_north_all[df_north_all["PRI Year"] == "A25"].copy()
     df_a24_all = df_north_all[df_north_all["PRI Year"] == "A24"].copy()
     df_a26_ytd_all = df_north_all[df_north_all["PRI Year"] == "A26"].copy()
@@ -5382,10 +5491,10 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
         detail_rows = []
         
         # Group ALL families by Manufacturing Company (not just selected)
-        all_families_in_data = df_a25_all["Brand Family"].unique().tolist() if "Brand Family" in df_a25_all.columns else []
+        all_families_in_data = df_for_denominator["Brand Family"].unique().tolist() if "Brand Family" in df_for_denominator.columns else []
         family_to_mfg_all = {}
         for family in all_families_in_data:
-            family_data = df_a25_all[df_a25_all["Brand Family"] == family]
+            family_data = df_for_denominator[df_for_denominator["Brand Family"] == family]
             if not family_data.empty and "Mfg Com" in family_data.columns:
                 mfg_com = family_data["Mfg Com"].iloc[0]
                 family_to_mfg_all[family] = mfg_com
