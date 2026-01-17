@@ -521,8 +521,11 @@ def render_ns_landscape_config(segment: Dict, df_filtered: pd.DataFrame, dataset
                 # A25 Growth % (YoY from A24)
                 a25_growth = ((ns_a25 - ns_a24) / ns_a24 * 100) if ns_a24 != 0 else 0
                 
-                # 2-Year CAGR (A23 to A25)
-                cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100 if ns_a23 != 0 else 0
+                # 2-Year CAGR (A23 to A25) - only if ratio is positive
+                if ns_a23 != 0 and ns_a25 > 0 and ns_a23 > 0:
+                    cagr_2yr = (((ns_a25 / ns_a23) ** 0.5) - 1) * 100
+                else:
+                    cagr_2yr = 0
                 
                 # A26 YTD Growth % (July-Oct A26 vs July-Oct A25)
                 if "A26" in years_in_data_chart and has_month_col:
