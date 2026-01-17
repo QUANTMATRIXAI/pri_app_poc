@@ -4639,18 +4639,18 @@ def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], 
                 if not family_brands_all:
                     continue
                 
-                # Family total row
-                family_a25 = brand_state_a25[
-                    (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
+                # Family total row - sum across ALL brands in family for this state (not just selected)
+                family_a25 = family_state_a25_all[
+                    (family_state_a25_all["State"] == state) & (family_state_a25_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
-                family_a24 = brand_state_a24[
-                    (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
+                family_a24 = family_state_a24_all[
+                    (family_state_a24_all["State"] == state) & (family_state_a24_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
-                family_a26_ytd = brand_state_a26_ytd[
-                    (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
+                family_a26_ytd = family_state_a26_ytd_all[
+                    (family_state_a26_ytd_all["State"] == state) & (family_state_a26_ytd_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
-                family_a25_ytd = brand_state_a25_ytd[
-                    (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
+                family_a25_ytd = family_state_a25_ytd_all[
+                    (family_state_a25_ytd_all["State"] == state) & (family_state_a25_ytd_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
             
                 if family_a25 == 0 and family_a24 == 0:
@@ -4977,15 +4977,15 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
             # Add Brand Family header row (indented under Mfg Com)
             family_row = {"Brand": f"  {family} FAM", "Type": "family"}
             
-            # Calculate family total across all zones for salience
-            family_total_all_zones = family_zone_a25[family_zone_a25["Brand Family"] == family]["Revised NS"].sum()
+            # Calculate family total across all zones for salience (use ALL brands in family, not just selected)
+            family_total_all_zones = family_zone_a25_all[family_zone_a25_all["Brand Family"] == family]["Revised NS"].sum()
             
             for zone in zones:
-                # Get family totals for this zone
-                family_zone_data_a25 = family_zone_a25[(family_zone_a25["Zone"] == zone) & (family_zone_a25["Brand Family"] == family)]
+                # Get family totals for this zone (use ALL brands in family, not just selected)
+                family_zone_data_a25 = family_zone_a25_all[(family_zone_a25_all["Zone"] == zone) & (family_zone_a25_all["Brand Family"] == family)]
                 family_sum_a25 = family_zone_data_a25["Revised NS"].sum() if not family_zone_data_a25.empty else 0
                 
-                family_zone_data_a24 = family_zone_a24[(family_zone_a24["Zone"] == zone) & (family_zone_a24["Brand Family"] == family)]
+                family_zone_data_a24 = family_zone_a24_all[(family_zone_a24_all["Zone"] == zone) & (family_zone_a24_all["Brand Family"] == family)]
                 family_sum_a24 = family_zone_data_a24["Revised NS"].sum() if not family_zone_data_a24.empty else 0
                 
                 # MS = Family share in this zone (vs segment total in zone)
@@ -4998,11 +4998,11 @@ def create_zonal_pivot(df: pd.DataFrame, selected_families: List[str], selected_
                 # Growth = Family growth in this zone
                 family_growth = ((family_sum_a25 / family_sum_a24) - 1) * 100 if family_sum_a24 > 0 else 0
                 
-                # A26 YTD Growth = (July-Oct A26 - July-Oct A25) / July-Oct A25
-                family_zone_data_a26_ytd = family_zone_a26_ytd[(family_zone_a26_ytd["Zone"] == zone) & (family_zone_a26_ytd["Brand Family"] == family)]
+                # A26 YTD Growth = (July-Oct A26 - July-Oct A25) / July-Oct A25 (use ALL brands in family)
+                family_zone_data_a26_ytd = family_zone_a26_ytd_all[(family_zone_a26_ytd_all["Zone"] == zone) & (family_zone_a26_ytd_all["Brand Family"] == family)]
                 family_sum_a26_ytd = family_zone_data_a26_ytd["Revised NS"].sum() if not family_zone_data_a26_ytd.empty else 0
                 
-                family_zone_data_a25_ytd = family_zone_a25_ytd[(family_zone_a25_ytd["Zone"] == zone) & (family_zone_a25_ytd["Brand Family"] == family)]
+                family_zone_data_a25_ytd = family_zone_a25_ytd_all[(family_zone_a25_ytd_all["Zone"] == zone) & (family_zone_a25_ytd_all["Brand Family"] == family)]
                 family_sum_a25_ytd = family_zone_data_a25_ytd["Revised NS"].sum() if not family_zone_data_a25_ytd.empty else 0
                 
                 family_a26_ytd_growth = ((family_sum_a26_ytd / family_sum_a25_ytd) - 1) * 100 if family_sum_a25_ytd > 0 else 0
@@ -5663,18 +5663,18 @@ def create_north_state_drilldown(df: pd.DataFrame, selected_families: List[str],
                 if not family_brands_all:
                     continue
             
-                # Family total row - sum across all brands in family for this state
-                family_a25 = brand_state_a25[
-                    (brand_state_a25["State"] == state) & (brand_state_a25["Brand Family"] == family)
+                # Family total row - sum across ALL brands in family for this state (not just selected)
+                family_a25 = family_state_a25_all[
+                    (family_state_a25_all["State"] == state) & (family_state_a25_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
-                family_a24 = brand_state_a24[
-                    (brand_state_a24["State"] == state) & (brand_state_a24["Brand Family"] == family)
+                family_a24 = family_state_a24_all[
+                    (family_state_a24_all["State"] == state) & (family_state_a24_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
-                family_a26_ytd = brand_state_a26_ytd[
-                    (brand_state_a26_ytd["State"] == state) & (brand_state_a26_ytd["Brand Family"] == family)
+                family_a26_ytd = family_state_a26_ytd_all[
+                    (family_state_a26_ytd_all["State"] == state) & (family_state_a26_ytd_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
-                family_a25_ytd = brand_state_a25_ytd[
-                    (brand_state_a25_ytd["State"] == state) & (brand_state_a25_ytd["Brand Family"] == family)
+                family_a25_ytd = family_state_a25_ytd_all[
+                    (family_state_a25_ytd_all["State"] == state) & (family_state_a25_ytd_all["Brand Family"] == family)
                 ]["Revised NS"].sum()
             
                 # If family has no sales in this state, show "-"
