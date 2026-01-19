@@ -4320,6 +4320,17 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
     
     # Create a copy and remove unwanted columns
     df_display = df.copy()
+    
+    # Before removing columns, extract numeric values for sorting
+    # Store original numeric values before they were formatted with %
+    numeric_columns = {}
+    for col in df_display.columns:
+        if col not in columns_to_remove and col != "State":
+            # Extract numeric value from "X.X%" format
+            numeric_columns[col.replace('\n', ' ')] = df_display[col].apply(
+                lambda x: float(str(x).rstrip('%')) if isinstance(x, str) and x.strip() and x != '' else 0.0
+            )
+    
     for col in columns_to_remove:
         if col in df_display.columns:
             df_display = df_display.drop(columns=[col])
@@ -4327,8 +4338,22 @@ def display_state_performance_table(df: pd.DataFrame) -> None:
     # Clean up column names (remove \n for better display)
     df_display.columns = [col.replace('\n', ' ') for col in df_display.columns]
     
-    # Display as normal Streamlit dataframe (downloadable)
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    # Replace formatted strings with numeric values for proper sorting
+    for col_name, numeric_values in numeric_columns.items():
+        if col_name in df_display.columns:
+            df_display[col_name] = numeric_values
+    
+    # Configure columns to display as percentages with proper numeric sorting
+    column_config = {}
+    for col in df_display.columns:
+        if col != "State":
+            column_config[col] = st.column_config.NumberColumn(
+                col,
+                format="%.1f%%"
+            )
+    
+    # Display as normal Streamlit dataframe (downloadable) with numeric sorting
+    st.dataframe(df_display, use_container_width=True, hide_index=True, column_config=column_config)
 
 
 def create_zone_state_drilldown(df: pd.DataFrame, selected_families: List[str], selected_brands: List[str], selected_states: List[str], zone_name: str, df_full_segment: pd.DataFrame = None) -> Dict | None:
